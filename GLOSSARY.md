@@ -7,7 +7,7 @@ A party game played in person, each player on their own phone, where players pla
 ### Cards and timelines
 
 **Card**:
-A single historical statement together with the year it happened, its category and its language. It is the thing read aloud and placed on a timeline.
+A single historical statement together with when it happened, its category and its language. It is the thing read aloud and placed on a timeline. From 1500 onwards a card has an exact year; before 1500 it only has a decade (e.g. "1490s", "490s BC").
 _Avoid_: Event, statement, fact, question
 
 **Anchor year**:
@@ -29,16 +29,20 @@ _Avoid_: Banked, secured
 To end your turn voluntarily, turning all unlocked cards into locked cards.
 _Avoid_: Bank, pass
 
-### Play
+### Turns and rounds
 
 **Turn**:
-One player's sequence of placements, ending when they lock in or misplace a card.
+One player's sequence of plays, ending when they lock in or misplace a card.
+
+**Play**:
+One card dealt to the active player and their attempt to place it on their timeline. Lock in is offered only after a correct play; choosing to continue starts a new play within the same turn.
+_Avoid_: Placement, action, guess, move
 
 **Round**:
 The span in which every player has had one turn.
 
 **Category draw**:
-The random selection at the start of each turn that decides which category the next card is dealt from: either a specific category, Reader's choice, or Free choice.
+The random selection before each card is dealt that decides which category the next card is dealt from: either a specific category, Reader's choice, or Free choice.
 _Avoid_: Category roll, category die, spin
 
 **Reader's choice**:
@@ -53,7 +57,7 @@ How a card reaches the reader for a turn. Cards are dealt, never drawn; "draw" i
 _Avoid_: Drawn
 
 **Steal**:
-An attempt by another player to place a card the active player misplaced. The card passes around the table in seating order until someone places it correctly; a successful steal locks the card on the stealer's timeline and does not affect turn order.
+An attempt by another player to place a card the active player misplaced. The card passes around the table in seating order, ending with the reader, until someone places it correctly; a card nobody places is discarded for the rest of the game. A successful steal locks the card on the stealer's timeline and does not affect turn order.
 _Avoid_: Pass, rebound, hand-over
 
 **Reader**:
