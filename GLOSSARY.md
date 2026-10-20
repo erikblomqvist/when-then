@@ -7,8 +7,16 @@ A party game played in person, each player on their own phone, where players pla
 ### Cards and timelines
 
 **Card**:
-A single historical statement together with when it happened, its category and its language. It is the thing read aloud and placed on a timeline. From 1500 onwards a card has an exact year; before 1500 it only has a decade (e.g. "1490s", "490s BC").
+A single historical statement together with when it happened and its category. It is the thing read aloud and placed on a timeline. How precisely its date is known varies (decade, year, month or day), but a card from 1500 onwards is always known at least to the year; the game mode decides how precisely it must be placed.
 _Avoid_: Event, statement, fact, question
+
+**Difficulty**:
+How obscure the knowledge on a card is, from 1 (most people know it) to 4.
+_Avoid_: Obscurity
+
+**Draft / Published / Archived**:
+The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but no longer dealt. Categories can be archived too, taking them out of the category draw for new games.
+_Avoid_: Retired, deleted, inactive
 
 **Anchor year**:
 A random year given to each player at the start of a game, sitting on their timeline as the first reference point. It is not a card and is worth no points.
@@ -67,3 +75,10 @@ _Avoid_: Asker, quizmaster
 **Target score**:
 The number of points a player must reach to win, set when the game is created.
 _Avoid_: Winning score
+
+**Game mode**:
+The rules for how precisely cards must be placed, chosen when the game is created. The standard mode places cards from 1500 onwards by year and earlier cards by decade; a card not known that precisely is not dealt. A game mode changes what an answer is, unlike a house rule, which tweaks scoring or locking.
+_Avoid_: Difficulty level
+
+**Card language**:
+The language a game's cards are read aloud in, chosen when the game is created and independent of each player's own app language. A card without text in that language is read in English.
