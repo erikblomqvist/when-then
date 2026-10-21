@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { cardFormValues, parseCardForm } from './card-form'
+import {
+    cardFormValues,
+    fillMachineTranslationField,
+    parseCardForm,
+    translationDraft,
+} from './card-form'
 
 const categoryId = '6f1c1d5e-8f0a-4c43-9d1e-2b7a0f6c1a01'
 
@@ -132,6 +137,96 @@ describe('cardFormValues', () => {
             day: '15',
             source_url: '',
             source_quote: 'the Ides of March',
+            text_sv: '',
+            note_sv: '',
+            reviewed_sv: '',
+            machine_text_sv: '',
+            text_nb: '',
+            note_nb: '',
+            reviewed_nb: '',
+            machine_text_nb: '',
+        })
+    })
+
+    it('fills a locale tab from its saved translation, unticked', () => {
+        const values = cardFormValues({
+            categoryId,
+            date: { decade: null, year: null, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: {
+                en: { text: 'A made-up bridge opens' },
+                sv: { text: 'En påhittad bro öppnas', note: 'Bro, inte brygga' },
+            },
+        })
+        expect(translationDraft(values, 'sv')).toEqual({
+            text: 'En påhittad bro öppnas',
+            note: 'Bro, inte brygga',
+            reviewed: false,
+            machineText: null,
+        })
+        expect(translationDraft(values, 'nb').text).toBe('')
+    })
+})
+
+describe('locale tabs', () => {
+    it('reads a translation, with no status unless the person ticked reviewed', () => {
+        const edited = parseCardForm(form({ text_sv: ' En påhittad bro öppnas ', note_sv: '' }))
+        expect(edited.ok && edited.card.translations).toEqual({
+            en: { text: 'A made-up event happens' },
+            sv: { text: 'En påhittad bro öppnas', note: null },
+        })
+        const ticked = parseCardForm(
+            form({ text_nb: 'En oppdiktet bro åpner', note_nb: 'Om broen', reviewed_nb: 'true' }),
+        )
+        expect(ticked.ok && ticked.card.translations.nb).toEqual({
+            text: 'En oppdiktet bro åpner',
+            note: 'Om broen',
+            status: 'reviewed',
+        })
+    })
+
+    it('marks a machine translation left as it is', () => {
+        const values = fillMachineTranslationField(
+            cardFormValues({
+                categoryId,
+                date: { decade: null, year: null, month: null, day: null },
+                sourceUrl: null,
+                sourceQuote: null,
+                translations: { en: { text: 'A made-up bridge opens' } },
+            }),
+            'sv',
+            'En påhittad bro öppnas',
+        )
+        expect(values.text_sv).toBe('En påhittad bro öppnas')
+        const result = parseCardForm(form({ ...values }))
+        expect(result.ok && result.card.translations.sv).toEqual({
+            text: 'En påhittad bro öppnas',
+            note: null,
+            status: 'machine',
+        })
+    })
+
+    it('removes a translation whose text was cleared, and leaves out tabs not posted', () => {
+        const result = parseCardForm(form({ text_sv: '  ', note_sv: '' }))
+        expect(result.ok && result.card.translations).toEqual({
+            en: { text: 'A made-up event happens' },
+            sv: null,
+        })
+    })
+
+    it('asks for the text before a note', () => {
+        expect(parseCardForm(form({ text_nb: '', note_nb: 'Om broen' }))).toEqual({
+            ok: false,
+            errors: { text_nb: 'Write the Norwegian text, or clear the note.' },
+        })
+    })
+
+    it('keeps a translation as short as a card', () => {
+        const result = parseCardForm(form({ text_sv: 'x'.repeat(501) }))
+        expect(result).toEqual({
+            ok: false,
+            errors: { text_sv: 'Keep the card under 500 characters.' },
         })
     })
 })
