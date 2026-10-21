@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+    <title>When Then?</title>
+    <rect width="512" height="512" rx="96" fill="#1b1d3a" />
+    <g transform="rotate(-8 256 272)">
+        <rect x="150" y="124" width="212" height="296" rx="20" fill="#f3ead6" />
+        <rect x="150" y="124" width="212" height="296" rx="20" fill="none" stroke="#b8a98a" stroke-width="6" />
+        <rect x="150" y="124" width="212" height="44" rx="20" fill="#d9483b" />
+        <rect x="150" y="150" width="212" height="18" fill="#d9483b" />
+    </g>
+    <text x="256" y="322" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="176" font-weight="700" fill="#1b1d3a">?</text>
+</svg>
