@@ -35,10 +35,12 @@ export type CardInput = {
     sourceUrl: string | null
     sourceQuote: string | null
     translations: Partial<Record<CardLocale, TranslationInput>> & { en: TranslationInput }
+    /** Clear the date's verification with this save (the editor asks when a verified date changes). */
+    clearVerification?: boolean
 }
 
 /** The language-neutral part of a card. */
-export type CardFields = Omit<CardInput, 'translations'>
+export type CardFields = Omit<CardInput, 'translations' | 'clearVerification'>
 
 export type Translation = { text: string; note: string | null; status: TranslationStatus }
 
@@ -47,6 +49,9 @@ export type Card = CardFields & {
     id: string
     status: CardStatus
     translations: Partial<Record<CardLocale, Translation>>
+    /** When and by whom the date was checked against a source; null when it wasn't. */
+    verifiedAt: string | null
+    verifiedBy: string | null
     createdAt: string
     updatedAt: string
 }

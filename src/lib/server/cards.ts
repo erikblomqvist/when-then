@@ -101,6 +101,8 @@ export async function getCard(db: Db, id: string): Promise<Card | null> {
                 { text, note, status } satisfies Translation,
             ]),
         ),
+        verifiedAt: data.verified_at,
+        verifiedBy: data.verified_by,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
     }
@@ -127,6 +129,7 @@ export async function saveCard(
             day: input.date.day,
             source_url: input.sourceUrl,
             source_quote: input.sourceQuote,
+            clear_verification: input.clearVerification ?? false,
         },
         translations: input.translations,
         card_id: cardId,

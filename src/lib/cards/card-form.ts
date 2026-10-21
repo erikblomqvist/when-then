@@ -141,6 +141,8 @@ export function parseCardForm(form: FormData): ParsedCardForm {
             sourceUrl: sourceUrl || null,
             sourceQuote: sourceQuote || null,
             translations: { en: { text } },
+            // Set by the editor when a verified date changed and the editor chose to clear it.
+            ...(form.get('clear_verification') === 'true' && { clearVerification: true }),
         },
     }
 }
