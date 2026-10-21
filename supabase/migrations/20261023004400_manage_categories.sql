@@ -102,23 +102,21 @@ end;
 $$;
 
 -- Puts the given categories in this order, using the positions they hold between them, so
--- the categories left out (archived, or added by someone else meanwhile) keep theirs.
+-- the categories left out (archived, or added by someone else meanwhile) keep theirs. Ids of
+-- categories deleted meanwhile are skipped.
 create function public.reorder_categories(actor uuid, ids uuid[])
 returns void
 language plpgsql
 security invoker
 set search_path = ''
 as $$
-declare
-    known integer;
 begin
     perform public.require_category_admin(actor);
     perform public.set_actor(actor);
     perform public.lock_category_positions();
 
-    select count(*) into known from public.categories as c where c.id = any(ids);
-    if known <> cardinality(ids) or known <> (select count(distinct i) from unnest(ids) as i) then
-        raise exception 'no_category' using errcode = 'P0002';
+    if cardinality(ids) <> (select count(distinct i) from unnest(ids) as i) then
+        raise exception 'duplicate_ids';
     end if;
 
     set constraints public.categories_position_key deferred;
@@ -127,11 +125,15 @@ begin
     set position = target.position
     from (
         select wanted.id, held.position
-        from unnest(ids) with ordinality as wanted (id, n)
+        from (
+            select w.id, row_number() over (order by w.n) as n
+            from unnest(ids) with ordinality as w (id, n)
+            where exists (select 1 from public.categories as c2 where c2.id = w.id)
+        ) as wanted
         join (
-            select c2.position, row_number() over (order by c2.position) as n
-            from public.categories as c2
-            where c2.id = any(ids)
+            select c3.position, row_number() over (order by c3.position) as n
+            from public.categories as c3
+            where c3.id = any(ids)
         ) as held using (n)
     ) as target
     where c.id = target.id and c.position <> target.position;

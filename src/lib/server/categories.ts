@@ -5,6 +5,7 @@
 
 import type { PostgrestError } from '@supabase/supabase-js'
 import type { CardLocale } from '../cards/card'
+import type { CategoryInput } from '../categories/category-form'
 import {
     isCategoryColour,
     isCategoryIcon,
@@ -29,13 +30,7 @@ export type Category = {
     cardCount: number
 }
 
-/** What the categories page saves: the look, and names per locale (English required). */
-export type CategoryInput = {
-    icon: CategoryIconName
-    colour: CategoryColour
-    /** A locale given as null or blank loses its name; locales left out keep theirs. */
-    names: Partial<Record<CardLocale, string | null>> & { en: string }
-}
+export type { CategoryInput }
 
 /** Why the database refused a category change, in words for the categories page. */
 export class CategoryError extends Error {}
