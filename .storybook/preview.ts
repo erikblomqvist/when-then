@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type { Preview } from '@storybook/sveltekit';
 import SurfaceDecorator from './SurfaceDecorator.svelte';
 import '../src/lib/styles/tokens.css';

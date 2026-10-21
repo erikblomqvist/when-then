@@ -4,18 +4,21 @@ A party game played in person, each player on their own phone, where players pla
 
 ## Stack
 
-SvelteKit 3 with Svelte 5 and TypeScript, built with Vite 8 and deployed to Vercel with `@sveltejs/adapter-vercel`. Storybook 11 (prerelease, pinned) is the component workbench. Backend, auth and realtime are Supabase, see [ADR 0002](docs/adr/0002-supabase-with-game-logic-in-sveltekit.md); that part is not wired up yet.
+SvelteKit 3 with Svelte 5 and TypeScript, built with [Vite+](https://viteplus.dev/) (Vite 8, Oxlint, Oxfmt) and deployed to Vercel with `@sveltejs/adapter-vercel`. Storybook 11 (prerelease, pinned) is the component workbench. Backend, auth and realtime are Supabase, see [ADR 0002](docs/adr/0002-supabase-with-game-logic-in-sveltekit.md); that part is not wired up yet.
 
-Node 22.17 or later is required (`.nvmrc` points at 22). Use pnpm.
+Install [Vite+](https://viteplus.dev/guide/) (`vp`). It reads the Node and pnpm versions pinned in `package.json#devEngines` and downloads them for you, so there is nothing else to install or switch. Change the pins with `vp env pin`.
 
 ```sh
-pnpm install
-pnpm dev              # the app, http://localhost:5173
-pnpm storybook        # the component library, http://localhost:6006
-pnpm check            # svelte-check
-pnpm build            # production build
-pnpm build-storybook  # static Storybook in storybook-static/
+vp install
+vp dev                    # the app, http://localhost:5173
+vpr storybook             # the component library, http://localhost:6006
+vp check                  # format, lint and type checks (Oxfmt, Oxlint)
+vpr check:svelte          # svelte-check, which vp check can't run
+vp build                  # production build
+vpr build-storybook       # static Storybook in storybook-static/
 ```
+
+`vpr check` runs both checks. A pre-commit hook runs `vp check --fix` on staged files; it is installed by `vp install`.
 
 ## Design system
 
