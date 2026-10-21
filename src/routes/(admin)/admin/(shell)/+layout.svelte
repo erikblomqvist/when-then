@@ -1,8 +1,14 @@
 <script lang="ts">
+    import { page } from '$app/state'
     import { Button } from '#lib/components/ui/button/index.js'
     import type { LayoutProps } from './$types'
 
     let { children, data }: LayoutProps = $props()
+
+    const navLink = (href: string) =>
+        `block rounded-md px-2 py-1.5 hover:bg-muted ${
+            page.url.pathname === href ? 'bg-muted font-medium' : 'text-muted-foreground'
+        }`
 </script>
 
 <div class="flex min-h-svh flex-col">
@@ -36,8 +42,21 @@
     <div class="flex flex-1">
         <nav
             aria-label="Admin"
-            class="w-56 shrink-0 border-r p-4 text-sm text-muted-foreground">
-            <p>Cards, categories and people will appear here.</p>
+            class="w-56 shrink-0 border-r p-4 text-sm">
+            <ul class="flex flex-col gap-1">
+                <li>
+                    <a
+                        href="/admin"
+                        class={navLink('/admin')}>Home</a>
+                </li>
+                {#if data.role === 'admin'}
+                    <li>
+                        <a
+                            href="/admin/people"
+                            class={navLink('/admin/people')}>People</a>
+                    </li>
+                {/if}
+            </ul>
         </nav>
         <main class="flex-1 p-6">
             {@render children()}

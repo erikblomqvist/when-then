@@ -16,6 +16,7 @@ vp check                  # format, lint and type checks (Oxfmt, Oxlint)
 vpr check:svelte          # svelte-check, which vp check can't run
 vp test                   # unit (Node) and component (Chromium) tests
 vpr test:e2e              # Playwright against a production build
+vpr test:db               # pgTAP tests in supabase/tests/ against the local stack
 vp build                  # production build
 vpr build-storybook       # static Storybook in storybook-static/
 ```
@@ -63,11 +64,13 @@ vpr db:stop
 
 ## Admin sign-in
 
-`/admin` is for editors and admins, who sign in with Google. `src/hooks.server.ts` reads the `user_role` claim from the validated JWT and turns away every `/admin` request (pages, form actions and endpoints) without at least `editor`: signed out goes to `/admin/sign-in`, signed in without a role to `/admin/no-access`. Admin-only work calls `requireRole(event, 'admin')` from `src/lib/server/guard.ts`, which answers editors with 403. A role granted or revoked takes effect at the next token refresh (within an hour), or at once after signing out and in. The service worker never caches `/admin`.
+`/admin` is for editors and admins, who sign in with Google. `src/hooks.server.ts` validates the session, reads the person's role from `user_roles` on each request, and turns away every `/admin` request (pages, form actions and endpoints) without at least `editor`: signed out goes to `/admin/sign-in`, signed in without a role to `/admin/no-access`. Admin-only work calls `requireRole(event, 'admin')` from `src/lib/server/guard.ts`, which answers editors with 403. A role granted, changed or revoked takes effect on the person's next request (the JWT's `user_role` claim lags up to an hour, so the guard does not rely on it). The service worker never caches `/admin`.
+
+Admins manage roles on the People page (`/admin/people`): add an email with a role, and it attaches at that email's first Google sign-in (a trigger on `auth.users` moves the pending invite into `user_roles`; password sign-ups never pick one up). Someone who has already signed in with Google gets the role at once. Roles and invites can be changed or revoked; there is always at least one admin. The SQL functions in `supabase/migrations/20261023004500_people_and_role_invites.sql` enforce this and write every change to `role_audit`.
 
 ### Seeding the first admin
 
-Once, after the first admin has signed in with Google (they land on "no access"), run this in the Supabase dashboard's SQL editor, then have them sign out and in again. Later roles are managed on the People page.
+Once, after the first admin has signed in with Google (they land on "no access"), run this in the Supabase dashboard's SQL editor; their next request lets them in. Later roles are managed on the People page.
 
 ```sql
 insert into public.user_roles (user_id, role)
@@ -85,7 +88,7 @@ on conflict (user_id) do update set role = excluded.role;
 
 ### Signing in from tests
 
-There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null)` from `src/lib/testing/e2e-auth.ts`: it creates a password user on the **local** stack with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
+There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null, { email? })` from `src/lib/testing/e2e-auth.ts`: it creates a user on the **local** stack that looks like a first Google sign-in (so a pending invite for its email attaches) with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
 
 ## Translations
 
