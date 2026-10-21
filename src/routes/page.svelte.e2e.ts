@@ -13,7 +13,8 @@ test.describe('with a Swedish browser', () => {
         page,
     }) => {
         await page.goto('/')
-        await expect(page.getByRole('heading', { level: 1, name: 'När då då?' })).toBeVisible()
+        await expect(page.getByRole('heading', { level: 1, name: 'When Then?' })).toBeVisible()
+        await expect(page.getByText('Ett sällskapsspel')).toBeVisible()
         await expect(page.locator('html')).toHaveAttribute('lang', 'sv')
         expect(new URL(page.url()).pathname).toBe('/')
     })

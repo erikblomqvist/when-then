@@ -1,6 +1,6 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
-    "app_name": "När då då?",
+    "app_name": "When Then?",
     "tagline": "Ett sällskapsspel där du placerar historien på din egen tidslinje. Spelet är inte byggt än.",
     "create_game": "Skapa spel",
     "join_game": "Gå med i spel"
