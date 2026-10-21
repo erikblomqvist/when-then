@@ -11,7 +11,7 @@ Extracted from the "När då då?" mobile prototype and adapted to the glossary.
 | `*.svelte` | Svelte 5 components that render the `ui-` markup with typed props. |
 | `*.stories.svelte` | Storybook stories (Svelte CSF). |
 
-Load order: Google Fonts (in `src/app.html`), then `tokens.css`, then `components.css` (both imported in `src/routes/+layout.svelte` and `.storybook/preview.ts`).
+Load order: Google Fonts (in `src/app.html`), then `tokens.css`, then `components.css` (both imported in `src/routes/(game)/+layout.svelte`, never on `/admin`, and `.storybook/preview.ts`).
 
 ## Token architecture
 
