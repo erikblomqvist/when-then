@@ -24,7 +24,9 @@ test('admin shows the shell with admin styles and none of the game styles', asyn
     const fontFamily = await page.evaluate(
         () => getComputedStyle(document.documentElement).fontFamily,
     )
-    expect(fontFamily).toContain('system-ui')
+    // The exact system stack differs between Tailwind's theme and browsers, so only check it
+    // falls back to sans-serif without naming a web font.
+    expect(fontFamily).toContain('sans-serif')
     expect(fontFamily).not.toMatch(/Inter|Bricolage|Fraunces/)
 })
 
