@@ -15,6 +15,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
 import type { AppRole } from '#lib/server/roles.js'
+import { isLocalSupabase } from '../server/sign-in-method'
 
 const env = (name: string) => {
     const value = process.env[name]
@@ -24,8 +25,8 @@ const env = (name: string) => {
 
 function localSupabase() {
     const url = env('PUBLIC_SUPABASE_URL')
-    const { hostname } = new URL(url)
-    if (hostname !== '127.0.0.1' && hostname !== 'localhost') {
+    // The same rule that lets the admin accept these password sign-ins at all.
+    if (!isLocalSupabase(url)) {
         throw new Error(`e2e sign-in only runs against a local Supabase stack, not ${url}`)
     }
     return { url, publishableKey: env('PUBLIC_SUPABASE_PUBLISHABLE_KEY') }

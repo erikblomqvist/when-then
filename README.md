@@ -68,6 +68,8 @@ vpr db:stop
 
 Admins manage roles on the People page (`/admin/people`): add an email with a role, and it attaches at that email's first Google sign-in (a trigger on `auth.users` moves the pending invite into `user_roles`; password sign-ups never pick one up). Someone who has already signed in with Google gets the role at once. Roles and invites can be changed or revoked; there is always at least one admin. The SQL functions in `supabase/migrations/20261023004500_people_and_role_invites.sql` enforce this and write every change to `role_audit`.
 
+The admin accepts only sessions that signed in with Google (the JWT's `amr` claim says `oauth`); a password session counts as signed out unless Supabase is the local stack, where e2e signs in that way (`src/lib/server/sign-in-method.ts`). As defence in depth, disable the Email provider in the production Supabase dashboard (Authentication → Sign In / Providers → Email), and don't run `supabase config push` without checking it, since it would push the local `[auth.email]` settings, which keep email sign-up on for e2e.
+
 ### Seeding the first admin
 
 Once, after the first admin has signed in with Google (they land on "no access"), run this in the Supabase dashboard's SQL editor; their next request lets them in. Later roles are managed on the People page.
