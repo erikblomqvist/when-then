@@ -184,7 +184,7 @@
 
 /* Animated light sweep across the lacquer */
 .ui-card--glossy::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
@@ -225,7 +225,7 @@
     --wobble-duration: 2.6s;
     animation: ui-wobble-left var(--wobble-duration) ease-in-out infinite;
 }
-.ui-card--unlocked[data-lean='right'] {
+.ui-card--unlocked[data-lean="right"] {
     animation-name: ui-wobble-right;
 }
 .ui-card--wobble-1 {
@@ -260,7 +260,7 @@
 }
 /* Timeline face gets an inner hairline frame */
 .ui-card__face--timeline::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0.38em;
     border: 0.07em solid oklch(from var(--color-ink-800) l c h / 0.16);
@@ -356,7 +356,7 @@
     color: var(--text-on-paper-muted);
 }
 .ui-card__caption::before {
-    content: '';
+    content: "";
     display: block;
     width: 1.6em;
     height: 0.12em;
@@ -486,7 +486,7 @@
 }
 /* Tick mark under each slot */
 .ui-timeline__slot::after {
-    content: '';
+    content: "";
     position: absolute;
     left: 50%;
     bottom: -14px;
@@ -509,7 +509,7 @@
     width: 92px;
 }
 .ui-timeline__gap--selected::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     box-sizing: border-box;
@@ -832,7 +832,7 @@ button.ui-chip:focus-visible {
     color: var(--color-ink-700);
     background: transparent;
 }
-.ui-tab[aria-selected='true'],
+.ui-tab[aria-selected="true"],
 .ui-tab--selected {
     color: var(--text-on-table);
     background: var(--color-ink-900);
@@ -874,7 +874,7 @@ button.ui-chip:focus-visible {
     color: var(--text-on-paper-strong);
 }
 .ui-category-legend-item::before {
-    content: '';
+    content: "";
     width: 11px;
     height: 11px;
     border-radius: 2px;

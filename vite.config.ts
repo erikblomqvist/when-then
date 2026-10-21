@@ -19,6 +19,13 @@ export default defineConfig({
         },
         // Docs are hand-formatted prose, and trailing double spaces there are deliberate line breaks.
         ignorePatterns: ['**/*.md'],
+        // CSS strings keep double quotes. Svelte <style> blocks follow the .svelte file's options instead.
+        overrides: [
+            {
+                files: ['**/*.css'],
+                options: { singleQuote: false },
+            },
+        ],
     },
     lint: {
         jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
