@@ -29,7 +29,7 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
             if (!client) {
                 if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
                     throw new Error(
-                        'PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set (see .env.example)',
+                        'PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set (declared in src/env.ts)',
                     )
                 }
                 client = createServerClient<Database>(

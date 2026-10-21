@@ -326,7 +326,7 @@ max_frequency = "5s"
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
 # Admin sign-in (ADR 0002). Production has its own client in the dashboard; locally the
-# client id and secret come from .env.local (see .env.example).
+# client id and secret come from supabase/.env, which the CLI loads and ignores in git.
 [auth.external.google]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"

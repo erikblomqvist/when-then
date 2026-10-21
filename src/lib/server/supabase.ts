@@ -15,7 +15,9 @@ export function supabaseService(): SupabaseClient<Database> {
         const url = SUPABASE_URL
         const key = SUPABASE_SECRET_KEY
         if (!url || !key) {
-            throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY must be set (see .env.example)')
+            throw new Error(
+                'SUPABASE_URL and SUPABASE_SECRET_KEY must be set (declared in src/env.ts)',
+            )
         }
         client = createClient<Database>(url, key, {
             auth: { persistSession: false, autoRefreshToken: false },

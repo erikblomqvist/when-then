@@ -1,8 +1,9 @@
 import { defineEnvVars } from '@sveltejs/kit/env'
 
 // Environment variables, typed and documented here, imported from `$app/env/private` and
-// `$app/env/public`. Names match .env.example and the Vercel project settings. All are
-// optional at start-up so that builds and tests run without a Supabase stack; the code
+// `$app/env/public`. This is the single list of names: the same ones are set in the Vercel
+// project settings, and locally in `.env.local` with the values `vpr db:start` prints. All
+// are optional at start-up so that builds and tests run without a Supabase stack; the code
 // that needs them fails with a clear message instead (see src/lib/server/supabase.ts).
 
 const optional = (value: string | undefined) => value || undefined

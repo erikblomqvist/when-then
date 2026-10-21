@@ -46,8 +46,8 @@ One hosted project, `when-then` in `eu-north-1`, serves production and previews;
 
 ```sh
 brew install supabase/tap/supabase   # the CLI, once (CI pins 2.109.1)
-cp .env.example .env.local           # then paste the keys that `vpr db:start` prints
 vpr db:start                         # local Postgres, Auth, Studio (http://127.0.0.1:54323)
+                                     # then put the URL and keys it prints in .env.local
 vpr db:reset                         # re-apply supabase/migrations and supabase/seed.sql
 vpr db:types                         # regenerate src/lib/database.types.ts after a migration
 vpr db:pull                          # copy production cards and categories into the local stack
@@ -58,7 +58,7 @@ vpr db:stop
 - **Config** for the local stack is `supabase/config.toml`, which mirrors the hosted project's auth settings (anonymous sign-in, Google provider, redirect allowlist, the access-token hook). After changing it, apply it to the hosted project with `supabase config push`.
 - **Auth:** players sign in anonymously; admins sign in with Google and get a row in `user_roles`. The Custom Access Token hook puts that role in the JWT as `user_role`.
 - **Clients:** `event.locals.supabase` (set in `src/hooks.server.ts`) acts as the visitor through the auth cookies; `supabaseService()` in `src/lib/server/supabase.ts` uses the secret key for server-side writes.
-- **Environment variables:** named in [`.env.example`](.env.example). Production and preview values are set by hand in Vercel's project settings (the Supabase integration could not be connected). Repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` and the variable `SUPABASE_PROJECT_REF` drive the workflows. The database password is in the owner's password manager.
+- **Environment variables:** declared, with descriptions, in [`src/env.ts`](src/env.ts); that is the only list of names. Locally they live in `.env.local`. Production and preview values are set by hand in Vercel's project settings (the Supabase integration could not be connected). Google sign-in on the *local* stack needs `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in `supabase/.env`, which the Supabase CLI reads for `supabase/config.toml`; anonymous sign-in works without them. Repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` and the variable `SUPABASE_PROJECT_REF` drive the workflows. The database password is in the owner's password manager.
 - **Keep-alive:** the *Keep Supabase awake* workflow runs a query every three days so the Free project is not paused. GitHub disables schedules after 60 days without commits; re-enable it under Actions if that happens.
 
 ## Translations

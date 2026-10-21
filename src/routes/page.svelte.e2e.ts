@@ -7,7 +7,7 @@ test('home page shows the game title', async ({ page }) => {
 })
 
 test.describe('with a Swedish browser', () => {
-    test.use({ locale: 'sv-SE' })
+    test.use({ locale: 'sv' })
 
     test('home page is in Swedish, from Accept-Language, without a locale in the URL', async ({
         page,
