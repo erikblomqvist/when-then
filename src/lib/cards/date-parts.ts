@@ -14,7 +14,7 @@ export type DateParts = {
 
 export type DatePartErrors = Partial<Record<keyof DateParts, string>>
 
-const monthNames = [
+export const monthNames = [
     'January',
     'February',
     'March',

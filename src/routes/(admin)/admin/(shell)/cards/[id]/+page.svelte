@@ -1,5 +1,6 @@
 <script lang="ts">
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
+    import CardHistory from '#lib/admin/cards/CardHistory.svelte'
     import type { PageProps } from './$types'
 
     let { data, form }: PageProps = $props()
@@ -20,3 +21,7 @@
         errors={form?.errors}
         saved={form?.saved ?? false} />
 {/key}
+
+<div class="mt-12">
+    <CardHistory {...data.history} />
+</div>
