@@ -2,6 +2,7 @@
 // for information about these interfaces
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
+import type { Viewer } from '#lib/server/guard.js'
 
 declare global {
     namespace App {
@@ -13,6 +14,9 @@ declare global {
             safeGetSession: () => Promise<
                 { session: Session; user: User } | { session: null; user: null }
             >
+            /** The validated user and their role from the JWT `user_role` claim, memoised per
+             * request. Gate admin work with `requireRole` from `#lib/server/guard.js`. */
+            getViewer: () => Promise<Viewer>
         }
         // interface PageData {}
         // interface PageState {}
