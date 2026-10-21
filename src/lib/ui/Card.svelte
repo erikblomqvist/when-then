@@ -1,12 +1,13 @@
 <script lang="ts">
     import CategoryIcon from './CategoryIcon.svelte'
     import Stamp from './Stamp.svelte'
-    import { categoryLabel, type Category, type CardSize } from './types'
+    import type { CardSize, CategoryLook } from './types'
 
     type Props = {
         /** Front: the reader sees the card text. Sleeve: everyone else sees a striped sleeve. Timeline: a placed card, year first. */
         face?: 'front' | 'sleeve' | 'timeline'
-        category: Category
+        /** The category's name (in the card language), icon and colour. */
+        category: CategoryLook
         /** The card text (front face) or the small caption under the year (timeline face). */
         text?: string
         /** Shown on the timeline face. A decade reads "1490s". */
@@ -52,7 +53,7 @@
     class={[
         'ui-card',
         `ui-card--${size}`,
-        `cat-${category}`,
+        `cat-${category.colour}`,
         finish === 'matte' && 'ui-card--matte',
         finish === 'glossy' && 'ui-card--glossy',
         lifted && 'ui-card--lifted',
@@ -74,15 +75,15 @@
         </div>
     {:else}
         <div class="ui-card__face">
-            <span class="ui-card__symbol"><CategoryIcon {category} /></span>
+            <span class="ui-card__symbol"><CategoryIcon icon={category.icon} /></span>
             {#if face === 'sleeve'}
                 <div class="ui-card__sleeve">
                     <div class="ui-card__mark">?</div>
-                    <div class="ui-card__category">{categoryLabel[category]}</div>
+                    <div class="ui-card__category">{category.name}</div>
                 </div>
             {:else}
                 <div class="ui-card__text">{text}</div>
-                <div class="ui-card__category">{categoryLabel[category]}</div>
+                <div class="ui-card__category">{category.name}</div>
             {/if}
         </div>
     {/if}

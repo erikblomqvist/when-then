@@ -6,12 +6,15 @@
      1. Primitives   raw values (color ramps, font stacks, sizes). Never use
                      these directly in components.
      2. Semantic     role-based aliases that components consume.
-     3. Category     per-category color scopes (.cat-*).
+     3. Category     colour scopes (.cat-<colour>) and their hues, in
+                     category-colours.css, which the admin shares.
 
    Colors are OKLCH. Translucent variants use relative color syntax:
      oklch(from var(--token) l c h / <alpha>)
    Baseline: Chrome/Edge 119+, Safari 16.4+, Firefox 128+.
    ========================================================================== */
+
+@import "./category-colours.css";
 
 :root {
     /* ------------------------------------------------------------------------
@@ -58,16 +61,6 @@
 
     /* Signal */
     --color-coral-100: oklch(93.1% 0.038 44.9);
-
-    /* Category hues: 500 = lacquer, 700 = edge/shadow */
-    --color-red-500: oklch(55.7% 0.182 29.6);
-    --color-red-700: oklch(41.5% 0.138 28.6);
-    --color-blue-500: oklch(47.3% 0.162 263);
-    --color-blue-700: oklch(34.2% 0.113 263);
-    --color-amber-500: oklch(75.5% 0.152 78.6);
-    --color-amber-700: oklch(56.3% 0.116 75.7);
-    --color-green-500: oklch(55.4% 0.118 158.5);
-    --color-green-700: oklch(39.6% 0.086 157.7);
 
     --color-white: oklch(100% 0 0);
     --color-black: oklch(0% 0 0);
@@ -201,8 +194,8 @@
     --border-on-table-strong: oklch(from var(--color-paper-300) l c h / 0.42);
     --border-on-paper: oklch(from var(--color-ink-900) l c h / 0.14);
     --border-on-paper-strong: oklch(from var(--color-ink-800) l c h / 0.5);
-    --border-notepad-header: oklch(from var(--color-red-500) l c h / 0.55);
-    --border-notepad-row: oklch(from var(--color-blue-500) l c h / 0.24);
+    --border-notepad-header: oklch(from var(--palette-red-500) l c h / 0.55);
+    --border-notepad-row: oklch(from var(--palette-blue-500) l c h / 0.24);
 
     --focus-ring-color: var(--color-paper-300);
     --focus-ring: 0 0 0 3px oklch(from var(--color-paper-300) l c h / 0.55);
@@ -299,25 +292,4 @@
     --shadow-overlay: 0 30px 60px oklch(from var(--color-black) l c h / 0.5);
     --shadow-field-inset: inset 0 2px 5px oklch(from var(--color-black) l c h / 0.22);
     --shadow-outline-on-table: inset 0 0 0 1.5px var(--border-on-table);
-}
-
-/* --------------------------------------------------------------------------
-   3. CATEGORY SCOPES
-   Set on a card (or any ancestor). Components read --cat and --cat-dark.
-   -------------------------------------------------------------------------- */
-.cat-events {
-    --cat: var(--color-red-500);
-    --cat-dark: var(--color-red-700);
-}
-.cat-people {
-    --cat: var(--color-blue-500);
-    --cat-dark: var(--color-blue-700);
-}
-.cat-inventions {
-    --cat: var(--color-amber-500);
-    --cat-dark: var(--color-amber-700);
-}
-.cat-places {
-    --cat: var(--color-green-500);
-    --cat-dark: var(--color-green-700);
 }

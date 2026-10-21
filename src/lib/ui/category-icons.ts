@@ -1,0 +1,48 @@
+import {
+    Atom,
+    BookOpen,
+    Castle,
+    Crown,
+    Film,
+    Flag,
+    FlaskConical,
+    Globe,
+    HeartPulse,
+    Landmark,
+    Lightbulb,
+    MapPin,
+    Music,
+    Palette,
+    Rocket,
+    Ship,
+    Swords,
+    Trophy,
+    User,
+    Zap,
+} from '@lucide/svelte'
+import type { Component } from 'svelte'
+import type { CategoryIconName } from '../categories/look'
+
+/** The Lucide component for each icon in the curated set (`#lib/categories/look.js`). */
+export const categoryIconComponents: Record<CategoryIconName, Component> = {
+    zap: Zap,
+    user: User,
+    lightbulb: Lightbulb,
+    'map-pin': MapPin,
+    landmark: Landmark,
+    crown: Crown,
+    swords: Swords,
+    flag: Flag,
+    globe: Globe,
+    rocket: Rocket,
+    music: Music,
+    palette: Palette,
+    'book-open': BookOpen,
+    trophy: Trophy,
+    film: Film,
+    'flask-conical': FlaskConical,
+    'heart-pulse': HeartPulse,
+    castle: Castle,
+    ship: Ship,
+    atom: Atom,
+}
