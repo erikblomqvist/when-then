@@ -1,6 +1,6 @@
 # AI assistance for card authoring
 
-Research for [#7](https://github.com/Ar-den-korkad/when-then/issues/7). Researched 2026-10-20.
+Research for [#7](https://github.com/erikblomqvist/when-then/issues/7). Researched 2026-10-20.
 
 **Question:** How should the admin interface's AI assistance work for **suggesting a card's year (with a source link)** and **translating** cards? Covers model and provider, how to ground year suggestions, accuracy pitfalls, cost at a few thousand cards, and where the call runs.
 
@@ -48,7 +48,7 @@ All three have a reliable knowledge cutoff of **Jun 2026** [models][models]. Tha
 - **Calendar/BCE:** dates before 1583 default to proleptic Julian. In JSON export 1 BCE is `-0001` (no year 0), while RDF/Query Service uses XSD where 1 BCE is year 0 [wd-dates][wd-dates]. Use the JSON API to avoid off-by-one BCE errors.
 - Verified live: `wbgetentities&ids=Q937&props=claims` returns P569 `{"time":"+1879-03-14T00:00:00Z","precision":11,"calendarmodel":".../Q1985727"}` (Einstein, born 1879).
 - **Wikipedia summary as the human-readable source link:** `GET https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}` returns `description`, `wikibase_item` (the Q-id) and `content_urls.desktop.page` (verified live for `Albert_Einstein` → `Q937`). Good for both the source link shown to the admin and the Wikipedia↔Wikidata bridge. It works for `sv.wikipedia.org` and `no.wikipedia.org` too.
-- **Etiquette:** send a descriptive `User-Agent` with contact info (e.g. `WhenThen/1.0 (https://github.com/Ar-den-korkad/when-then; admin@…)`). Missing or generic agents "will fail with an HTTP 403" [wm-ua][wm-ua]. Make read requests in series, batch ids with `|`, use gzip, and back off on `ratelimited` [api-etiquette][api-etiquette]. A bulk backfill should send `maxlag`, since no user is waiting [api-etiquette][api-etiquette].
+- **Etiquette:** send a descriptive `User-Agent` with contact info (e.g. `WhenThen/1.0 (https://github.com/erikblomqvist/when-then; admin@…)`). Missing or generic agents "will fail with an HTTP 403" [wm-ua][wm-ua]. Make read requests in series, batch ids with `|`, use gzip, and back off on `ratelimited` [api-etiquette][api-etiquette]. A bulk backfill should send `maxlag`, since no user is waiting [api-etiquette][api-etiquette].
 
 **Flow:** Claude (cheap call, or the same call via a custom tool) extracts `{subject, event_kind}` from the card text, for example "Albert Einstein is born" → subject *Albert Einstein*, property P569. Our server runs the Wikidata lookup and passes the dated statements plus the Wikipedia URL back to Claude, which judges whether they match the card's statement. This is ordinary tool use: define `lookup_wikidata` as a custom tool our server executes.
 

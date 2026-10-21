@@ -1,6 +1,6 @@
 # Compass-based seat detection: feasibility
 
-Research for [#4](https://github.com/Ar-den-korkad/when-then/issues/4). Researched 2026-10-20.
+Research for [#4](https://github.com/erikblomqvist/when-then/issues/4). Researched 2026-10-20.
 
 **Question:** Can phones work out where players sit around a table from the compass, so seating can be set automatically?
 

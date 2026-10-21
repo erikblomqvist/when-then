@@ -11,7 +11,7 @@ Vite+ (`vp`) runs everything; see the README for setup. `vp <name>` is a built-i
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues for Ar-den-korkad/when-then, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues for erikblomqvist/when-then, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
