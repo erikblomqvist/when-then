@@ -1,5 +1,6 @@
 <script lang="ts">
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
+    import CardHistory from '#lib/admin/cards/CardHistory.svelte'
     import CardLifecycle from '#lib/admin/cards/CardLifecycle.svelte'
     import type { PageProps } from './$types'
 
@@ -31,3 +32,7 @@
         {/snippet}
     </CardEditor>
 {/key}
+
+<div class="mt-12">
+    <CardHistory {...data.history} />
+</div>

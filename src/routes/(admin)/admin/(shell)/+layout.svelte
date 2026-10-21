@@ -68,6 +68,12 @@
                             class={navLink('/admin/people')}
                             aria-current={current('/admin/people')}>People</a>
                     </li>
+                    <li>
+                        <a
+                            href="/admin/audit"
+                            class={navLink('/admin/audit')}
+                            aria-current={current('/admin/audit')}>Audit log</a>
+                    </li>
                 {/if}
             </ul>
         </nav>
