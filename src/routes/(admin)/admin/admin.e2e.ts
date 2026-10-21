@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { signInAs } from '../../../lib/testing/e2e-auth'
 
 // `--surface-table` is a game token (tokens.css); `--background` is a shadcn token (admin.css).
 const rootVariable = (page: Page, name: string) =>
@@ -8,6 +9,7 @@ const rootVariable = (page: Page, name: string) =>
     )
 
 test('admin shows the shell with admin styles and none of the game styles', async ({ page }) => {
+    await signInAs(page, 'editor')
     await page.goto('/admin')
 
     await expect(page.getByRole('banner')).toContainText('When Then? admin')
@@ -37,6 +39,7 @@ test('a game route keeps its own styles and loads no admin styles', async ({ pag
 test('the link from admin to the game reloads the page, leaving admin styles behind', async ({
     page,
 }) => {
+    await signInAs(page, 'editor')
     await page.goto('/admin')
     await page.getByRole('link', { name: 'Back to the game' }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'When Then?' })).toBeVisible()

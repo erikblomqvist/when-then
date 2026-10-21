@@ -5,6 +5,8 @@ import type { Handle } from '@sveltejs/kit/hooks'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
+import { isPublicAdminPath, requireRole, type Viewer } from '#lib/server/guard.js'
+import { roleFromAccessToken } from '#lib/server/roles.js'
 
 // Locale comes from the cookie, then the browser's preferred language, then English
 // (strategy in vite.config.ts). There is no locale in the URL, so the request is not rewritten.
@@ -68,6 +70,15 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
         return { session, user }
     }
 
+    // Once per request: the layout, the page and an action may all ask.
+    let viewer: Promise<Viewer> | undefined
+    event.locals.getViewer = () =>
+        (viewer ??= event.locals
+            .safeGetSession()
+            .then(({ session, user }) =>
+                session ? { user, role: roleFromAccessToken(session.access_token) } : nulls,
+            ))
+
     return resolve(event, {
         // Let the browser receive the auth cookie headers.
         filterSerializedResponseHeaders: (name) =>
@@ -75,4 +86,17 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
     })
 }
 
-export const handle = sequence(handleParaglide, handleSupabase)
+const nulls = { user: null, role: null } as const
+
+// Every /admin request needs at least `editor`: pages, form actions and endpoints alike
+// (layout loads alone would not cover actions). Admin-only work calls `requireRole(event,
+// 'admin')` itself. Sign-in, the OAuth callback, sign-out and no-access stay reachable.
+const handleAdmin: Handle = async ({ event, resolve }) => {
+    const { pathname } = event.url
+    if (/^\/admin(?:\/|$)/.test(pathname) && !isPublicAdminPath(pathname)) {
+        await requireRole(event, 'editor')
+    }
+    return resolve(event)
+}
+
+export const handle = sequence(handleParaglide, handleSupabase, handleAdmin)

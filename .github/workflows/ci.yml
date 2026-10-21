@@ -19,6 +19,26 @@ jobs:
             - run: vp run check:svelte
             - run: vp exec playwright install --with-deps chromium
             - run: vp test
+            # E2E signs in against a local Supabase stack: Postgres, Auth, and the API gateway
+            # with PostgREST. Everything else is left out to keep the start quick.
+            - uses: supabase/setup-cli@v1
+              with:
+                  version: 2.109.1
+            - name: Start Supabase
+              run: supabase start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
+              env:
+                  # Google is enabled in config.toml; e2e never reaches Google, so placeholders do.
+                  SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-placeholder
+                  SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-placeholder
+            - name: Point the app at the local stack (.env.local, names from src/env.ts)
+              run: |
+                  eval "$(supabase status -o env)"
+                  {
+                      echo "SUPABASE_URL=$API_URL"
+                      echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+                      echo "PUBLIC_SUPABASE_URL=$API_URL"
+                      echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+                  } > .env.local
             - run: vp run test:e2e
             - run: vp build
             - run: vp run build-storybook
