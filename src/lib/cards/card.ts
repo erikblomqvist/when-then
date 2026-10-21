@@ -13,6 +13,12 @@ export type CardLocale = Enums['card_locale']
 /** Draft → Published → Archived (glossary). */
 export type CardStatus = Enums['card_status']
 
+export const cardStatusLabel: Record<CardStatus, string> = {
+    draft: 'Draft',
+    published: 'Published',
+    archived: 'Archived',
+}
+
 /** A translation's state: machine until a person reviews it, stale when the English changed. */
 export type TranslationStatus = Enums['translation_status']
 

@@ -72,8 +72,8 @@ create table public.audit_log (
     -- actions such as AI requests on a card.
     entity text not null,
     -- The card or category the row is about (also for its translations), so a card's history
-    -- is one indexed lookup.
-    entity_id uuid not null,
+    -- is one indexed lookup. Text, so entities keyed otherwise (a role invite's email) fit.
+    entity_id text not null,
     locale public.card_locale,
     -- 'create', 'update', 'delete' from the triggers; app-written rows add their own.
     action text not null,
@@ -140,7 +140,7 @@ begin
     values (
         actor,
         tg_argv[0],
-        (subject ->> tg_argv[1])::uuid,
+        subject ->> tg_argv[1],
         (subject ->> 'locale')::public.card_locale,
         case tg_op when 'INSERT' then 'create' when 'UPDATE' then 'update' else 'delete' end,
         old_row,

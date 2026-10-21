@@ -50,6 +50,17 @@ const field = (form: FormData, name: keyof CardFormValues) => {
     return typeof value === 'string' ? value.trim() : ''
 }
 
+/** The fields as posted, for showing the form again after a failed save without JavaScript. */
+export function readCardFormValues(form: FormData): CardFormValues {
+    const values = { ...emptyCardFormValues }
+    for (const name of Object.keys(values) as (keyof CardFormValues)[]) {
+        const value = form.get(name)
+        if (typeof value === 'string') Object.assign(values, { [name]: value })
+    }
+    values.era = values.era === 'BC' ? 'BC' : 'AD'
+    return values
+}
+
 /** A whole, non-negative number from a field: null when empty, NaN when not a number. */
 const wholeNumber = (value: string) => {
     if (value === '') return null
