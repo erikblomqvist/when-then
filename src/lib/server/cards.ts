@@ -15,6 +15,7 @@ import type {
     Translation,
     TranslationStatus,
 } from '../cards/card'
+import { defaultCardSort, type CardFilter } from '../cards/card-list'
 import type { DateParts } from '../cards/date-parts'
 import { historyOf, type AuditEntry } from './audit'
 import { namesByLocale } from './categories'
@@ -31,25 +32,83 @@ const dateParts = (row: DateParts): DateParts => ({
     day: row.day,
 })
 
-const listColumns = `id, status, decade, year, month, day, updated_at,
+const listColumns = `id, status, decade, year, month, day, verified_at, updated_at,
     category:categories!inner(id, icon, colour, category_translations(locale, name)),
     card_translations(locale, text, status)`
 
+/** The typed filter as `public.cards_matching`'s `filter` argument (absent keys drop out). */
+const filterArgs = (filter: CardFilter) => ({
+    search: filter.search,
+    status: filter.status,
+    category_id: filter.categoryId,
+    verified: filter.verified,
+    has_source: filter.hasSource,
+    era: filter.era,
+})
+
 /**
- * One page of the card list, most recently updated first, with the total for paging.
- * Search, filters and sorting extend `CardListQuery` and the query built here.
+ * Every card matching `filter`, as a query to finish with `.select(…)` and, if needed, order
+ * and range: the one definition of "cards matching this view", for the list, select all
+ * matching and export. Pass `{ count: 'exact' }` to get the total with the rows.
+ */
+export const matchingCards = (
+    db: Db,
+    filter: CardFilter,
+    options?: { count?: 'exact'; head?: boolean },
+) => db.rpc('cards_matching', { filter: filterArgs(filter) }, options)
+
+/** How many cards match `filter`. */
+export async function countMatchingCards(db: Db, filter: CardFilter): Promise<number> {
+    const { count, error } = await matchingCards(db, filter, { count: 'exact', head: true })
+    if (error) fail(error)
+    return count ?? 0
+}
+
+// The Data API returns at most `max_rows` (supabase/config.toml) rows per request.
+const idBatch = 1000
+
+/** The ids of every card matching `filter`, however many (select all matching). */
+export async function matchingCardIds(db: Db, filter: CardFilter): Promise<string[]> {
+    const ids: string[] = []
+    for (;;) {
+        const { data, error } = await matchingCards(db, filter)
+            .select('id')
+            .order('id')
+            .range(ids.length, ids.length + idBatch - 1)
+        if (error?.code === 'PGRST103') return ids
+        if (error) fail(error)
+        ids.push(...(data ?? []).map((row) => row.id))
+        if ((data ?? []).length < idBatch) return ids
+    }
+}
+
+/**
+ * One page of the cards matching `filter`, in `sort` order, with the total for paging.
+ * Sorting by date orders by decade (stored by its earliest year, so BC sorts right), then
+ * year, month and day with the less precise date first, and puts undated cards last either
+ * way. Ties break by id, so pages never overlap.
  */
 export async function listCards(
     db: Db,
-    { page, pageSize }: CardListQuery,
+    { page, pageSize, filter = {}, sort = defaultCardSort }: CardListQuery,
 ): Promise<{ cards: CardSummary[]; total: number }> {
     const from = (page - 1) * pageSize
-    const { data, count, error } = await db
-        .from('cards')
-        .select(listColumns, { count: 'exact' })
-        .order('updated_at', { ascending: false })
-        .order('id')
-        .range(from, from + pageSize - 1)
+    const ascending = !sort.startsWith('-')
+    let query = matchingCards(db, filter, { count: 'exact' }).select(listColumns)
+    if (sort === 'date' || sort === '-date') {
+        query = query
+            .order('decade', { ascending, nullsFirst: false })
+            .order('year', { ascending, nullsFirst: ascending })
+            .order('month', { ascending, nullsFirst: ascending })
+            .order('day', { ascending, nullsFirst: ascending })
+    } else {
+        query = query.order('updated_at', { ascending })
+    }
+    const { data, count, error } = await query.order('id').range(from, from + pageSize - 1)
+    // A page past the end (a stale link, or cards archived meanwhile): no rows, the real total.
+    if (error?.code === 'PGRST103') {
+        return { cards: [], total: await countMatchingCards(db, filter) }
+    }
     if (error) fail(error)
 
     const cards = (data ?? []).map((row): CardSummary => {
@@ -71,6 +130,7 @@ export async function listCards(
                     translation.status,
                 ]),
             ) as Partial<Record<CardLocale, TranslationStatus>>,
+            verified: row.verified_at !== null,
             updatedAt: row.updated_at,
         }
     })
