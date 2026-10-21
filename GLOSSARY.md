@@ -72,6 +72,10 @@ _Avoid_: Pass, rebound, hand-over
 The player seated before the active player, who reads the card aloud.
 _Avoid_: Asker, quizmaster
 
+**Host**:
+The player who created the game. The host also plays, and is the only one who can start the game and skip or remove an absent player.
+_Avoid_: Admin, owner (an admin manages cards and categories, unrelated to playing)
+
 **Target score**:
 The number of points a player must reach to win, set when the game is created.
 _Avoid_: Winning score
