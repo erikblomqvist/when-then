@@ -9,7 +9,6 @@ select plan(21);
 
 delete from public.role_invites;
 delete from public.user_roles;
-delete from public.role_audit;
 
 -- Synthetic people. Google users carry `google` in their app metadata, as GoTrue sets it.
 insert into auth.users (id, email, raw_app_meta_data) values
@@ -121,7 +120,8 @@ select is_empty(
 
 -- Everything above is in the audit trail, with who did it and the before and after.
 select results_eq(
-    $$ select action, entity, entity_id from public.role_audit order by id $$,
+    $$ select action, entity, entity_id from public.audit_log
+       where entity in ('user_role', 'role_invite') order by id $$,
     $$ values
         ('invite', 'role_invite', 'cy@example.com'),
         ('accept_invite', 'user_role', '00000000-0000-0000-0000-00000000000c'),
@@ -135,18 +135,18 @@ select results_eq(
     'every role change is audited'
 );
 select results_eq(
-    $$ select actor_id, before ->> 'role', after ->> 'role' from public.role_audit
+    $$ select actor_id, before ->> 'role', after ->> 'role' from public.audit_log
        where action = 'change' and entity_id = '00000000-0000-0000-0000-00000000000b' $$,
     $$ values ('00000000-0000-0000-0000-00000000000a'::uuid, 'editor', 'admin') $$,
     'a change records the actor and the role before and after'
 );
 select results_eq(
-    $$ select actor_id, after from public.role_audit where action = 'revoke' $$,
+    $$ select actor_id, after from public.audit_log where action = 'revoke' $$,
     $$ values ('00000000-0000-0000-0000-00000000000b'::uuid, null::jsonb) $$,
     'a revoke has no after'
 );
 select results_eq(
-    $$ select actor_id from public.role_audit where action = 'accept_invite' $$,
+    $$ select actor_id from public.audit_log where action = 'accept_invite' $$,
     $$ values ('00000000-0000-0000-0000-00000000000c'::uuid) $$,
     'accepting an invite is done by the person signing in'
 );

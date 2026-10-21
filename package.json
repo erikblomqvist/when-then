@@ -35,6 +35,7 @@
     },
     "devDependencies": {
         "@inlang/paraglide-js": "^2.29.1",
+        "@internationalized/date": "^3.12.4",
         "@playwright/test": "^1.64.1",
         "@storybook/addon-a11y": "11.0.0-alpha.7",
         "@storybook/addon-docs": "11.0.0-alpha.7",
@@ -46,6 +47,7 @@
         "@tailwindcss/vite": "^4.3.3",
         "@types/node": "^26.6.5",
         "@vitest/browser-playwright": "catalog:",
+        "bits-ui": "^2.20.0",
         "cn": "^0.5.0",
         "playwright": "^1.64.1",
         "shadcn-svelte": "^1.7.0",

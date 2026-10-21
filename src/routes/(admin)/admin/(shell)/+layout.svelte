@@ -1,13 +1,18 @@
 <script lang="ts">
-    import { page } from '$app/state'
     import { Button } from '#lib/components/ui/button/index.js'
+    import { page } from '$app/state'
     import type { LayoutProps } from './$types'
 
     let { children, data }: LayoutProps = $props()
 
-    const navLink = (href: string) =>
+    // `section`: also current on the pages below it (/admin/cards/new, /admin/cards/<id>).
+    const isCurrent = (href: string, section = false) =>
+        page.url.pathname === href || (section && page.url.pathname.startsWith(`${href}/`))
+    const current = (href: string, section = false) =>
+        isCurrent(href, section) ? ('page' as const) : undefined
+    const navLink = (href: string, section = false) =>
         `block rounded-md px-2 py-1.5 hover:bg-muted ${
-            page.url.pathname === href ? 'bg-muted font-medium' : 'text-muted-foreground'
+            isCurrent(href, section) ? 'bg-muted font-medium' : 'text-muted-foreground'
         }`
 </script>
 
@@ -47,13 +52,21 @@
                 <li>
                     <a
                         href="/admin"
-                        class={navLink('/admin')}>Home</a>
+                        class={navLink('/admin')}
+                        aria-current={current('/admin')}>Home</a>
+                </li>
+                <li>
+                    <a
+                        href="/admin/cards"
+                        class={navLink('/admin/cards', true)}
+                        aria-current={current('/admin/cards', true)}>Cards</a>
                 </li>
                 {#if data.role === 'admin'}
                     <li>
                         <a
                             href="/admin/people"
-                            class={navLink('/admin/people')}>People</a>
+                            class={navLink('/admin/people')}
+                            aria-current={current('/admin/people')}>People</a>
                     </li>
                 {/if}
             </ul>
