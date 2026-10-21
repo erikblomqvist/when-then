@@ -39,6 +39,7 @@ jobs:
                       echo "PUBLIC_SUPABASE_URL=$API_URL"
                       echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
                   } > .env.local
+            - run: vp run test:db
             - run: vp run test:e2e
             - run: vp build
             - run: vp run build-storybook

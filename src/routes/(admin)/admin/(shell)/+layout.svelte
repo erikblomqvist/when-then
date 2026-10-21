@@ -4,6 +4,16 @@
     import type { LayoutProps } from './$types'
 
     let { children, data }: LayoutProps = $props()
+
+    // `section`: also current on the pages below it (/admin/cards/new, /admin/cards/<id>).
+    const isCurrent = (href: string, section = false) =>
+        page.url.pathname === href || (section && page.url.pathname.startsWith(`${href}/`))
+    const current = (href: string, section = false) =>
+        isCurrent(href, section) ? ('page' as const) : undefined
+    const navLink = (href: string, section = false) =>
+        `block rounded-md px-2 py-1.5 hover:bg-muted ${
+            isCurrent(href, section) ? 'bg-muted font-medium' : 'text-muted-foreground'
+        }`
 </script>
 
 <div class="flex min-h-svh flex-col">
@@ -37,18 +47,28 @@
     <div class="flex flex-1">
         <nav
             aria-label="Admin"
-            class="w-56 shrink-0 border-r p-4 text-sm text-muted-foreground">
+            class="w-56 shrink-0 border-r p-4 text-sm">
             <ul class="flex flex-col gap-1">
                 <li>
                     <a
-                        href="/admin/cards"
-                        class="block rounded-md px-2 py-1 hover:bg-muted hover:text-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
-                        aria-current={page.url.pathname.startsWith('/admin/cards')
-                            ? 'page'
-                            : undefined}>
-                        Cards
-                    </a>
+                        href="/admin"
+                        class={navLink('/admin')}
+                        aria-current={current('/admin')}>Home</a>
                 </li>
+                <li>
+                    <a
+                        href="/admin/cards"
+                        class={navLink('/admin/cards', true)}
+                        aria-current={current('/admin/cards', true)}>Cards</a>
+                </li>
+                {#if data.role === 'admin'}
+                    <li>
+                        <a
+                            href="/admin/people"
+                            class={navLink('/admin/people')}
+                            aria-current={current('/admin/people')}>People</a>
+                    </li>
+                {/if}
             </ul>
         </nav>
         <main class="flex-1 p-6">

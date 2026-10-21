@@ -240,6 +240,27 @@ export type Database = {
                     },
                 ]
             }
+            role_invites: {
+                Row: {
+                    created_at: string
+                    email: string
+                    invited_by: string | null
+                    role: Database['public']['Enums']['app_role']
+                }
+                Insert: {
+                    created_at?: string
+                    email: string
+                    invited_by?: string | null
+                    role: Database['public']['Enums']['app_role']
+                }
+                Update: {
+                    created_at?: string
+                    email?: string
+                    invited_by?: string | null
+                    role?: Database['public']['Enums']['app_role']
+                }
+                Relationships: []
+            }
             user_roles: {
                 Row: {
                     created_at: string
@@ -263,6 +284,17 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            audit_role_change: {
+                Args: {
+                    action: string
+                    actor_id: string
+                    after: Json
+                    before: Json
+                    entity: string
+                    entity_id: string
+                }
+                Returns: undefined
+            }
             card_date_parts_valid: {
                 Args: { day: number; decade: number; month: number; year: number }
                 Returns: boolean
@@ -270,6 +302,25 @@ export type Database = {
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
+            invite_person: {
+                Args: {
+                    actor_id: string
+                    email: string
+                    role: Database['public']['Enums']['app_role']
+                }
+                Returns: string
+            }
+            is_google_user: { Args: { app_metadata: Json }; Returns: boolean }
+            list_people: {
+                Args: never
+                Returns: {
+                    email: string
+                    granted_at: string
+                    role: Database['public']['Enums']['app_role']
+                    user_id: string
+                }[]
+            }
+            require_admin: { Args: { actor_id: string }; Returns: undefined }
             save_card: {
                 Args: {
                     actor: string
@@ -280,6 +331,22 @@ export type Database = {
                 Returns: string
             }
             set_actor: { Args: { actor: string }; Returns: undefined }
+            set_invite_role: {
+                Args: {
+                    actor_id: string
+                    invite_email: string
+                    new_role?: Database['public']['Enums']['app_role']
+                }
+                Returns: undefined
+            }
+            set_person_role: {
+                Args: {
+                    actor_id: string
+                    new_role?: Database['public']['Enums']['app_role']
+                    person_id: string
+                }
+                Returns: undefined
+            }
         }
         Enums: {
             app_role: 'admin' | 'editor'

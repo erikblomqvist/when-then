@@ -23,6 +23,7 @@
         "test": "vp test && vp run test:e2e",
         "test:unit": "vp test",
         "test:e2e": "playwright test",
+        "test:db": "supabase test db",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "storybook": "storybook dev -p 6006",
         "build-storybook": "storybook build"

@@ -39,17 +39,24 @@ export function localServiceClient() {
 }
 
 /**
- * Creates a fresh confirmed user (`<role>-<uuid>@example.com`), gives it `role` (or none),
- * signs it in with a password and puts the auth cookies in the page's browser context, the
- * same cookies the app's `@supabase/ssr` client reads. Returns the user's email and id.
+ * Creates a fresh confirmed user (`<role>-<uuid>@example.com`, or `options.email`), gives it
+ * `role` (or none), signs it in with a password and puts the auth cookies in the page's
+ * browser context, the same cookies the app's `@supabase/ssr` client reads. The user looks
+ * like a first Google sign-in (Google in its app metadata), so a pending invite for that
+ * email attaches. Returns the user's email and id.
  */
-export async function signInAs(page: Page, role: AppRole | null) {
+export async function signInAs(page: Page, role: AppRole | null, options: { email?: string } = {}) {
     const { url, publishableKey } = localSupabase()
     const admin = localServiceClient()
 
-    const email = `${role ?? 'no-role'}-${randomUUID()}@example.com`
+    const email = options.email ?? `${role ?? 'no-role'}-${randomUUID()}@example.com`
     const password = randomUUID()
-    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true })
+    const created = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        app_metadata: { provider: 'google', providers: ['google'] },
+    })
     if (created.error) throw created.error
     const userId = created.data.user.id
 
