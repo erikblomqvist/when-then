@@ -5,8 +5,9 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import type { CardInput } from '../cards/card'
+import type { CardFilter } from '../cards/card-list'
 import { localServiceClient } from '../testing/e2e-auth'
-import { cardHistory, getCard, listCards, saveCard } from './cards'
+import { cardHistory, getCard, listCards, matchingCardIds, saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
@@ -186,4 +187,170 @@ test('the browser cannot read or write card tables directly', async () => {
     }
     const rpc = await browser.rpc('save_card', { actor: randomUUID(), card: {}, translations: {} })
     expect(rpc.error).not.toBeNull()
+})
+
+// The list query (search, filters, sort, paging) over cards made here with a unique token, so
+// cards other tests save meanwhile never show up, plus the seeded cards for status and
+// verified (which only the seed sets so far).
+
+const tokenCard = (
+    categoryId: string,
+    token: string,
+    date: CardInput['date'],
+    more: Partial<CardInput> = {},
+): CardInput => ({
+    categoryId,
+    date,
+    sourceUrl: null,
+    sourceQuote: null,
+    translations: { en: { text: `A made-up ${token} card from ${JSON.stringify(date)}` } },
+    ...more,
+})
+
+const undated = { decade: null, year: null, month: null, day: null }
+
+test('search matches card text in any locale, ignoring case and wildcards', async () => {
+    const actor = await newActor()
+    const events = await eventsCategory()
+    const token = randomUUID().slice(0, 8)
+    const id = await saveCard(db, actor, {
+        ...tokenCard(events.id, `en${token}`, undated),
+        translations: {
+            en: { text: `A made-up market en${token}` },
+            nb: { text: `Et oppdiktet marked nb${token}` },
+        },
+    })
+
+    const ids = async (search: string) =>
+        (await listCards(db, { page: 1, pageSize: 10, filter: { search } })).cards.map(
+            (listed) => listed.id,
+        )
+    expect(await ids(`NB${token.toUpperCase()}`)).toEqual([id])
+    expect(await ids(`market en${token}`)).toEqual([id])
+    expect(await ids(`n_${token}`)).toEqual([])
+    expect(await ids(`%${token}`)).toEqual([])
+})
+
+test('sorting by date puts BC before AD, a decade at its earliest year and undated last', async () => {
+    const actor = await newActor()
+    const events = await eventsCategory()
+    const token = randomUUID().slice(0, 8)
+    const dates = {
+        undated,
+        y1967day: { decade: 1960, year: 1967, month: 4, day: 12 },
+        y1: { decade: 1, year: 1, month: null, day: null },
+        d1490: { decade: 1490, year: null, month: null, day: null },
+        y44bc: { decade: -49, year: -44, month: null, day: null },
+        y1967: { decade: 1960, year: 1967, month: null, day: null },
+        d0sbc: { decade: -9, year: null, month: null, day: null },
+        y1493: { decade: 1490, year: 1493, month: null, day: null },
+        d490sbc: { decade: -499, year: null, month: null, day: null },
+    }
+    const ids: Record<string, string> = {}
+    for (const [name, date] of Object.entries(dates)) {
+        ids[name] = await saveCard(db, actor, tokenCard(events.id, token, date))
+    }
+    const order = async (sort: 'date' | '-date') =>
+        (await listCards(db, { page: 1, pageSize: 20, filter: { search: token }, sort })).cards.map(
+            (listed) => Object.keys(ids).find((name) => ids[name] === listed.id),
+        )
+
+    expect(await order('date')).toEqual([
+        'd490sbc',
+        'y44bc',
+        'd0sbc',
+        'y1',
+        'd1490',
+        'y1493',
+        'y1967',
+        'y1967day',
+        'undated',
+    ])
+    expect(await order('-date')).toEqual([
+        'y1967day',
+        'y1967',
+        'y1493',
+        'd1490',
+        'y1',
+        'd0sbc',
+        'y44bc',
+        'd490sbc',
+        'undated',
+    ])
+})
+
+test('filters by category, source and before/after 1500, and pages the result', async () => {
+    const actor = await newActor()
+    const [events, people] = await listCategories(db)
+    const token = randomUUID().slice(0, 8)
+    const source = { sourceUrl: 'https://example.com/made-up', sourceQuote: null }
+    const early = await saveCard(
+        db,
+        actor,
+        tokenCard(events.id, token, { decade: 1490, year: null, month: null, day: null }, source),
+    )
+    const late = await saveCard(
+        db,
+        actor,
+        tokenCard(people.id, token, { decade: 1500, year: 1500, month: null, day: null }),
+    )
+    const lateDecade = await saveCard(
+        db,
+        actor,
+        tokenCard(events.id, token, { decade: 1810, year: null, month: null, day: null }),
+    )
+    const none = await saveCard(db, actor, tokenCard(events.id, token, undated))
+
+    const ids = async (filter: CardFilter) =>
+        (await listCards(db, { page: 1, pageSize: 10, filter: { search: token, ...filter } })).cards
+            .map((listed) => listed.id)
+            .toSorted()
+    expect(await ids({ categoryId: people.id })).toEqual([late])
+    expect(await ids({ hasSource: true })).toEqual([early])
+    expect(await ids({ hasSource: false })).toEqual([late, lateDecade, none].toSorted())
+    expect(await ids({ era: 'before-1500' })).toEqual([early])
+    expect(await ids({ era: 'from-1500' })).toEqual([late, lateDecade].toSorted())
+
+    const [first, second, third] = await Promise.all(
+        [1, 2, 3].map((page) =>
+            listCards(db, { page, pageSize: 3, filter: { search: token }, sort: 'date' }),
+        ),
+    )
+    expect([first.total, second.total]).toEqual([4, 4])
+    expect(first.cards.map((listed) => listed.id)).toEqual([early, late, lateDecade])
+    expect(second.cards.map((listed) => listed.id)).toEqual([none])
+    // Past the last page: no cards, still the total.
+    expect(third).toEqual({ cards: [], total: 4 })
+})
+
+test('filters seeded cards by status and verified', async () => {
+    const list = async (filter: CardFilter) =>
+        (await listCards(db, { page: 1, pageSize: 50, filter })).cards
+    const published = await list({ status: 'published' })
+    expect(published.every((listed) => listed.status === 'published')).toBe(true)
+    expect(published.map((listed) => listed.text)).toContain(
+        'The made-up port of Sampleby lights its first lighthouse',
+    )
+
+    const verified = await list({ verified: true, search: 'Sampleb' })
+    expect(verified.map((listed) => [listed.text, listed.verified])).toEqual([
+        ['The made-up port of Sampleby lights its first lighthouse', true],
+    ])
+    const unverified = await list({ verified: false, search: 'Sampleb' })
+    expect(unverified.map((listed) => [listed.text, listed.verified])).toEqual([
+        ['The made-up Samplebridge opens to horse carts', false],
+    ])
+})
+
+test('the ids of every card matching a filter, beyond one page', async () => {
+    const actor = await newActor()
+    const events = await eventsCategory()
+    const token = randomUUID().slice(0, 8)
+    const saved = []
+    for (const year of [1901, 1902, 1903]) {
+        const date = { decade: 1900, year, month: null, day: null }
+        saved.push(await saveCard(db, actor, tokenCard(events.id, token, date)))
+    }
+
+    expect((await matchingCardIds(db, { search: token })).toSorted()).toEqual(saved.toSorted())
 })
