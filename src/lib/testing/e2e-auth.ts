@@ -31,6 +31,13 @@ function localSupabase() {
     return { url, publishableKey: env('PUBLIC_SUPABASE_PUBLISHABLE_KEY') }
 }
 
+/** The service client (secret key) for the local stack, for test setup and checks. */
+export function localServiceClient() {
+    return createClient<Database>(localSupabase().url, env('SUPABASE_SECRET_KEY'), {
+        auth: { persistSession: false, autoRefreshToken: false },
+    })
+}
+
 /**
  * Creates a fresh confirmed user (`<role>-<uuid>@example.com`), gives it `role` (or none),
  * signs it in with a password and puts the auth cookies in the page's browser context, the
@@ -38,9 +45,7 @@ function localSupabase() {
  */
 export async function signInAs(page: Page, role: AppRole | null) {
     const { url, publishableKey } = localSupabase()
-    const admin = createClient<Database>(url, env('SUPABASE_SECRET_KEY'), {
-        auth: { persistSession: false, autoRefreshToken: false },
-    })
+    const admin = localServiceClient()
 
     const email = `${role ?? 'no-role'}-${randomUUID()}@example.com`
     const password = randomUUID()

@@ -5,7 +5,7 @@
 // Later tickets add fields (per-locale `text_sv`, `note_sv`, difficulty, tags) by extending
 // `CardFormValues`, `parseCardForm` and `cardFormValues` together.
 
-import type { CardInput } from './card'
+import type { CardFields, CardInput, CardLocale } from './card'
 import {
     decadeFromLabel,
     decadeLabel,
@@ -137,11 +137,13 @@ export function parseCardForm(form: FormData): ParsedCardForm {
 const numberField = (value: number | null) => (value === null ? '' : String(value))
 
 /** The fields the editor shows for a saved card: the inverse of `parseCardForm`. */
-export function cardFormValues(card: CardInput): CardFormValues {
+export function cardFormValues(
+    card: CardFields & { translations: Partial<Record<CardLocale, { text: string }>> },
+): CardFormValues {
     const { decade, year, month, day } = card.date
     const bc = (year ?? decade ?? 0) < 0
     return {
-        text_en: card.translations.en.text,
+        text_en: card.translations.en?.text ?? '',
         category_id: card.categoryId,
         era: bc ? 'BC' : 'AD',
         decade: decade === null ? '' : String(decadeLabel(decade)),

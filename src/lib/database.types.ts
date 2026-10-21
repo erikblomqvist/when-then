@@ -3,6 +3,243 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
     public: {
         Tables: {
+            audit_log: {
+                Row: {
+                    action: string
+                    actor_id: string | null
+                    after: Json | null
+                    at: string
+                    before: Json | null
+                    details: Json | null
+                    entity: string
+                    entity_id: string
+                    id: number
+                    locale: Database['public']['Enums']['card_locale'] | null
+                }
+                Insert: {
+                    action: string
+                    actor_id?: string | null
+                    after?: Json | null
+                    at?: string
+                    before?: Json | null
+                    details?: Json | null
+                    entity: string
+                    entity_id: string
+                    id?: never
+                    locale?: Database['public']['Enums']['card_locale'] | null
+                }
+                Update: {
+                    action?: string
+                    actor_id?: string | null
+                    after?: Json | null
+                    at?: string
+                    before?: Json | null
+                    details?: Json | null
+                    entity?: string
+                    entity_id?: string
+                    id?: never
+                    locale?: Database['public']['Enums']['card_locale'] | null
+                }
+                Relationships: []
+            }
+            card_translations: {
+                Row: {
+                    card_id: string
+                    created_at: string
+                    created_by: string | null
+                    locale: Database['public']['Enums']['card_locale']
+                    note: string | null
+                    status: Database['public']['Enums']['translation_status']
+                    text: string
+                    updated_at: string
+                    updated_by: string | null
+                }
+                Insert: {
+                    card_id: string
+                    created_at?: string
+                    created_by?: string | null
+                    locale: Database['public']['Enums']['card_locale']
+                    note?: string | null
+                    status?: Database['public']['Enums']['translation_status']
+                    text: string
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Update: {
+                    card_id?: string
+                    created_at?: string
+                    created_by?: string | null
+                    locale?: Database['public']['Enums']['card_locale']
+                    note?: string | null
+                    status?: Database['public']['Enums']['translation_status']
+                    text?: string
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: 'card_translations_card_id_fkey'
+                        columns: ['card_id']
+                        isOneToOne: false
+                        referencedRelation: 'cards'
+                        referencedColumns: ['id']
+                    },
+                ]
+            }
+            cards: {
+                Row: {
+                    archived_at: string | null
+                    archived_by: string | null
+                    category_id: string
+                    created_at: string
+                    created_by: string | null
+                    day: number | null
+                    decade: number | null
+                    difficulty: number | null
+                    id: string
+                    month: number | null
+                    source_quote: string | null
+                    source_url: string | null
+                    status: Database['public']['Enums']['card_status']
+                    tags: string[]
+                    updated_at: string
+                    updated_by: string | null
+                    verified_at: string | null
+                    verified_by: string | null
+                    year: number | null
+                }
+                Insert: {
+                    archived_at?: string | null
+                    archived_by?: string | null
+                    category_id: string
+                    created_at?: string
+                    created_by?: string | null
+                    day?: number | null
+                    decade?: number | null
+                    difficulty?: number | null
+                    id?: string
+                    month?: number | null
+                    source_quote?: string | null
+                    source_url?: string | null
+                    status?: Database['public']['Enums']['card_status']
+                    tags?: string[]
+                    updated_at?: string
+                    updated_by?: string | null
+                    verified_at?: string | null
+                    verified_by?: string | null
+                    year?: number | null
+                }
+                Update: {
+                    archived_at?: string | null
+                    archived_by?: string | null
+                    category_id?: string
+                    created_at?: string
+                    created_by?: string | null
+                    day?: number | null
+                    decade?: number | null
+                    difficulty?: number | null
+                    id?: string
+                    month?: number | null
+                    source_quote?: string | null
+                    source_url?: string | null
+                    status?: Database['public']['Enums']['card_status']
+                    tags?: string[]
+                    updated_at?: string
+                    updated_by?: string | null
+                    verified_at?: string | null
+                    verified_by?: string | null
+                    year?: number | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: 'cards_category_id_fkey'
+                        columns: ['category_id']
+                        isOneToOne: false
+                        referencedRelation: 'categories'
+                        referencedColumns: ['id']
+                    },
+                ]
+            }
+            categories: {
+                Row: {
+                    archived_at: string | null
+                    archived_by: string | null
+                    colour: string
+                    created_at: string
+                    created_by: string | null
+                    icon: string
+                    id: string
+                    position: number
+                    updated_at: string
+                    updated_by: string | null
+                }
+                Insert: {
+                    archived_at?: string | null
+                    archived_by?: string | null
+                    colour: string
+                    created_at?: string
+                    created_by?: string | null
+                    icon: string
+                    id?: string
+                    position: number
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Update: {
+                    archived_at?: string | null
+                    archived_by?: string | null
+                    colour?: string
+                    created_at?: string
+                    created_by?: string | null
+                    icon?: string
+                    id?: string
+                    position?: number
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Relationships: []
+            }
+            category_translations: {
+                Row: {
+                    category_id: string
+                    created_at: string
+                    created_by: string | null
+                    locale: Database['public']['Enums']['card_locale']
+                    name: string
+                    status: Database['public']['Enums']['translation_status']
+                    updated_at: string
+                    updated_by: string | null
+                }
+                Insert: {
+                    category_id: string
+                    created_at?: string
+                    created_by?: string | null
+                    locale: Database['public']['Enums']['card_locale']
+                    name: string
+                    status?: Database['public']['Enums']['translation_status']
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Update: {
+                    category_id?: string
+                    created_at?: string
+                    created_by?: string | null
+                    locale?: Database['public']['Enums']['card_locale']
+                    name?: string
+                    status?: Database['public']['Enums']['translation_status']
+                    updated_at?: string
+                    updated_by?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: 'category_translations_category_id_fkey'
+                        columns: ['category_id']
+                        isOneToOne: false
+                        referencedRelation: 'categories'
+                        referencedColumns: ['id']
+                    },
+                ]
+            }
             user_roles: {
                 Row: {
                     created_at: string
@@ -26,10 +263,29 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            card_date_parts_valid: {
+                Args: { day: number; decade: number; month: number; year: number }
+                Returns: boolean
+            }
+            current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+            decade_of: { Args: { year: number }; Returns: number }
+            save_card: {
+                Args: {
+                    actor: string
+                    card: Json
+                    card_id?: string
+                    translations: Json
+                }
+                Returns: string
+            }
+            set_actor: { Args: { actor: string }; Returns: undefined }
         }
         Enums: {
             app_role: 'admin' | 'editor'
+            card_locale: 'en' | 'sv' | 'nb'
+            card_status: 'draft' | 'published' | 'archived'
+            translation_status: 'machine' | 'reviewed' | 'stale'
         }
         CompositeTypes: {
             [_ in never]: never
@@ -158,6 +414,9 @@ export const Constants = {
     public: {
         Enums: {
             app_role: ['admin', 'editor'],
+            card_locale: ['en', 'sv', 'nb'],
+            card_status: ['draft', 'published', 'archived'],
+            translation_status: ['machine', 'reviewed', 'stale'],
         },
     },
 } as const
