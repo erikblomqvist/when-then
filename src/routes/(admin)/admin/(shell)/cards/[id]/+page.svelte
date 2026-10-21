@@ -1,6 +1,7 @@
 <script lang="ts">
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
     import CardHistory from '#lib/admin/cards/CardHistory.svelte'
+    import CardLifecycle from '#lib/admin/cards/CardLifecycle.svelte'
     import type { PageProps } from './$types'
 
     let { data, form }: PageProps = $props()
@@ -19,7 +20,17 @@
         categories={data.categories}
         card={data.card}
         errors={form?.errors}
-        saved={form?.saved ?? false} />
+        saved={form?.saved ?? false}>
+        {#snippet sidebar({ dirty })}
+            <CardLifecycle
+                card={data.card}
+                blockers={data.publishBlockers}
+                role={data.role}
+                {dirty}
+                verifiedByEmail={data.verifiedByEmail}
+                error={form?.lifecycleError} />
+        {/snippet}
+    </CardEditor>
 {/key}
 
 <div class="mt-12">

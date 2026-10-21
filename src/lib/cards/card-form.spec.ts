@@ -34,6 +34,13 @@ describe('parseCardForm', () => {
         })
     })
 
+    it('asks to clear the verification only when the editor said so', () => {
+        const cleared = parseCardForm(form({ year: '1492', clear_verification: 'true' }))
+        expect(cleared.ok && cleared.card.clearVerification).toBe(true)
+        const kept = parseCardForm(form({ year: '1492' }))
+        expect(kept.ok && 'clearVerification' in kept.card).toBe(false)
+    })
+
     it('fills the decade from the year, whatever the decade field says', () => {
         const result = parseCardForm(form({ year: '1969', decade: '1480', month: '7', day: '20' }))
         expect(result.ok && result.card.date).toEqual({

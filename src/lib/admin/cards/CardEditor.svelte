@@ -21,6 +21,7 @@
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
+        cardFormValues,
         cardTextMaxLength,
         sourceQuoteMaxLength,
         type CardFormErrors,
@@ -73,6 +74,15 @@
             : null,
     )
 
+    // Changing a verified date asks whether to clear the verification (sent with the save).
+    const dateFields = ['era', 'decade', 'year', 'month', 'day'] as const
+    const dateChanged = () => {
+        if (!card) return false
+        const saved = cardFormValues(card)
+        const now = { ...values, decade: decadeFromYear ?? values.decade }
+        return dateFields.some((name) => now[name].trim() !== saved[name].trim())
+    }
+
     beforeNavigate((navigation) => {
         if (!dirty || saving) return
         // Closing the tab or leaving the site: the browser asks with its own dialog.
@@ -100,7 +110,16 @@
         method="POST"
         action="?/save"
         class="flex flex-col gap-6"
-        use:enhance={() => {
+        use:enhance={({ formData }) => {
+            if (
+                card?.verifiedAt &&
+                dateChanged() &&
+                confirm(
+                    'This card’s date was verified, and you changed it. Clear the verification? (Cancel keeps it.)',
+                )
+            ) {
+                formData.set('clear_verification', 'true')
+            }
             saving = true
             const submitted = JSON.stringify(values)
             return async ({ result, update }) => {

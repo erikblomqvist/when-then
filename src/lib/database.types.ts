@@ -284,6 +284,10 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            archive_card: {
+                Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
             audit_actors: {
                 Args: never
                 Returns: {
@@ -313,9 +317,14 @@ export type Database = {
                 Args: { day: number; decade: number; month: number; year: number }
                 Returns: boolean
             }
+            card_publish_blockers: { Args: { card_id: string }; Returns: string[] }
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
+            delete_draft: {
+                Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
             invite_person: {
                 Args: {
                     actor_id: string
@@ -334,7 +343,16 @@ export type Database = {
                     user_id: string
                 }[]
             }
+            lock_card: {
+                Args: { card_id: string }
+                Returns: Database['public']['Enums']['card_status']
+            }
+            publish_card: {
+                Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
             require_admin: { Args: { actor_id: string }; Returns: undefined }
+            require_publishable: { Args: { card_id: string }; Returns: undefined }
             save_card: {
                 Args: {
                     actor: string
@@ -345,6 +363,10 @@ export type Database = {
                 Returns: string
             }
             set_actor: { Args: { actor: string }; Returns: undefined }
+            set_card_verified: {
+                Args: { actor: string; card_id: string; verified: boolean }
+                Returns: undefined
+            }
             set_invite_role: {
                 Args: {
                     actor_id: string
@@ -359,6 +381,10 @@ export type Database = {
                     new_role?: Database['public']['Enums']['app_role']
                     person_id: string
                 }
+                Returns: undefined
+            }
+            unarchive_card: {
+                Args: { actor: string; card_id: string }
                 Returns: undefined
             }
         }
