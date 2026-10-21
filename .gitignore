@@ -32,6 +32,12 @@ storybook-static
 test-results
 playwright-report
 
+# Paraglide output (compiled from messages/ by the Vite plugin and `vpr i18n:compile`)
+src/lib/paraglide
+
+# Supabase CLI state (link info, dumps)
+supabase/.temp
+
 # Project dotfiles, overriding a global `.*` ignore. New dotfiles need an entry here.
 !.gitignore
 !.npmrc

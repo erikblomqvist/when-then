@@ -6,6 +6,8 @@ Vite+ (`vp`) runs everything; see the README for setup. `vp <name>` is a built-i
 - Tests: `*.spec.ts` runs in Node, `*.svelte.spec.ts` in a real browser (Vitest browser mode), `*.e2e.ts` with Playwright.
 - Code style is enforced by Oxfmt (`fmt` in `vite.config.ts`). Run `vp fmt`; don't hand-format.
 - New dotfiles need a `!` entry in `.gitignore`, which overrides a global `.*` ignore.
+- Backend: Supabase, local stack via the Supabase CLI (`vpr db:start`, `vpr db:reset`, `vpr db:types`); schema is SQL in `supabase/migrations/`, pushed to production by the *Migrate database* workflow on `main`. Env var names are declared in `src/env.ts` and listed in `.env.example`.
+- UI strings: Paraglide messages in `messages/<locale>.json` (en base, sv, nb), used as `m.key()` from `#lib/paraglide/messages.js`. `src/lib/paraglide/` is generated; `vpr i18n:compile` regenerates it.
 
 ## Agent skills
 

@@ -1,14 +1,14 @@
 <script lang="ts">
     import { Button, Card, Surface, Text } from '#lib'
+    import { m } from '#lib/paraglide/messages.js'
 </script>
 
 <Surface
     kind="table"
     grain
     class="page">
-    <Text role="heading-1">When Then?</Text>
-    <Text role="body"
-        >A party game of placing history on your own timeline. The game is not built yet.</Text>
+    <Text role="heading-1">{m.app_name()}</Text>
+    <Text role="body">{m.tagline()}</Text>
     <div class="cards">
         <Card
             category="events"
@@ -22,7 +22,7 @@
     </div>
     <Button
         variant="ghost"
-        disabled>Create game</Button>
+        disabled>{m.create_game()}</Button>
 </Surface>
 
 <style>

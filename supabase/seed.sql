@@ -1,0 +1,6 @@
+-- Local seed, applied by `supabase db reset` (and `supabase start` on a fresh stack).
+--
+-- Production is the source of truth for cards and categories; this file only holds
+-- synthetic data for local development and tests, never real content. Add the category
+-- rows and a handful of made-up cards here once those tables exist. To work with real
+-- data locally, run `vpr db:pull` instead.
