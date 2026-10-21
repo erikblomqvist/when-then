@@ -2,6 +2,7 @@
 // card repository (`#lib/server/cards.js`) maps rows to these shapes and back.
 
 import { Constants, type Database } from '../database.types'
+import type { CardFilter, CardSort } from './card-list'
 import type { DateParts } from './date-parts'
 
 type Enums = Database['public']['Enums']
@@ -59,11 +60,15 @@ export type Card = CardFields & {
 /** The category facts the card list and editor show next to a card. */
 export type CardCategory = { id: string; name: string; icon: string; colour: string }
 
-/**
- * What the card list asks for. Search, filters (status, category, translation state, verified,
- * source, before/after 1500) and sort order are added here as the list grows.
- */
-export type CardListQuery = { page: number; pageSize: number }
+/** What the card list asks for: a view (`#lib/cards/card-list.js`) and the page size. */
+export type CardListQuery = {
+    page: number
+    pageSize: number
+    /** Defaults to every card. */
+    filter?: CardFilter
+    /** Defaults to most recently updated first. */
+    sort?: CardSort
+}
 
 /** One row of the card list. */
 export type CardSummary = {
@@ -75,5 +80,6 @@ export type CardSummary = {
     category: CardCategory
     /** Per-locale translation status, for the list's badges. A missing locale has no entry. */
     translations: Partial<Record<CardLocale, TranslationStatus>>
+    verified: boolean
     updatedAt: string
 }

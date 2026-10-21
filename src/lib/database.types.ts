@@ -318,6 +318,36 @@ export type Database = {
                 Returns: boolean
             }
             card_publish_blockers: { Args: { card_id: string }; Returns: string[] }
+            cards_matching: {
+                Args: { filter?: Json }
+                Returns: {
+                    archived_at: string | null
+                    archived_by: string | null
+                    category_id: string
+                    created_at: string
+                    created_by: string | null
+                    day: number | null
+                    decade: number | null
+                    difficulty: number | null
+                    id: string
+                    month: number | null
+                    source_quote: string | null
+                    source_url: string | null
+                    status: Database['public']['Enums']['card_status']
+                    tags: string[]
+                    updated_at: string
+                    updated_by: string | null
+                    verified_at: string | null
+                    verified_by: string | null
+                    year: number | null
+                }[]
+                SetofOptions: {
+                    from: '*'
+                    to: 'cards'
+                    isOneToOne: false
+                    isSetofReturn: true
+                }
+            }
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
@@ -334,6 +364,7 @@ export type Database = {
                 Returns: string
             }
             is_google_user: { Args: { app_metadata: Json }; Returns: boolean }
+            like_literal: { Args: { text: string }; Returns: string }
             list_people: {
                 Args: never
                 Returns: {
