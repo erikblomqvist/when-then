@@ -1,0 +1,71 @@
+// The categories pages' server side (#44): admin only, the actor for the audit log, and the
+// database's refusals as messages.
+
+import { fail, type RequestEvent } from '@sveltejs/kit'
+import {
+    parseCategoryForm,
+    type CategoryFormErrors,
+    type CategoryFormValues,
+} from '../categories/category-form'
+import type { Category } from './categories'
+import { CategoryError, saveCategory } from './categories'
+import { requireRole } from './guard'
+import { supabaseService } from './supabase'
+
+export const emptyCategoryFormValues: CategoryFormValues = {
+    icon: '',
+    colour: '',
+    name_en: '',
+    name_sv: '',
+    name_nb: '',
+}
+
+export const categoryFormValues = (category: Category): CategoryFormValues => ({
+    icon: category.icon,
+    colour: category.colour,
+    name_en: category.names.en ?? '',
+    name_sv: category.names.sv ?? '',
+    name_nb: category.names.nb ?? '',
+})
+
+/**
+ * Runs an admin's category change with their id as the actor; a `CategoryError` from the
+ * database becomes a 409 with its message (and `values`, to show the form again).
+ */
+export async function asAdmin<T>(
+    event: RequestEvent,
+    run: (actor: string) => Promise<T>,
+    values?: CategoryFormValues,
+) {
+    const { user } = await requireRole(event, 'admin')
+    try {
+        return await run(user.id)
+    } catch (error) {
+        if (error instanceof CategoryError) {
+            const errors: CategoryFormErrors = {}
+            return fail(409, { error: error.message, errors, values })
+        }
+        throw error
+    }
+}
+
+/** The save action of the new and edit pages: the saved category's id, or a failure to show. */
+export async function saveCategoryAction(event: RequestEvent, id?: string) {
+    await requireRole(event, 'admin')
+    const parsed = parseCategoryForm(await event.request.formData())
+    if ('errors' in parsed) {
+        return fail(400, { error: undefined, errors: parsed.errors, values: parsed.values })
+    }
+    const values = {
+        icon: parsed.input.icon,
+        colour: parsed.input.colour,
+        name_en: parsed.input.names.en,
+        name_sv: parsed.input.names.sv ?? '',
+        name_nb: parsed.input.names.nb ?? '',
+    }
+    return asAdmin(
+        event,
+        (actor) => saveCategory(supabaseService(), actor, parsed.input, id),
+        values,
+    )
+}

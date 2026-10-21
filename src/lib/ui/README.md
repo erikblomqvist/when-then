@@ -6,7 +6,7 @@ Extracted from the "När då då?" mobile prototype and adapted to the glossary.
 
 | File | Purpose |
 |---|---|
-| `../styles/tokens.css` | All design tokens as CSS custom properties on `:root`, plus category scope classes. |
+| `../styles/tokens.css` | All design tokens as CSS custom properties on `:root`. Imports `category-colours.css` (category palette and scope classes, shared with the admin). |
 | `../styles/components.css` | The `ui-` component styles. Depends on `tokens.css`. |
 | `*.svelte` | Svelte 5 components that render the `ui-` markup with typed props. |
 | `*.stories.svelte` | Storybook stories (Svelte CSF). |
@@ -19,7 +19,7 @@ Tokens have two layers. Components reference the **semantic** layer (or the cate
 
 1. **Primitives:** `--color-<ramp>-<step>`, `--font-family-*`, `--font-size-<px>`, `--font-weight-*`, `--space-<n>`, `--radius-*`, `--ease-*`, `--duration-*`.
 2. **Semantic:** `--surface-*`, `--gradient-*`, `--text-on-<surface>-*`, `--border-*`, `--focus-ring*`, `--type-<role>-*`, `--shadow-*`.
-3. **Category scopes:** `.cat-events`, `.cat-people`, `.cat-inventions`, `.cat-places` set `--cat` and `--cat-dark`.
+3. **Category scopes:** `.cat-<colour>` (red, orange, amber, green, teal, blue, purple, pink) in `category-colours.css` set `--cat` and `--cat-dark`.
 
 ### Colour
 
@@ -32,7 +32,7 @@ All colours are OKLCH. Translucent variants use relative colour syntax, for exam
 | `ink` 600–950 | Text and marks on paper |
 | `haze` 100–300 | Cool secondary text on the table |
 | `coral-100` | Error text on the table |
-| `red`, `blue`, `amber`, `green` (500, 700) | Category lacquer (500) and edge (700) |
+| `--palette-<colour>-500/700` (in `category-colours.css`) | Category lacquer (500) and edge (700) |
 
 There are two contexts: **on table** (dark navy, cream text) and **on paper** (cream, ink text). Text tokens are named for the surface they sit on.
 
@@ -56,19 +56,21 @@ Names follow the glossary: a card shows **card text** (not a question), a correc
 | `Button`, `IconButton`, `ActionButton` | Lock in | Action buttons are the two game actions, Place and Lock in. |
 | `Input`, `CodeInput` | Host, join | The code input is the play code, entry and read-only display. |
 | `Chip`, `Tabs` | Category draw, Card language | Chips show the draw result; tabs pick settings on paper. |
-| `CategoryDot`, `CategoryLegendItem`, `CategoryIcon` | Category | Lucide icons: zap, user, lightbulb, map-pin. |
+| `CategoryDot`, `CategoryLegendItem`, `CategoryIcon` | Category | Render from category data: name, icon (curated Lucide set) and colour. |
 | `Notepad`, `PlayerRow`, `NumberBadge`, `RoleTag` | Host, Reader | The lobby list and seating order. |
 | `Surface` | | table, tray, paper, sheet, panel, veil. |
 | `Text` | | The type roles. |
 
-## Category mapping
+## Categories
 
-| Class | Source category (Swedish) | Hue |
-|---|---|---|
-| `.cat-events` | Händelser | red |
-| `.cat-people` | Personer | blue |
-| `.cat-inventions` | Prylar | amber |
-| `.cat-places` | Platser | green |
+Categories are data, managed by admins on `/admin/categories`: a name per card language, an icon from the curated Lucide set and a colour from the palette, both listed in `src/lib/categories/look.ts`. Components take a `CategoryLook` (`{ name, icon, colour }`) and set `.cat-<colour>`. `sampleCategories` in `types.ts` holds made-up ones in the seed's looks for stories:
+
+| Sample | Source category (Swedish) | Icon | Colour |
+|---|---|---|---|
+| events | Händelser | zap | red |
+| people | Personer | user | blue |
+| inventions | Prylar | lightbulb | amber |
+| places | Platser | map-pin | green |
 
 ## Still in flux
 

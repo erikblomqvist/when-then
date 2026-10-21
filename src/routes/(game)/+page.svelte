@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Button, Card, Surface, Text } from '#lib'
+    import { Button, Card, sampleCategories, Surface, Text } from '#lib'
     import { m } from '#lib/paraglide/messages.js'
 </script>
 
@@ -11,11 +11,11 @@
     <Text role="body">{m.tagline()}</Text>
     <div class="cards">
         <Card
-            category="events"
+            category={sampleCategories.events}
             text="The Berlin Wall falls" />
         <Card
             face="timeline"
-            category="people"
+            category={sampleCategories.people}
             year="1490s"
             text="Columbus reaches America"
             state="locked" />
