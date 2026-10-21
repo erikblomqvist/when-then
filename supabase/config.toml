@@ -163,6 +163,7 @@ site_url = "https://when-then-gamma.vercel.app"
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
+    "https://when-then-gamma.vercel.app/**",
     "http://localhost:5173/**",
     "https://when-then-*-erikblomqvists-projects.vercel.app/**",
 ]

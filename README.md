@@ -61,6 +61,32 @@ vpr db:stop
 - **Environment variables:** declared, with descriptions, in [`src/env.ts`](src/env.ts); that is the only list of names. Locally they live in `.env.local`. Production and preview values are set by hand in Vercel's project settings (the Supabase integration could not be connected). Google sign-in on the *local* stack needs `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in `supabase/.env`, which the Supabase CLI reads for `supabase/config.toml`; anonymous sign-in works without them. Repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` and the variable `SUPABASE_PROJECT_REF` drive the workflows. The database password is in the owner's password manager.
 - **Keep-alive:** the *Keep Supabase awake* workflow runs a query every three days so the Free project is not paused. GitHub disables schedules after 60 days without commits; re-enable it under Actions if that happens.
 
+## Admin sign-in
+
+`/admin` is for editors and admins, who sign in with Google. `src/hooks.server.ts` reads the `user_role` claim from the validated JWT and turns away every `/admin` request (pages, form actions and endpoints) without at least `editor`: signed out goes to `/admin/sign-in`, signed in without a role to `/admin/no-access`. Admin-only work calls `requireRole(event, 'admin')` from `src/lib/server/guard.ts`, which answers editors with 403. A role granted or revoked takes effect at the next token refresh (within an hour), or at once after signing out and in. The service worker never caches `/admin`.
+
+### Seeding the first admin
+
+Once, after the first admin has signed in with Google (they land on "no access"), run this in the Supabase dashboard's SQL editor, then have them sign out and in again. Later roles are managed on the People page.
+
+```sql
+insert into public.user_roles (user_id, role)
+select id, 'admin' from auth.users where email = 'first.admin@example.com'
+on conflict (user_id) do update set role = excluded.role;
+```
+
+### Google OAuth for production (once, by the project owner)
+
+1. **Google Cloud console** → APIs & Services → OAuth consent screen: user type *External*, app name "When Then? admin", support email, and the scopes `openid`, `email`, `profile`. Publish it (In production) so it is not limited to test users.
+2. **Credentials** → Create credentials → OAuth client ID → *Web application*. Authorised JavaScript origins: `https://when-then-gamma.vercel.app`. Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase's callback, not the app's). For Google sign-in on the local stack, add `http://127.0.0.1:54321/auth/v1/callback` too.
+3. **Supabase dashboard** → Authentication → Sign In / Providers → Google: enable, paste the client ID and secret, save. Locally, put the same pair in `supabase/.env` as `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` and restart the stack.
+4. **Supabase dashboard** → Authentication → URL Configuration: Site URL `https://when-then-gamma.vercel.app`; Redirect URLs include `https://when-then-gamma.vercel.app/**` and `https://when-then-*-erikblomqvists-projects.vercel.app/**` (both are in `supabase/config.toml`, so `supabase config push` sets them too).
+5. Check that the Custom Access Token hook is enabled (Authentication → Hooks → `public.custom_access_token_hook`), then seed the first admin as above.
+
+### Signing in from tests
+
+There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null)` from `src/lib/testing/e2e-auth.ts`: it creates a password user on the **local** stack with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
+
 ## Translations
 
 UI strings are messages in `messages/<locale>.json` (English is the base; Swedish and Norwegian Bokmål follow), compiled by [Paraglide JS](https://paraglidejs.com/sveltekit) into typed functions under `src/lib/paraglide/` (generated, not committed). Use them as `m.key()` from `#lib/paraglide/messages.js`. The locale is per phone: cookie first, then the browser's languages, then English. It is never in the URL, because every phone opens the same join link. Card content is translated in the database, not here.
