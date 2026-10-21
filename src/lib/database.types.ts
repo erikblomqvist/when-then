@@ -284,6 +284,24 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            archive_card: {
+                Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
+            audit_actors: {
+                Args: never
+                Returns: {
+                    email: string
+                    id: string
+                }[]
+            }
+            audit_kinds: {
+                Args: never
+                Returns: {
+                    action: string
+                    entity: string
+                }[]
+            }
             audit_role_change: {
                 Args: {
                     action: string
@@ -299,11 +317,16 @@ export type Database = {
                 Args: { day: number; decade: number; month: number; year: number }
                 Returns: boolean
             }
+            card_publish_blockers: { Args: { card_id: string }; Returns: string[] }
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
             delete_category: {
                 Args: { actor: string; category_id: string }
+                Returns: undefined
+            }
+            delete_draft: {
+                Args: { actor: string; card_id: string }
                 Returns: undefined
             }
             invite_person: {
@@ -324,13 +347,22 @@ export type Database = {
                     user_id: string
                 }[]
             }
+            lock_card: {
+                Args: { card_id: string }
+                Returns: Database['public']['Enums']['card_status']
+            }
             lock_category_positions: { Args: never; Returns: undefined }
+            publish_card: {
+                Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
             reorder_categories: {
                 Args: { actor: string; ids: string[] }
                 Returns: undefined
             }
             require_admin: { Args: { actor_id: string }; Returns: undefined }
             require_category_admin: { Args: { actor: string }; Returns: undefined }
+            require_publishable: { Args: { card_id: string }; Returns: undefined }
             save_card: {
                 Args: {
                     actor: string
@@ -350,6 +382,10 @@ export type Database = {
                 Returns: string
             }
             set_actor: { Args: { actor: string }; Returns: undefined }
+            set_card_verified: {
+                Args: { actor: string; card_id: string; verified: boolean }
+                Returns: undefined
+            }
             set_category_archived: {
                 Args: { actor: string; archived: boolean; category_id: string }
                 Returns: undefined
@@ -368,6 +404,10 @@ export type Database = {
                     new_role?: Database['public']['Enums']['app_role']
                     person_id: string
                 }
+                Returns: undefined
+            }
+            unarchive_card: {
+                Args: { actor: string; card_id: string }
                 Returns: undefined
             }
         }
