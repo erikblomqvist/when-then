@@ -284,6 +284,20 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            audit_actors: {
+                Args: never
+                Returns: {
+                    email: string
+                    id: string
+                }[]
+            }
+            audit_kinds: {
+                Args: never
+                Returns: {
+                    action: string
+                    entity: string
+                }[]
+            }
             audit_role_change: {
                 Args: {
                     action: string
