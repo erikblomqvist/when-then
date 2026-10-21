@@ -5,8 +5,10 @@
 //
 // How entries read (labels, field diffs) is `#lib/audit/display.js`, shared with the pages.
 
+import type { AuditNames } from '../audit/display'
 import type { Database, Json } from '../database.types'
 import type { CardLocale } from '../cards/card'
+import { listCategories } from './categories'
 import type { Db } from './supabase'
 
 export type AuditEntry = {
@@ -123,5 +125,17 @@ export async function auditKinds(db: Db): Promise<{ entities: string[]; actions:
     return {
         entities: [...new Set(rows.map((row) => row.entity))].sort(),
         actions: [...new Set(rows.map((row) => row.action))].sort(),
+    }
+}
+
+/** The names audit entries show instead of ids: people who acted, and every category. */
+export async function auditNames(db: Db): Promise<AuditNames> {
+    const [actors, categories] = await Promise.all([
+        auditActors(db),
+        listCategories(db, { includeArchived: true }),
+    ])
+    return {
+        people: Object.fromEntries(actors.map((actor) => [actor.id, actor.email])),
+        categories: Object.fromEntries(categories.map((category) => [category.id, category.name])),
     }
 }
