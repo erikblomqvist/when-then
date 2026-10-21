@@ -1,6 +1,6 @@
 # Design tokens and basic components
 
-Extracted from the "När då då?" mobile prototype and adapted to the glossary. A starting point for the design system, not a finished one. Run `pnpm storybook` to browse every component and state.
+Extracted from the "När då då?" mobile prototype and adapted to the glossary. A starting point for the design system, not a finished one. Run `vpr storybook` to browse every component and state.
 
 ## Files
 
