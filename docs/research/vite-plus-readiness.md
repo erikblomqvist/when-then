@@ -1,6 +1,6 @@
 # Vite+ readiness with SvelteKit, Storybook and oxlint
 
-Research for [#5](https://github.com/Ar-den-korkad/when-then/issues/5). Checked on **2026-10-20** against official docs, release notes, the npm registry and upstream issue trackers.
+Research for [#5](https://github.com/erikblomqvist/when-then/issues/5). Checked on **2026-10-20** against official docs, release notes, the npm registry and upstream issue trackers.
 
 **Question:** Can we use Vite+ (with pnpm and oxlint) today for a SvelteKit + Svelte 5 + TypeScript project with Storybook? This covers licensing, SvelteKit compatibility, Storybook, how much of a `.svelte` file oxlint covers, the PWA plugin and the Vercel adapter.
 
