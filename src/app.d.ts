@@ -14,8 +14,8 @@ declare global {
             safeGetSession: () => Promise<
                 { session: Session; user: User } | { session: null; user: null }
             >
-            /** The validated user and their role from the JWT `user_role` claim, memoised per
-             * request. Gate admin work with `requireRole` from `#lib/server/guard.js`. */
+            /** The validated user and their role from `user_roles`, memoised per request.
+             * Gate admin work with `requireRole` from `#lib/server/guard.js`. */
             getViewer: () => Promise<Viewer>
         }
         // interface PageData {}

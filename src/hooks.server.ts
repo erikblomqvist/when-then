@@ -6,7 +6,7 @@ import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
 import { isPublicAdminPath, requireRole, type Viewer } from '#lib/server/guard.js'
-import { roleFromAccessToken } from '#lib/server/roles.js'
+import { currentRole } from '#lib/server/people.js'
 
 // Locale comes from the cookie, then the browser's preferred language, then English
 // (strategy in vite.config.ts). There is no locale in the URL, so the request is not rewritten.
@@ -70,14 +70,15 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
         return { session, user }
     }
 
-    // Once per request: the layout, the page and an action may all ask.
+    // Once per request: the layout, the page and an action may all ask. The role comes from
+    // `user_roles`, not the JWT claim, so a change or revoke on the People page takes effect
+    // on the person's next request rather than at their next token refresh.
     let viewer: Promise<Viewer> | undefined
     event.locals.getViewer = () =>
-        (viewer ??= event.locals
-            .safeGetSession()
-            .then(({ session, user }) =>
-                session ? { user, role: roleFromAccessToken(session.access_token) } : nulls,
-            ))
+        (viewer ??= event.locals.safeGetSession().then(async ({ user }) => {
+            if (!user) return nulls
+            return { user, role: user.is_anonymous ? null : await currentRole(user.id) }
+        }))
 
     return resolve(event, {
         // Let the browser receive the auth cookie headers.
