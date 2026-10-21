@@ -1,9 +1,9 @@
 <script lang="ts">
     import favicon from '#lib/assets/favicon.svg'
     import type { LayoutProps } from './$types'
-    import '#lib/styles/tokens.css'
-    import '#lib/styles/components.css'
 
+    // No CSS here: the game's styles load in (game)/+layout.svelte and the admin's in
+    // (admin)/admin/+layout.svelte, so neither ever loads on the other side.
     let { children }: LayoutProps = $props()
 </script>
 
