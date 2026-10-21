@@ -29,12 +29,12 @@
 <Story name="Block" args={{ block: true, size: 'lg' }} {template} />
 <Story name="Disabled" args={{ disabled: true }} {template} />
 
-<Story name="With icon">
+<Story name="With icon" asChild>
 	<Button variant="ghost"><ChevronLeft /> Back</Button>
 </Story>
 
 <!-- Ghost becomes an outline and ink turns brown on paper surfaces. -->
-<Story name="On paper" parameters={{ surface: 'paper' }}>
+<Story name="On paper" parameters={{ surface: 'paper' }} asChild>
 	<div style="display: flex; gap: 12px; flex-wrap: wrap;">
 		<Button>Primary</Button>
 		<Button variant="ghost">Ghost</Button>
@@ -42,7 +42,7 @@
 	</div>
 </Story>
 
-<Story name="Icon buttons">
+<Story name="Icon buttons" asChild>
 	<div style="display: flex; gap: 12px;">
 		<IconButton label="Back"><ChevronLeft /></IconButton>
 		<IconButton label="Close"><X /></IconButton>
@@ -51,7 +51,7 @@
 </Story>
 
 <!-- The two game actions. "Lock in" ends the turn and locks the unlocked cards. -->
-<Story name="Action buttons">
+<Story name="Action buttons" asChild>
 	<div style="display: flex; gap: 24px; align-items: center;">
 		<ActionButton label="Place"><ArrowDownToLine /></ActionButton>
 		<ActionButton label="Lock in" count="2 cards"><Lock /></ActionButton>

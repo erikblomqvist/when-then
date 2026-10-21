@@ -55,7 +55,7 @@
 <!-- The random starting point on every timeline. Not a card, worth no points. -->
 <Story name="Anchor year" args={{ face: 'timeline', category: 'places', year: 1952, state: 'anchor' }} />
 
-<Story name="All categories">
+<Story name="All categories" asChild>
 	<div style="display: flex; gap: 24px; flex-wrap: wrap;">
 		{#each categories as category (category)}
 			<Card {category} text={`A card in ${category}`} />
@@ -63,7 +63,7 @@
 	</div>
 </Story>
 
-<Story name="Sizes">
+<Story name="Sizes" asChild>
 	<div style="display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap;">
 		<Card size="sm" category="events" text="Small" />
 		<Card size="md" category="people" text="Medium" />

@@ -18,7 +18,7 @@
 </script>
 
 <!-- The category draw result, shown as chips on the table. -->
-<Story name="Chips">
+<Story name="Chips" asChild>
 	<div style="display: flex; gap: 8px; flex-wrap: wrap;">
 		<Chip active><CategoryDot category="events" /> Events</Chip>
 		<Chip>Reader's choice</Chip>
@@ -26,13 +26,13 @@
 	</div>
 </Story>
 
-<Story name="Chips as buttons">
+<Story name="Chips as buttons" asChild>
 	<div style="display: flex; gap: 8px; flex-wrap: wrap;">
 		<Chip active onclick={() => {}}>Standard</Chip>
 		<Chip onclick={() => {}}>By month</Chip>
 	</div>
 </Story>
 
-<Story name="Tabs" parameters={{ surface: 'paper' }}>
+<Story name="Tabs" parameters={{ surface: 'paper' }} asChild>
 	<Tabs tabs={languages} selected="en" label="Card language" />
 </Story>

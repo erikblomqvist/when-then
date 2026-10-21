@@ -11,7 +11,7 @@
 	});
 </script>
 
-<Story name="Dots">
+<Story name="Dots" asChild>
 	<div style="display: flex; gap: 12px;">
 		{#each categories as category (category)}
 			<CategoryDot {category} />
@@ -19,7 +19,7 @@
 	</div>
 </Story>
 
-<Story name="Legend" parameters={{ surface: 'paper' }}>
+<Story name="Legend" parameters={{ surface: 'paper' }} asChild>
 	<div style="display: flex; gap: 16px; flex-wrap: wrap;">
 		{#each categories as category (category)}
 			<CategoryLegendItem {category} />

@@ -10,7 +10,7 @@
 </script>
 
 <!-- Fraunces for display, headings, card text and years; Bricolage Grotesque for UI text. -->
-<Story name="Roles">
+<Story name="Roles" asChild>
 	<div style="display: grid; gap: 20px;">
 		<Text role="display" class="ui-paper" style="display:inline-block">1989</Text>
 		<Text role="heading-1">When Then?</Text>

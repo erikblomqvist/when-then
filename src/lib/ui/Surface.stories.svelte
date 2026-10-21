@@ -12,14 +12,14 @@
 	});
 </script>
 
-<Story name="Table with grain">
+<Story name="Table with grain" asChild>
 	<Surface kind="table" grain style="min-height: 100vh; padding: 32px;">
 		<Text role="heading-1">When Then?</Text>
 		<Text role="body">The game table, with the felt grain texture.</Text>
 	</Surface>
 </Story>
 
-<Story name="Paper, sheet and panel">
+<Story name="Paper, sheet and panel" asChild>
 	<Surface kind="table" style="min-height: 100vh; padding: 32px; display: grid; gap: 24px; align-content: start;">
 		<Surface kind="paper"><Text role="heading-2">Paper</Text><Text role="caption">A paper card on the table.</Text></Surface>
 		<Surface kind="sheet"><Text role="heading-2">Sheet</Text><Text role="caption">A full overlay sheet.</Text></Surface>
@@ -31,7 +31,7 @@
 	</Surface>
 </Story>
 
-<Story name="Veil">
+<Story name="Veil" asChild>
 	<Surface kind="table" style="position: relative; min-height: 100vh; padding: 32px;">
 		<Text role="heading-1">Behind the veil</Text>
 		<Surface kind="veil" />

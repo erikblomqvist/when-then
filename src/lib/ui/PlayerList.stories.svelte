@@ -12,7 +12,7 @@
 </script>
 
 <!-- The lobby: joined players in seating order, with the host marked. -->
-<Story name="Lobby">
+<Story name="Lobby" asChild>
 	<div style="max-width: 360px;">
 		<Notepad title="Players" meta="3 of 8">
 			<PlayerRow number={1} name="Astrid" role="Host" />
@@ -23,7 +23,7 @@
 	</div>
 </Story>
 
-<Story name="Number badges">
+<Story name="Number badges" asChild>
 	<div style="display: flex; gap: 12px; align-items: center;">
 		<NumberBadge value={1} />
 		<NumberBadge value={2} />

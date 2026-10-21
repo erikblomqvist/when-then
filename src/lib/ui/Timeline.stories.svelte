@@ -14,14 +14,14 @@
 </script>
 
 <!-- A timeline at the start of a game: only the anchor year. -->
-<Story name="Only the anchor">
+<Story name="Only the anchor" asChild>
 	<Timeline>
 		<TimelineSlot><Card face="timeline" category="events" year={1969} state="anchor" /></TimelineSlot>
 	</Timeline>
 </Story>
 
 <!-- Mid-turn: two locked cards, one unlocked card and the insertion gap open between neighbours. -->
-<Story name="Placing a card">
+<Story name="Placing a card" asChild>
 	<Timeline>
 		<TimelineSlot>
 			<Card face="timeline" category="people" year="1490s" text="Columbus reaches America" state="locked" />
@@ -39,7 +39,7 @@
 	</Timeline>
 </Story>
 
-<Story name="With the deck">
+<Story name="With the deck" asChild>
 	<div style="display: flex; gap: 24px; align-items: center;">
 		<CardBack size="md" />
 		<Timeline>
