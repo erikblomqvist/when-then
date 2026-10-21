@@ -1,3 +1,12 @@
+## Tooling
+
+Vite+ (`vp`) runs everything; see the README for setup. `vp <name>` is a built-in command and `vp run <name>` (or `vpr <name>`) a `package.json` script, and they can differ: `vp check` is format + lint + type check for `.ts`, while `vpr check` also runs `svelte-check`. Vite+ docs are local in `node_modules/vite-plus/docs`.
+
+- Before handing work back: `vpr check` and `vp test`, plus `vpr test:e2e` for changes a user would see.
+- Tests: `*.spec.ts` runs in Node, `*.svelte.spec.ts` in a real browser (Vitest browser mode), `*.e2e.ts` with Playwright.
+- Code style is enforced by Oxfmt (`fmt` in `vite.config.ts`). Run `vp fmt`; don't hand-format.
+- New dotfiles need a `!` entry in `.gitignore`, which overrides a global `.*` ignore.
+
 ## Agent skills
 
 ### Issue tracker

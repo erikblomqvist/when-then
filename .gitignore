@@ -27,3 +27,16 @@ vite.config.ts.timestamp-*
 
 # Storybook
 storybook-static
+
+# Playwright
+test-results
+playwright-report
+
+# Project dotfiles, overriding a global `.*` ignore. New dotfiles need an entry here.
+!.gitignore
+!.npmrc
+!.editorconfig
+!.github/
+!.storybook/
+!.vite-hooks/
+!.vscode/
