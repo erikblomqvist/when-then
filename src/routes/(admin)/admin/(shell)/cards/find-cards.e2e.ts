@@ -9,8 +9,9 @@ const sampleby = 'The made-up port of Sampleby lights its first lighthouse'
 const balloonist = 'A fictional balloonist crosses the Sample Sea'
 const samplebridge = 'The made-up Samplebridge opens to horse carts'
 
+// The body rows only: the header row's sort links are links too.
 const cardTexts = (page: Page) =>
-    page.getByRole('table').getByRole('row').getByRole('link').allTextContents()
+    page.getByRole('table').locator('tbody').getByRole('row').getByRole('link').allTextContents()
 
 const listed = async (page: Page) => (await cardTexts(page)).map((text) => text.trim())
 
@@ -41,7 +42,8 @@ test('a filter and a sort narrow and order the list, and the URL keeps them', as
     await signInAs(page, 'editor')
     await gotoHydrated(page, '/admin/cards?q=Sample')
 
-    const dateHeader = page.getByRole('columnheader', { name: 'Date' })
+    // Exact, or "Updated" matches too.
+    const dateHeader = page.getByRole('columnheader', { name: 'Date', exact: true })
     await dateHeader.getByRole('link').click()
     await expect(page).toHaveURL(/\?q=Sample&sort=date$/)
     await expect(dateHeader).toHaveAttribute('aria-sort', 'ascending')

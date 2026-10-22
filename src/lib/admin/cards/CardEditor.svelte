@@ -95,14 +95,16 @@
     }
 
     // "New category…" is an option of the category select: picking it opens the dialog and
-    // leaves the card's category as it was until one is created.
+    // leaves the card's category as it was until one is created. The select is bound through
+    // this setter, so it never holds "new-category" as its own value.
     const newCategory = 'new-category'
-    function pickCategory(event: Event & { currentTarget: HTMLSelectElement }) {
-        if (event.currentTarget.value !== newCategory) {
-            values.category_id = event.currentTarget.value
+    let categorySelect: HTMLSelectElement | null = $state(null)
+    function pickCategory(id: string) {
+        if (id !== newCategory) {
+            values.category_id = id
             return
         }
-        event.currentTarget.value = values.category_id
+        if (categorySelect) categorySelect.value = values.category_id
         creatingCategory = true
     }
 
@@ -335,8 +337,8 @@
             <NativeSelect.Root
                 id="category_id"
                 name="category_id"
-                value={values.category_id}
-                onchange={pickCategory}
+                bind:ref={categorySelect}
+                bind:value={() => values.category_id, pickCategory}
                 aria-invalid={shown.category_id ? 'true' : undefined}
                 aria-describedby={describedBy('category_id')}>
                 <NativeSelect.Option

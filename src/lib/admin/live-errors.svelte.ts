@@ -12,6 +12,31 @@ import { SvelteSet } from 'svelte/reactivity'
 
 type Errors<Values> = Partial<Record<keyof Values, string>>
 
+// Whether a mouse button or finger is down, from the press until it is released.
+let pressed = false
+let tracking = false
+function trackPresses() {
+    if (typeof window === 'undefined' || tracking) return
+    tracking = true
+    const options = { capture: true, passive: true }
+    window.addEventListener('pointerdown', () => (pressed = true), options)
+    for (const type of ['pointerup', 'pointercancel'] as const) {
+        window.addEventListener(type, () => (pressed = false), options)
+    }
+}
+
+/** Calls `then` once the current press ends, after the click it makes (if any). */
+function afterPress(then: () => void) {
+    const ended = new AbortController()
+    const options = { capture: true, signal: ended.signal }
+    const end = () => {
+        ended.abort()
+        setTimeout(then)
+    }
+    window.addEventListener('pointerup', end, options)
+    window.addEventListener('pointercancel', end, options)
+}
+
 export class LiveErrors<Values extends Record<keyof Values, string>> {
     #values: () => Values
     #validate: (values: Values) => Errors<Values>
@@ -36,6 +61,7 @@ export class LiveErrors<Values extends Record<keyof Values, string>> {
         this.#validate = validate
         this.#server = server
         this.#initial = { ...values() }
+        trackPresses()
         if (Object.keys(server()).length > 0) {
             this.#tried = true
             this.#posted = { ...values() }
@@ -83,7 +109,14 @@ export class LiveErrors<Values extends Record<keyof Values, string>> {
         const name = (event.target as { name?: unknown } | null)?.name
         if (typeof name !== 'string' || !(name in this.#initial)) return
         const field = name as keyof Values
-        if (this.#values()[field] !== this.#initial[field]) this.#left.add(field)
+        if (this.#values()[field] === this.#initial[field]) return
+        if (!pressed) {
+            this.#left.add(field)
+            return
+        }
+        // Left by pressing something, such as Save: an error shown now could push that button
+        // away before the press ends, and the click would miss it. Show it once the click is in.
+        afterPress(() => this.#left.add(field))
     }
 
     /**

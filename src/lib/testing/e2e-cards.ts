@@ -8,6 +8,12 @@
 import { expect, type Page } from '@playwright/test'
 import { gotoHydrated } from './e2e-hydration'
 
+/**
+ * The editor's form, without its sidebar: an error shows by its field here, while the
+ * sidebar repeats it under Publish ("Before it can be published").
+ */
+export const editorForm = (page: Page) => page.locator('form#card-editor')
+
 /** Clicks the editor's Save (or `button`) and waits for the card list it goes back to. */
 export async function saveInEditor(page: Page, button: 'Save' | 'Publish' = 'Save') {
     await page.getByRole('button', { name: button, exact: true }).click()
