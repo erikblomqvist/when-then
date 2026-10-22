@@ -23,6 +23,7 @@
 </script>
 
 <script lang="ts">
+    import { untrack } from 'svelte'
     import { Label } from '#lib/components/ui/label/index.js'
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import type { Card } from '#lib/cards/card.js'
@@ -50,15 +51,20 @@
 
     let { values = $bindable(), card, errors = {}, actions }: Props = $props()
 
-    const erroredLocale = () =>
-        translationLocales.find((locale) => errors[`text_${locale}`] ?? errors[`note_${locale}`])
+    const erroredLocales = () =>
+        translationLocales.filter((locale) => errors[`text_${locale}`] ?? errors[`note_${locale}`])
 
     // svelte-ignore state_referenced_locally -- the starting tab; later errors switch below
-    let active: TranslationLocale = $state(erroredLocale() ?? 'sv')
-    // Errors follow typing, so switch only when a different locale gets one.
-    const errored = $derived(erroredLocale())
+    let active: TranslationLocale = $state(erroredLocales()[0] ?? 'sv')
+    // Errors follow typing: switch to a locale that just got one, unless the tab shown has one
+    // too. An error going away (as its text is typed) never switches.
+    // svelte-ignore state_referenced_locally
+    let hadErrors = new Set(erroredLocales())
     $effect(() => {
-        if (errored) active = errored
+        const now = erroredLocales()
+        const gained = now.find((locale) => !hadErrors.has(locale))
+        hadErrors = new Set(now)
+        if (gained && !now.includes(untrack(() => active))) active = gained
     })
 
     const englishChanged = $derived(

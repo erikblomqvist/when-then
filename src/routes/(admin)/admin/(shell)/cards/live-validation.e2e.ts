@@ -119,3 +119,38 @@ test('the category form’s errors follow what is typed', async ({ page }) => {
     await expect(page.getByText('Pick an icon.')).toHaveCount(0)
     await expect(page.getByText('Pick a colour.')).toBeVisible()
 })
+
+test('fixing one tab’s error keeps that tab open while another still has one', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    await page.getByLabel('Swedish note').fill('En anteckning')
+    await tab(page, 'Norwegian').click()
+    await page.getByLabel('Norwegian note').fill('Et notat')
+    await tab(page, 'Swedish').click()
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText('Write the Swedish text, or clear the note.')).toBeVisible()
+
+    await page.getByLabel('Swedish text').fill('E')
+    await expect(page.getByLabel('Swedish text')).toBeVisible()
+    await expect(tab(page, 'Swedish')).toHaveAttribute('aria-selected', 'true')
+})
+
+test('a duplicate English name stays on that field until the name changes', async ({ page }) => {
+    await signInAs(page, 'admin')
+    const name = unique('Duplicates')
+    for (const attempt of [1, 2]) {
+        await gotoHydrated(page, '/admin/categories/new')
+        await page.getByLabel('English name').fill(name)
+        await page.getByRole('radio', { name: 'ship' }).check()
+        await page.getByRole('radio', { name: 'teal' }).check()
+        await page.getByRole('button', { name: 'Save' }).click()
+        if (attempt === 1) await expect(page).toHaveURL(/\/admin\/categories$/)
+    }
+    const refusal = page.getByText('Another category already has that English name.')
+    await expect(refusal).toBeVisible()
+
+    await page.getByRole('radio', { name: 'purple' }).check()
+    await expect(refusal).toBeVisible()
+    await page.getByLabel('English name').fill(`${name} 2`)
+    await expect(refusal).toHaveCount(0)
+})

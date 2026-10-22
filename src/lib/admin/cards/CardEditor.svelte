@@ -169,9 +169,12 @@
                 if (result.type === 'success' || result.type === 'redirect') {
                     // Unless typed since, the form now shows what was saved; ticks are spent.
                     const settled = settledCardFormValues(submitted)
-                    if (JSON.stringify(values) === JSON.stringify(submitted)) values = settled
+                    // Typed during the save: those edits keep their errors.
+                    if (JSON.stringify(values) === JSON.stringify(submitted)) {
+                        values = settled
+                        live.settle()
+                    }
                     baseline = JSON.stringify(settled)
-                    live.settle()
                 }
                 await update({ reset: false })
                 saving = false
