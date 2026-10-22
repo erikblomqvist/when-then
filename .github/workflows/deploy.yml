@@ -1,0 +1,63 @@
+name: Deploy
+
+# Deploys to Vercel with the owner's token instead of Vercel's Git integration.
+# On the Hobby plan the integration blocks commits whose author isn't the account
+# owner, so collaborators' pushes never deployed. vercel.json turns the
+# integration's deploys off; this workflow does them all.
+# main deploys to production, every pull request from this repo gets a preview.
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+concurrency:
+    group: deploy-${{ github.event.pull_request.number || github.ref }}
+    # Let a production deploy finish; replace a superseded preview.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+    contents: read
+    pull-requests: write
+
+env:
+    VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+    VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+    deploy:
+        # Pull requests from forks get no secrets, so they can't deploy.
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  # Preview the branch itself, not GitHub's merge with main.
+                  ref: ${{ github.event.pull_request.head.sha || github.sha }}
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: '24'
+            # Install from outside the repo: npm refuses to run in it, because
+            # package.json pins pnpm through devEngines.
+            - name: Install the Vercel CLI
+              working-directory: ${{ runner.temp }}
+              run: npm install --global vercel@65.1.0
+            - name: Deploy
+              id: deploy
+              # Vercel builds remotely with its own env vars, as the integration did.
+              run: |
+                  if [ "$GITHUB_EVENT_NAME" = push ]; then target=--prod; else target=; fi
+                  url=$(vercel deploy $target --archive=tgz --token "$VERCEL_TOKEN" --yes)
+                  echo "url=$url" >> "$GITHUB_OUTPUT"
+                  echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
+            - name: Comment the preview URL
+              if: github.event_name == 'pull_request'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR: ${{ github.event.pull_request.number }}
+                  URL: ${{ steps.deploy.outputs.url }}
+                  SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none \
+                      --body "Preview: $URL (commit ${SHA:0:7})"
