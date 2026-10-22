@@ -34,7 +34,7 @@
     } = $props()
 
     // How far above the finger the lifted name is drawn, so the finger doesn't hide it.
-    const lift = 44
+    const lift = 22
 
     const seats = $derived(startingFrom(seating, anchor))
     let history = $state<Seating[]>([])
