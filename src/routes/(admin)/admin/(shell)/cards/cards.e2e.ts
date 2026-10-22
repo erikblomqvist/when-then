@@ -7,6 +7,10 @@ const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
 const cardRow = (page: Page, text: string) => page.getByRole('row').filter({ hasText: text })
 
+// Other tests add cards in parallel (dozens at once), so a fresh card may not be on page 1 of
+// the unfiltered list: look it up by its text.
+const findCard = (text: string) => `/admin/cards?q=${encodeURIComponent(text)}`
+
 async function createCard(page: Page, text: string) {
     await gotoHydrated(page, '/admin/cards')
     await page.getByRole('link', { name: 'New card' }).click()
@@ -40,6 +44,8 @@ test('an editor creates a draft card and sees it in the list', async ({ page }) 
         .getByRole('navigation', { name: 'Admin' })
         .getByRole('link', { name: 'Cards' })
         .click()
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await gotoHydrated(page, findCard(text))
     const row = cardRow(page, text)
     await expect(row).toContainText('1492')
     await expect(row).toContainText('Inventions')
@@ -64,7 +70,7 @@ test('entering a year fills the decade; a decade can be entered alone', async ({
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
 
-    await gotoHydrated(page, '/admin/cards')
+    await gotoHydrated(page, findCard(text))
     await expect(cardRow(page, text)).toContainText('490s BC')
 })
 
@@ -98,7 +104,7 @@ test('an editor edits a card, and the change is audited with who did it', async 
     await expect(page.getByLabel('English text')).toHaveValue(edited)
     await expect(page.getByLabel('Month')).toHaveValue('3')
 
-    await gotoHydrated(page, '/admin/cards')
+    await gotoHydrated(page, findCard(edited))
     await expect(cardRow(page, edited)).toContainText('March 1492')
 
     const { data } = await localServiceClient()
