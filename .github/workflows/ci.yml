@@ -1,9 +1,24 @@
 name: CI
 
+# Two jobs in parallel: `check` (lint, types, unit tests, Storybook) and `e2e` (Supabase,
+# database tests, end-to-end). A run takes as long as the slower one, which is e2e.
+
 on:
     push:
         branches: [main]
+        paths-ignore: &docs-only
+            - '**/*.md'
+            - 'docs/**'
+            - 'design-files/**'
     pull_request:
+        # ready_for_review starts e2e once a draft is marked ready.
+        types: [opened, synchronize, reopened, ready_for_review]
+        paths-ignore: *docs-only
+
+concurrency:
+    group: ci-${{ github.event.pull_request.number || github.ref }}
+    # A new push to a pull request replaces its running checks; main runs every commit.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
     check:
@@ -17,19 +32,45 @@ jobs:
                   cache: true
             - run: vp check
             - run: vp run check:svelte
-            - run: vp exec playwright install --with-deps chromium
+            # Unit tests in *.svelte.spec.ts run in a real browser.
+            - uses: ./.github/actions/playwright
             - run: vp test
+            - run: vp run build-storybook
+
+    e2e:
+        # Drafts get the quick checks only; e2e runs when the pull request is marked ready.
+        if: github.event_name == 'push' || !github.event.pull_request.draft
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
             # E2E signs in against a local Supabase stack: Postgres, Auth, and the API gateway
             # with PostgREST. Everything else is left out to keep the start quick.
             - uses: supabase/setup-cli@v1
               with:
                   version: 2.109.1
-            - name: Start Supabase
-              run: supabase start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
+            # Starting Supabase is mostly pulling Docker images, so it runs in the background
+            # while the next steps install Node and the browser.
+            - name: Start Supabase in the background
+              run: |
+                  (
+                      supabase start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
+                      echo $? > "$RUNNER_TEMP/supabase-start.exit"
+                  ) > "$RUNNER_TEMP/supabase-start.log" 2>&1 &
               env:
                   # Google is enabled in config.toml; e2e never reaches Google, so placeholders do.
                   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-placeholder
                   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-placeholder
+            - uses: voidzero-dev/setup-vp@v1.21.2
+              with:
+                  node-version: '24'
+                  cache: true
+            - uses: ./.github/actions/playwright
+            - name: Wait for Supabase
+              timeout-minutes: 10
+              run: |
+                  until [ -f "$RUNNER_TEMP/supabase-start.exit" ]; do sleep 2; done
+                  cat "$RUNNER_TEMP/supabase-start.log"
+                  exit "$(cat "$RUNNER_TEMP/supabase-start.exit")"
             - name: Point the app at the local stack (.env.local, names from src/env.ts)
               run: |
                   eval "$(supabase status -o env)"
@@ -40,6 +81,5 @@ jobs:
                       echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
                   } > .env.local
             - run: vp run test:db
+            # Also proves the production build: playwright.config.ts runs `vp build` first.
             - run: vp run test:e2e
-            - run: vp build
-            - run: vp run build-storybook
