@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
-import { openCard, saveAndReopen, saveInEditor } from '../../../../../lib/testing/e2e-cards'
+import {
+    editorForm,
+    openCard,
+    saveAndReopen,
+    saveInEditor,
+} from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -81,8 +86,8 @@ test('the editor shows what is wrong and keeps what was typed', async ({ page })
     await page.getByLabel('Day').fill('20')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
 
-    await expect(page.getByText('A day needs a month.')).toBeVisible()
-    await expect(page.getByText('Pick a category.')).toBeVisible()
+    await expect(editorForm(page).getByText('A day needs a month.')).toBeVisible()
+    await expect(editorForm(page).getByText('Pick a category.')).toBeVisible()
     await expect(page.getByLabel('English text')).toHaveValue('A made-up moon landing')
     await expect(page.getByRole('heading', { name: 'New card' })).toBeVisible()
 })

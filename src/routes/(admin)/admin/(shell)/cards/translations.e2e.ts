@@ -74,6 +74,8 @@ test('editing the English text makes a reviewed translation stale; ticking revie
     await save(page)
     await expect(tab(page, 'Norwegian')).toContainText('Reviewed')
 
+    // The reopened card shows the Swedish tab.
+    await tab(page, 'Norwegian').click()
     await page.getByLabel('English text').fill(`${text}, at night`)
     await expect(panel(page, 'Norwegian')).toContainText('Stale when saved')
     await save(page)

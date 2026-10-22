@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
-import { openCard, saveInEditor } from '../../../../../lib/testing/e2e-cards'
+import { editorForm, openCard, saveInEditor } from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -34,20 +34,20 @@ test('errors show after leaving a field or saving, and go away once fixed', asyn
     // Passing through an empty field is not an error.
     await page.getByLabel('English text').focus()
     await page.getByLabel('Year').focus()
-    await expect(page.getByText('Write the card in English.')).toHaveCount(0)
+    await expect(editorForm(page).getByText('Write the card in English.')).toHaveCount(0)
 
     await page.getByLabel('Source URL').fill('example')
     await page.getByLabel('Source quote').focus()
-    await expect(page.getByText('Use a full web address')).toBeVisible()
+    await expect(editorForm(page).getByText('Use a full web address')).toBeVisible()
     await page.getByLabel('Source URL').fill('https://example.com/made-up')
-    await expect(page.getByText('Use a full web address')).toHaveCount(0)
+    await expect(editorForm(page).getByText('Use a full web address')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Write the card in English.')).toBeVisible()
-    await expect(page.getByText('Pick a category.')).toBeVisible()
+    await expect(editorForm(page).getByText('Write the card in English.')).toBeVisible()
+    await expect(editorForm(page).getByText('Pick a category.')).toBeVisible()
     await page.getByLabel('English text').fill('A made-up harbour opens')
-    await expect(page.getByText('Write the card in English.')).toHaveCount(0)
-    await expect(page.getByText('Pick a category.')).toBeVisible()
+    await expect(editorForm(page).getByText('Write the card in English.')).toHaveCount(0)
+    await expect(editorForm(page).getByText('Pick a category.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'New card' })).toBeVisible()
 })
 
@@ -93,7 +93,8 @@ test('cancelling the new category leaves the card as it was', async ({ page }) =
 
     await expect(dialog).toHaveCount(0)
     await expect(page.getByLabel('English text')).toHaveValue('A made-up canal is dug')
-    await expect(page.getByLabel('Category')).toHaveValue('')
+    // Exact, or the closed "New category" dialog matches too.
+    await expect(page.getByLabel('Category', { exact: true })).toHaveValue('')
 })
 
 test('an editor is pointed to an admin instead of offered a new category', async ({ page }) => {
@@ -127,7 +128,9 @@ test('fixing one tab’s error keeps that tab open while another still has one',
     await page.getByLabel('Norwegian note').fill('Et notat')
     await tab(page, 'Swedish').click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Write the Swedish text, or clear the note.')).toBeVisible()
+    await expect(
+        editorForm(page).getByText('Write the Swedish text, or clear the note.'),
+    ).toBeVisible()
 
     await page.getByLabel('Swedish text').fill('E')
     await expect(page.getByLabel('Swedish text')).toBeVisible()
@@ -159,10 +162,10 @@ test('a decade from 1500 on needs a year, even for a draft', async ({ page }) =>
     await gotoHydrated(page, '/admin/cards/new')
     await page.getByLabel('Decade').fill('1700')
     await page.getByLabel('Year').focus()
-    await expect(page.getByText('Cards from 1500 onwards need a year.')).toBeVisible()
+    await expect(editorForm(page).getByText('Cards from 1500 onwards need a year.')).toBeVisible()
 
     await page.getByLabel('Year').fill('1704')
-    await expect(page.getByText('Cards from 1500 onwards need a year.')).toHaveCount(0)
+    await expect(editorForm(page).getByText('Cards from 1500 onwards need a year.')).toHaveCount(0)
 })
 
 test('Publish on a new card saves and publishes it, and goes back to the list', async ({
