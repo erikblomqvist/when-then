@@ -1,8 +1,9 @@
 import { parseCardListView } from '#lib/cards/card-list.js'
+import { cardBulkActions } from '#lib/server/card-bulk-actions.js'
 import { listCards } from '#lib/server/cards.js'
 import { listCategories } from '#lib/server/categories.js'
 import { supabaseService } from '#lib/server/supabase.js'
-import type { PageServerLoad } from './$types'
+import type { Actions, PageServerLoad } from './$types'
 
 const pageSize = 50
 
@@ -21,3 +22,6 @@ export const load: PageServerLoad = async ({ url }) => {
         categories: categories.map(({ id, name, archived }) => ({ id, name, archived })),
     }
 }
+
+// Bulk actions on the selected cards (`BulkActionBar`).
+export const actions: Actions = { ...cardBulkActions }

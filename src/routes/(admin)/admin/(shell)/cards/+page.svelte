@@ -17,9 +17,13 @@
         type CardEra,
     } from '#lib/cards/card-list.js'
     import { formatCardDate } from '#lib/cards/date-parts.js'
+    import { filterParams } from '#lib/cards/card-list.js'
+    import BulkActionBar from '#lib/admin/cards/BulkActionBar.svelte'
+    import { CardListSelection } from '#lib/admin/cards/card-list-selection.svelte.js'
+    import { untrack } from 'svelte'
     import type { PageProps } from './$types'
 
-    let { data }: PageProps = $props()
+    let { data, form: result }: PageProps = $props()
 
     const updated = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
     const statuses = Object.keys(cardStatusLabel) as CardStatus[]
@@ -44,6 +48,19 @@
     }
 
     const submit = () => form?.requestSubmit()
+
+    // Row selection for the bulk actions; kept across pages, cleared when the filter changes.
+    const selected = new CardListSelection(() => ({
+        filter: data.view.filter,
+        total: data.total,
+        pageIds: data.cards.map((card) => card.id),
+    }))
+    const filterKey = $derived(filterParams(data.view.filter).toString())
+    $effect(() => {
+        void filterKey
+        untrack(() => selected.clear())
+    })
+    const activeCategories = $derived(data.categories.filter((category) => !category.archived))
 </script>
 
 <svelte:head>
@@ -167,9 +184,27 @@
     {/if}
 </form>
 
+<BulkActionBar
+    {selected}
+    categories={activeCategories}
+    report={result?.bulk}
+    error={result?.bulkError} />
+
 <Table.Root class="mt-6">
     <Table.Header>
         <Table.Row>
+            <Table.Head class="w-8">
+                <input
+                    type="checkbox"
+                    class="size-4 align-middle accent-primary"
+                    aria-label="Select all cards on this page"
+                    disabled={data.cards.length === 0}
+                    checked={selected.pageSelected}
+                    {@attach (input) => {
+                        input.indeterminate = selected.pagePartlySelected
+                    }}
+                    onchange={() => selected.togglePage()} />
+            </Table.Head>
             <Table.Head>Card</Table.Head>
             <Table.Head>Date</Table.Head>
             <Table.Head>Category</Table.Head>
@@ -180,7 +215,15 @@
     </Table.Header>
     <Table.Body>
         {#each data.cards as card (card.id)}
-            <Table.Row>
+            <Table.Row data-state={selected.has(card.id) ? 'selected' : undefined}>
+                <Table.Cell>
+                    <input
+                        type="checkbox"
+                        class="size-4 align-middle accent-primary"
+                        aria-label="Select {card.text ?? 'card without English text'}"
+                        checked={selected.has(card.id)}
+                        onchange={() => selected.toggle(card.id)} />
+                </Table.Cell>
                 <Table.Cell class="max-w-md whitespace-normal">
                     <a
                         class="font-medium hover:underline"
@@ -209,7 +252,7 @@
         {:else}
             <Table.Row>
                 <Table.Cell
-                    colspan={6}
+                    colspan={7}
                     class="py-8 text-center text-muted-foreground">
                     {#if data.total > 0}
                         No cards on this page.
