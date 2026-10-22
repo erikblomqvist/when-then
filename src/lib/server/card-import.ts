@@ -3,24 +3,17 @@
 // an import creates all its cards or none. The database checks the actor is an admin and logs
 // an 'import' per card with the file name and row.
 
-import type { PostgrestError } from '@supabase/supabase-js'
 import type { ImportRow } from '../cards/card-import'
+import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
 /** Why the database refused an import, in words for the import page. */
-export class CardImportError extends Error {}
+export class CardImportError extends RpcRefusal {}
 
-const refusals: Record<string, string> = {
+const refusals: Refusals = {
     not_admin: 'Only admins can import cards.',
     invalid_category:
         'A category was archived or deleted since the preview. Upload the file again to check it.',
-}
-
-function check(error: PostgrestError | null) {
-    if (!error) return
-    const refusal = refusals[error.message]
-    if (refusal) throw new CardImportError(refusal, { cause: error })
-    throw new Error(error.message, { cause: error })
 }
 
 /** A card the import created, by the CSV row it came from. */
@@ -52,7 +45,7 @@ export async function importCards(
             translations: card.translations,
         })),
     })
-    check(error)
+    checkRpc(error, refusals, CardImportError)
     const ids = (data ?? []) as string[]
     return importable.map(({ row }, index) => ({ row, id: ids[index]! }))
 }

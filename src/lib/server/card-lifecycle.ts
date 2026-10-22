@@ -5,6 +5,7 @@
 // check `publishBlockers` first to explain a refusal, and catch `CardLifecycleError`.
 
 import type { Database } from '../database.types'
+import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
 /** Why the database refused a lifecycle step. */
@@ -15,37 +16,26 @@ export type CardLifecycleErrorCode =
     | 'not_admin'
     | 'not_draft'
 
-const codes = new Set<string>([
-    'not_found',
-    'invalid_transition',
-    'publish_blocked',
-    'not_admin',
-    'not_draft',
-])
+// The database words every lifecycle refusal itself, in the detail.
+const inItsWords = (details: string) => details
+const refusals = {
+    not_found: inItsWords,
+    invalid_transition: inItsWords,
+    publish_blocked: inItsWords,
+    not_admin: inItsWords,
+    not_draft: inItsWords,
+} satisfies Record<CardLifecycleErrorCode, unknown> & Refusals
 
 /** A refused step; `message` says why, in a sentence the editor can show. */
-export class CardLifecycleError extends Error {
-    constructor(
-        readonly code: CardLifecycleErrorCode,
-        message: string,
-    ) {
-        super(message)
-        this.name = 'CardLifecycleError'
-    }
+export class CardLifecycleError extends RpcRefusal {
+    declare readonly code: CardLifecycleErrorCode
 }
 
 type Rpc = keyof Database['public']['Functions']
 
 async function step(db: Db, rpc: Rpc, args: Record<string, unknown>): Promise<void> {
     const { error } = await db.rpc(rpc, args as never)
-    if (!error) return
-    if (codes.has(error.message)) {
-        throw new CardLifecycleError(
-            error.message as CardLifecycleErrorCode,
-            error.details || error.message,
-        )
-    }
-    throw new Error(error.message, { cause: error })
+    checkRpc(error, refusals, CardLifecycleError)
 }
 
 /** Draft → Published. Refused (`publish_blocked`) while the publish rule blocks the card. */

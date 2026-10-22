@@ -3,7 +3,6 @@
 // admin and name it for the audit log; this module passes the actor along and turns their
 // refusals into errors the categories page can show.
 
-import type { PostgrestError } from '@supabase/supabase-js'
 import type { CardLocale } from '../cards/card'
 import { englishNameKey, type CategoryInput } from '../categories/category-form'
 import {
@@ -12,6 +11,7 @@ import {
     type CategoryColour,
     type CategoryIconName,
 } from '../categories/look'
+import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
 export type Category = {
@@ -33,26 +33,17 @@ export type Category = {
 export type { CategoryInput }
 
 /** Why the database refused a category change, in words for the categories page. */
-export class CategoryError extends Error {}
+export class CategoryError extends RpcRefusal {}
 
-const refusals: Record<string, string> = {
+const refusals: Refusals = {
     not_admin: 'Only admins can manage categories.',
     english_name_required: 'A category needs an English name.',
     category_has_cards: 'This category has cards, so it can only be archived, not deleted.',
     no_category: 'That category no longer exists.',
+    category_translations_en_name_key: 'Another category already has that English name.',
 }
 
-function check(error: PostgrestError | null) {
-    if (!error) return
-    const refusal = refusals[error.message]
-    if (refusal) throw new CategoryError(refusal, { cause: error })
-    if (error.code === '23505' && error.message.includes('category_translations_en_name_key')) {
-        throw new CategoryError('Another category already has that English name.', {
-            cause: error,
-        })
-    }
-    throw new Error(error.message, { cause: error })
-}
+const check = (error: Parameters<typeof checkRpc>[0]) => checkRpc(error, refusals, CategoryError)
 
 type NameRow = { locale: CardLocale; name: string }
 
@@ -117,7 +108,7 @@ export async function saveCategory(
     id?: string,
 ): Promise<string> {
     if (!isCategoryIcon(input.icon) || !isCategoryColour(input.colour)) {
-        throw new CategoryError('Pick an icon and a colour from the lists.')
+        throw new CategoryError('invalid_look', 'Pick an icon and a colour from the lists.')
     }
     const { data, error } = await db.rpc('save_category', {
         actor,

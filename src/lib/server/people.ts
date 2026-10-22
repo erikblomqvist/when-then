@@ -3,27 +3,22 @@
 // actor is an admin, keep at least one admin, and audit every change; this module only
 // passes the actor along and turns their refusals into errors the People page can show.
 
-import type { PostgrestError } from '@supabase/supabase-js'
 import type { AppRole } from './roles'
+import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import { supabaseService } from './supabase'
 
 export type Person = { userId: string; email: string; role: AppRole }
 export type Invite = { email: string; role: AppRole }
 
 /** Why the database refused a role change, in words for the People page. */
-export class PeopleError extends Error {}
+export class PeopleError extends RpcRefusal {}
 
-const refusals: Record<string, string> = {
+const refusals: Refusals = {
     last_admin: 'There must always be at least one admin. Make someone else an admin first.',
     not_admin: 'Only admins can manage people.',
 }
 
-function check(error: PostgrestError | null) {
-    if (!error) return
-    const refusal = refusals[error.message]
-    if (refusal) throw new PeopleError(refusal)
-    throw error
-}
+const check = (error: Parameters<typeof checkRpc>[0]) => checkRpc(error, refusals, PeopleError)
 
 /**
  * The role someone has right now, read from `user_roles` on each request rather than from
