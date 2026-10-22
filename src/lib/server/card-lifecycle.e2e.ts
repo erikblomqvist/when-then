@@ -126,10 +126,15 @@ test('marking the date verified records who and when; clearing it is audited too
     const actor = await newActor()
     const id = await newCard(actor)
 
+    const created = await getCard(db, id)
     await markVerified(db, actor, id)
     const verified = await getCard(db, id)
     expect(verified?.verifiedBy).toBe(actor)
-    expect(Date.now() - Date.parse(verified?.verifiedAt ?? '')).toBeLessThan(60_000)
+    // Compare against the database's own clock (the write stamps updated_at in the same
+    // transaction), not the host's: a local Docker DB can drift minutes from the host.
+    const verifiedAt = Date.parse(verified?.verifiedAt ?? '')
+    expect(verifiedAt).toBe(Date.parse(verified?.updatedAt ?? ''))
+    expect(verifiedAt).toBeGreaterThan(Date.parse(created?.updatedAt ?? ''))
 
     await clearVerification(db, actor, id)
     expect(await getCard(db, id)).toMatchObject({ verifiedAt: null, verifiedBy: null })
