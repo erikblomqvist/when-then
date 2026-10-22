@@ -58,8 +58,10 @@ const actionLabels: Record<AuditAction, string> = {
     revoke: 'Revoked role',
     accept_invite: 'Accepted invite',
     import: 'Imported from CSV',
+    import_photo: 'Added from a photo',
     ai_translate: 'Machine translated with AI',
     ai_suggest_date: 'Suggested a date with AI',
+    ai_read_photo: 'Read a photo with AI',
     accept_date_suggestion: 'Accepted the AI date suggestion',
     reject_date_suggestion: 'Rejected the AI date suggestion',
 }
@@ -75,6 +77,7 @@ const entityLabels: Record<string, string> = {
     category_translation: 'Category name',
     user_role: 'Role',
     role_invite: 'Invite',
+    photo: 'Photo',
 }
 
 /** 'sv' → 'Swedish'; a locale we don't know stays as it is. */

@@ -17,10 +17,12 @@
 </script>
 
 <div class="flex min-h-svh flex-col">
-    <header class="flex h-14 items-center gap-4 border-b px-6">
+    <!-- Phone-sized screens get the nav as a scrolling row under the header (#60: adding a card
+         from a photo happens on a phone). -->
+    <header class="flex h-14 items-center gap-2 border-b px-4 sm:gap-4 md:px-6">
         <span class="font-semibold">When Then? admin</span>
         <span
-            class="ml-auto text-sm text-muted-foreground"
+            class="ml-auto hidden text-sm text-muted-foreground sm:inline"
             data-testid="signed-in-as">
             {data.email} · {data.role}
         </span>
@@ -30,6 +32,7 @@
             href="/"
             variant="ghost"
             size="sm"
+            class="ml-auto sm:ml-0"
             data-sveltekit-reload>
             Back to the game
         </Button>
@@ -44,11 +47,11 @@
             </Button>
         </form>
     </header>
-    <div class="flex flex-1">
+    <div class="flex flex-1 flex-col md:flex-row">
         <nav
             aria-label="Admin"
-            class="w-56 shrink-0 border-r p-4 text-sm">
-            <ul class="flex flex-col gap-1">
+            class="shrink-0 overflow-x-auto border-b px-4 py-2 text-sm md:w-56 md:border-r md:border-b-0 md:p-4">
+            <ul class="flex gap-1 whitespace-nowrap md:flex-col">
                 <li>
                     <a
                         href="/admin"
@@ -83,7 +86,7 @@
                 {/if}
             </ul>
         </nav>
-        <main class="flex-1 p-6">
+        <main class="min-w-0 flex-1 p-4 md:p-6">
             {@render children()}
         </main>
     </div>

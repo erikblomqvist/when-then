@@ -1,5 +1,5 @@
 // Every action the audit log records, in one list: the triggers' create/update/delete and the
-// card lifecycle names (migrations 003700, 003800), role changes (004500), CSV imports (004800)
+// card lifecycle names (migrations 003700, 003800), role changes (004500), CSV imports (004800), photo imports (005600)
 // and the app-written AI rows (#41, #42). `display.ts` labels each one; app code that writes a
 // row through `record_audit` names its action with this type.
 
@@ -24,9 +24,12 @@ export const auditActions = [
     'accept_invite',
     // CSV import, one per card created
     'import',
+    // Cards added from a photo (#60), one per card created
+    'import_photo',
     // AI calls and what the editor did with a suggestion
     'ai_translate',
     'ai_suggest_date',
+    'ai_read_photo',
     'accept_date_suggestion',
     'reject_date_suggestion',
 ] as const

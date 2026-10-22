@@ -3,7 +3,7 @@
     the card page's `?/createCategory`. Once saved, the page's data reloads (so the editor's
     category list has it) and `oncreated` gets the new id; the card being written is left as
     it is. Admins only, like the categories page. Render it outside the card editor's <form>:
-    forms can't nest.
+    forms can't nest. `values` prefills the form (a category the AI suggested, #60).
 -->
 <script lang="ts">
     import { tick } from 'svelte'
@@ -12,15 +12,17 @@
     import {
         emptyCategoryFormValues,
         type CategoryFormErrors,
+        type CategoryFormValues,
     } from '#lib/categories/category-form.js'
     import CategoryForm from './CategoryForm.svelte'
 
     type Props = {
         open: boolean
         oncreated: (id: string) => void
+        values?: CategoryFormValues
     }
 
-    let { open = $bindable(), oncreated }: Props = $props()
+    let { open = $bindable(), oncreated, values = emptyCategoryFormValues }: Props = $props()
 
     let dialog: HTMLDialogElement | undefined = $state()
     let errors: CategoryFormErrors = $state({})
@@ -68,7 +70,7 @@
             New category
         </h2>
         <CategoryForm
-            values={emptyCategoryFormValues}
+            {values}
             {errors}
             {error}
             action="?/createCategory"

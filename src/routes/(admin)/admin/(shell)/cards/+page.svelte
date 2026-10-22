@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation'
+    import { page } from '$app/state'
     import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
@@ -46,6 +47,9 @@
 
     const filter = $derived(data.view.filter)
     const filtered = $derived(isFiltered(filter))
+
+    // Drafts just added from a photo (#60) come back as `?new=<id>`, highlighted in the list.
+    const addedCards = $derived(new Set(page.url.searchParams.getAll('new')))
 
     // Without JavaScript the GET form navigates as is; with it, go to the canonical URL (no
     // empty fields), keeping focus in the search box.
@@ -207,10 +211,22 @@
             <Button
                 href="/admin/cards/import"
                 variant="outline">Import</Button>
+            <Button
+                href="/admin/cards/photo"
+                variant="outline">Add from photo</Button>
         {/if}
         <Button href="/admin/cards/new">New card</Button>
     </div>
 </div>
+
+{#if addedCards.size > 0}
+    <p
+        role="status"
+        class="mt-4 rounded-md border bg-muted px-3 py-2 text-sm">
+        Added {addedCards.size}
+        {addedCards.size === 1 ? 'draft' : 'drafts'} from your photo, highlighted below.
+    </p>
+{/if}
 
 <nav
     aria-label="Review queues"
@@ -406,7 +422,10 @@
     </Table.Header>
     <Table.Body>
         {#each data.cards as card (card.id)}
-            <Table.Row data-state={selected.has(card.id) ? 'selected' : undefined}>
+            <Table.Row
+                data-state={selected.has(card.id) ? 'selected' : undefined}
+                data-added={addedCards.has(card.id) ? '' : undefined}
+                class="data-added:bg-amber-50 dark:data-added:bg-amber-950/40">
                 <Table.Cell>
                     <input
                         type="checkbox"
