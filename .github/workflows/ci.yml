@@ -41,19 +41,29 @@ jobs:
         # Drafts get the quick checks only; e2e runs when the pull request is marked ready.
         if: github.event_name == 'push' || !github.event.pull_request.draft
         runs-on: ubuntu-latest
+        env:
+            # The CLI's experimental stack engine, in CI only: its native runtime runs the
+            # services as plain processes, without Docker images to pull. Its flags can change
+            # between CLI releases, so the version below is pinned and moved on purpose.
+            SUPABASE_EXPERIMENTAL_STACK: 1
         steps:
             - uses: actions/checkout@v5
-            # E2E signs in against a local Supabase stack: Postgres, Auth, and the API gateway
-            # with PostgREST. Everything else is left out to keep the start quick.
+            # E2E signs in against a local Supabase stack: Postgres, Auth and PostgREST.
+            # Everything else is left out to keep the start quick.
             - uses: supabase/setup-cli@v1
               with:
-                  version: 2.109.1
-            # Starting Supabase is mostly pulling Docker images, so it runs in the background
-            # while the next steps install Node and the browser.
+                  version: 2.121.0
+            # The native runtime's service archives, downloaded on its first start.
+            - uses: actions/cache@v4
+              with:
+                  path: ~/.supabase/cache/stack
+                  key: supabase-stack-${{ runner.os }}-2.121.0
+            # Runs in the background while the next steps install Node and the browser.
+            # --eager: Auth and PostgREST are up before the tests, not on their first request.
             - name: Start Supabase in the background
               run: |
                   (
-                      supabase start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
+                      supabase start --runtime native --eager --exclude realtime,storage,functions,studio,mail,analytics,pooler
                       echo $? > "$RUNNER_TEMP/supabase-start.exit"
                   ) > "$RUNNER_TEMP/supabase-start.log" 2>&1 &
               env:
@@ -73,7 +83,7 @@ jobs:
                   exit "$(cat "$RUNNER_TEMP/supabase-start.exit")"
             - name: Point the app at the local stack (.env.local, names from src/env.ts)
               run: |
-                  eval "$(supabase status -o env)"
+                  eval "$(supabase status --env --output-format text)"
                   {
                       echo "SUPABASE_URL=$API_URL"
                       echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
