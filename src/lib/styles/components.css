@@ -799,6 +799,7 @@
 }
 button.ui-chip {
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 button.ui-chip:focus-visible {
     outline: 3px solid var(--focus-ring-color);
