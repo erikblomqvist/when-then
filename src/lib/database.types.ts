@@ -351,6 +351,10 @@ export type Database = {
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
+            delete_category: {
+                Args: { actor: string; category_id: string }
+                Returns: undefined
+            }
             delete_draft: {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
@@ -378,11 +382,17 @@ export type Database = {
                 Args: { card_id: string }
                 Returns: Database['public']['Enums']['card_status']
             }
+            lock_category_positions: { Args: never; Returns: undefined }
             publish_card: {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
             }
+            reorder_categories: {
+                Args: { actor: string; ids: string[] }
+                Returns: undefined
+            }
             require_admin: { Args: { actor_id: string }; Returns: undefined }
+            require_category_admin: { Args: { actor: string }; Returns: undefined }
             require_publishable: { Args: { card_id: string }; Returns: undefined }
             save_card: {
                 Args: {
@@ -393,9 +403,22 @@ export type Database = {
                 }
                 Returns: string
             }
+            save_category: {
+                Args: {
+                    actor: string
+                    category: Json
+                    category_id?: string
+                    names: Json
+                }
+                Returns: string
+            }
             set_actor: { Args: { actor: string }; Returns: undefined }
             set_card_verified: {
                 Args: { actor: string; card_id: string; verified: boolean }
+                Returns: undefined
+            }
+            set_category_archived: {
+                Args: { actor: string; archived: boolean; category_id: string }
                 Returns: undefined
             }
             set_invite_role: {

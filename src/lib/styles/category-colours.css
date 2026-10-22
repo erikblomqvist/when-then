@@ -1,0 +1,64 @@
+/* ==========================================================================
+   Category palette: the colours a category can pick (`categoryColours` in
+   src/lib/categories/look.ts; keep the two lists in step).
+
+   Shared by the game (tokens.css imports it) and the admin (admin.css), so
+   it defines only `--palette-*` primitives and `.cat-<colour>` scopes, no
+   names Tailwind also uses (`--color-red-500` would clash in the admin).
+
+   Each hue is a pair: 500 = lacquer, 700 = edge/shadow. A scope sets --cat
+   and --cat-dark on a card, dot or swatch (or any ancestor); components read
+   those.
+   ========================================================================== */
+
+:root {
+    --palette-red-500: oklch(55.7% 0.182 29.6);
+    --palette-red-700: oklch(41.5% 0.138 28.6);
+    --palette-orange-500: oklch(64.5% 0.17 48);
+    --palette-orange-700: oklch(48% 0.13 45);
+    --palette-amber-500: oklch(75.5% 0.152 78.6);
+    --palette-amber-700: oklch(56.3% 0.116 75.7);
+    --palette-green-500: oklch(55.4% 0.118 158.5);
+    --palette-green-700: oklch(39.6% 0.086 157.7);
+    --palette-teal-500: oklch(56% 0.095 192);
+    --palette-teal-700: oklch(41% 0.07 192);
+    --palette-blue-500: oklch(47.3% 0.162 263);
+    --palette-blue-700: oklch(34.2% 0.113 263);
+    --palette-purple-500: oklch(49% 0.16 305);
+    --palette-purple-700: oklch(36% 0.115 305);
+    --palette-pink-500: oklch(58% 0.185 355);
+    --palette-pink-700: oklch(43% 0.135 355);
+}
+
+.cat-red {
+    --cat: var(--palette-red-500);
+    --cat-dark: var(--palette-red-700);
+}
+.cat-orange {
+    --cat: var(--palette-orange-500);
+    --cat-dark: var(--palette-orange-700);
+}
+.cat-amber {
+    --cat: var(--palette-amber-500);
+    --cat-dark: var(--palette-amber-700);
+}
+.cat-green {
+    --cat: var(--palette-green-500);
+    --cat-dark: var(--palette-green-700);
+}
+.cat-teal {
+    --cat: var(--palette-teal-500);
+    --cat-dark: var(--palette-teal-700);
+}
+.cat-blue {
+    --cat: var(--palette-blue-500);
+    --cat-dark: var(--palette-blue-700);
+}
+.cat-purple {
+    --cat: var(--palette-purple-500);
+    --cat-dark: var(--palette-purple-700);
+}
+.cat-pink {
+    --cat: var(--palette-pink-500);
+    --cat-dark: var(--palette-pink-700);
+}
