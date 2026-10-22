@@ -8,6 +8,9 @@ import type { Actions, PageServerLoad } from './$types'
 
 const pageSize = 50
 
+// Bulk machine translation makes one model call per card (a few seconds each, four at a time).
+export const config = { maxDuration: 300 }
+
 export const load: PageServerLoad = async ({ url }) => {
     const db = supabaseService()
     const view = parseCardListView(url.searchParams)

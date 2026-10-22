@@ -56,6 +56,7 @@ const actionLabels: Record<string, string> = {
     change: 'Changed role',
     revoke: 'Revoked role',
     accept_invite: 'Accepted invite',
+    ai_translate: 'Machine translated with AI',
 }
 
 /** What happened, as a past-tense phrase: 'update' → 'Edited'. Unknown actions humanized. */
@@ -112,6 +113,14 @@ const fieldLabels: Record<string, string> = {
     role: 'Role',
     email: 'Email',
     invited_by: 'Invited by',
+    // AI calls (details of `ai_*` entries)
+    outcome: 'Outcome',
+    model: 'Model',
+    input_tokens: 'Input tokens',
+    output_tokens: 'Output tokens',
+    cost_usd: 'Cost',
+    locales: 'Languages',
+    error: 'Error',
 }
 
 export const fieldLabel = (field: string) => fieldLabels[field] ?? humanize(field)
@@ -146,6 +155,7 @@ export function formatValue(
             return formatCardDate({ decade: null, year: value, month: null, day: null })
         if (field === 'decade')
             return formatCardDate({ decade: value, year: null, month: null, day: null })
+        if (field === 'cost_usd') return `$${value}`
         return String(value)
     }
     if (typeof value === 'boolean') return value ? 'Yes' : 'No'
@@ -153,7 +163,8 @@ export function formatValue(
         if (field === 'category_id') return names?.categories[value] ?? value
         if (isPersonField(field)) return names?.people[value] ?? value
         if (field.endsWith('_at')) return formatTime(value)
-        if (field === 'status' || field === 'role') return humanize(value)
+        if (field === 'status' || field === 'role' || field === 'outcome') return humanize(value)
+        if (field === 'locales') return localeNames[value] ?? value
         return value
     }
     if (Array.isArray(value)) {

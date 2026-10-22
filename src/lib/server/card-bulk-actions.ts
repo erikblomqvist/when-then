@@ -13,6 +13,9 @@ import {
     type SkippedCard,
 } from './card-bulk'
 import { resolveCardSelection } from './card-selection'
+import { AiUnavailableError } from './ai'
+import { aiDeps } from './ai-client'
+import { translateMissingCards } from './card-ai-translate'
 import { listCategories } from './categories'
 import { requireRole } from './guard'
 import { supabaseService } from './supabase'
@@ -62,5 +65,26 @@ export const cardBulkActions = {
         if (!target) return fail(400, { bulkError: 'Choose a category to move the cards to.' })
         const result = await moveCards(db, selected.user.id, selected.ids, target.id)
         return report(result, (count) => `Moved ${count} to ${target.name}.`)
+    },
+    /** Machine-translates the missing locales (#41); per-card failures are skipped. */
+    translate: async (event: RequestEvent) => {
+        const selected = await selectedCardIds(event)
+        if ('failure' in selected) return selected.failure
+        let deps
+        try {
+            deps = aiDeps()
+        } catch (error) {
+            if (error instanceof AiUnavailableError) {
+                return fail(503, { bulkError: error.message })
+            }
+            throw error
+        }
+        const result = await translateMissingCards(
+            deps,
+            supabaseService(),
+            selected.user.id,
+            selected.ids,
+        )
+        return report(result, (count) => `Machine-translated ${count}.`)
     },
 }
