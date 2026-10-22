@@ -7,6 +7,7 @@ import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { openCard, saveAndReopen, saveInEditor } from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -20,14 +21,12 @@ async function createCard(page: Page, text: string) {
     await page.getByLabel('English text').fill(text)
     await page.getByLabel('Year').fill('1895')
     await page.getByLabel('Category').selectOption({ label: 'Events' })
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
-    return page.url().split('/').pop() ?? ''
+    await saveInEditor(page)
+    return openCard(page, text)
 }
 
 async function save(page: Page) {
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible()
+    await saveAndReopen(page)
 }
 
 const listRow = async (page: Page, text: string) => {

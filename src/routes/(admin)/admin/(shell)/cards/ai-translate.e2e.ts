@@ -8,6 +8,7 @@ import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { saveAndReopen } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 const word = () => `Ai${randomUUID().slice(0, 8)}`
@@ -47,8 +48,7 @@ test('an editor translates a tab from English: filled, unsaved, saved as machine
     // Not saved until the editor saves.
     expect((await getCard(db, id))?.translations.nb).toBeUndefined()
 
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible()
+    await saveAndReopen(page)
     expect((await getCard(db, id))?.translations.nb).toEqual({
         text: `NB: ${english}`,
         note: null,

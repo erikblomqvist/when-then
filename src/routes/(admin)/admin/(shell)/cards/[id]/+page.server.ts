@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit'
 import { cardFormValues } from '#lib/cards/card-form.js'
 import { publishBlockers } from '#lib/cards/publish-rule.js'
 import { auditNames } from '#lib/server/audit.js'
@@ -5,6 +6,7 @@ import {
     cardLifecycleActions,
     editorCategories,
     loadCard,
+    saveAndPublishAction,
     saveCardAction,
     verifierEmail,
 } from '#lib/server/card-editor.js'
@@ -36,7 +38,8 @@ export const actions: Actions = {
     save: async (event) => {
         const saved = await saveCardAction(event, await loadCard(event.params.id))
         if (typeof saved !== 'string') return saved
-        return { saved: true }
+        redirect(303, '/admin/cards')
     },
+    saveAndPublish: async (event) => saveAndPublishAction(event, await loadCard(event.params.id)),
     ...cardLifecycleActions,
 }

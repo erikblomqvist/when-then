@@ -38,10 +38,17 @@ export async function editorCategories(card?: Card | null): Promise<Category[]> 
  *     const saved = await saveCardAction(event, card)
  *     if (typeof saved !== 'string') return saved
  */
-export async function saveCardAction(event: RequestEvent, card?: Card | null) {
+export async function saveCardAction(
+    event: RequestEvent,
+    card?: Card | null,
+    { publish = false }: { publish?: boolean } = {},
+) {
     const { user } = await requireRole(event, 'editor')
     const form = await event.request.formData()
     const parsed = parseCardForm(form)
+    // Publish (it saves too): what the publish rule still misses, checked before anything is saved.
+    const publishError =
+        publish && parsed.ok ? publishBlockers(parsed.card).join(' ') || undefined : undefined
 
     const errors: CardFormErrors = parsed.ok ? {} : { ...parsed.errors }
     if (parsed.ok && card?.status === 'published') {
@@ -55,11 +62,31 @@ export async function saveCardAction(event: RequestEvent, card?: Card | null) {
             errors.category_id = 'Pick a category.'
         }
     }
-    if (!parsed.ok || Object.keys(errors).length > 0) {
-        return fail(400, { errors, values: readCardFormValues(form) })
+    if (!parsed.ok || Object.keys(errors).length > 0 || publishError) {
+        return fail(400, { errors, values: readCardFormValues(form), publishError })
     }
 
     return saveCard(supabaseService(), user.id, parsed.card, card?.id)
+}
+
+/**
+ * The editor's Publish, on /admin/cards/new and on a draft: saves the card, publishes
+ * it and goes back to the card list. Nothing is saved when the publish rule says no (see
+ * `saveCardAction`); should the database still refuse the publish, the card stays a saved
+ * draft and the reason is shown on it.
+ */
+export async function saveAndPublishAction(event: RequestEvent, card?: Card | null) {
+    const saved = await saveCardAction(event, card, { publish: true })
+    if (typeof saved !== 'string') return saved
+    const { user } = await requireRole(event, 'editor')
+    try {
+        await publishCard(supabaseService(), user.id, saved)
+    } catch (caught) {
+        if (!(caught instanceof CardLifecycleError)) throw caught
+        if (!card) redirect(303, `/admin/cards/${saved}`)
+        return fail(400, { publishError: caught.message })
+    }
+    redirect(303, '/admin/cards')
 }
 
 /** The card the route is about, or a 404. */
@@ -109,10 +136,15 @@ async function lifecycleStep(
 
 /**
  * The sidebar's form actions for /admin/cards/[id], to spread into the route's `actions`.
- * Delete draft is admin-only (403 for an editor) and goes back to the card list.
+ * Publish and Delete draft go back to the card list; Delete draft is admin-only (403 for an
+ * editor).
  */
 export const cardLifecycleActions = {
-    publish: (event: RequestEvent) => lifecycleStep(event, publishCard, { checkRule: true }),
+    publish: async (event: RequestEvent) => {
+        const failed = await lifecycleStep(event, publishCard, { checkRule: true })
+        if (failed) return failed
+        redirect(303, '/admin/cards')
+    },
     archive: (event: RequestEvent) => lifecycleStep(event, archiveCard),
     unarchive: (event: RequestEvent) => lifecycleStep(event, unarchiveCard, { checkRule: true }),
     verify: (event: RequestEvent) => lifecycleStep(event, markVerified),

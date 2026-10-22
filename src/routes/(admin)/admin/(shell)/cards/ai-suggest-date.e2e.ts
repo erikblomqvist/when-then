@@ -10,6 +10,7 @@ import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { saveAndReopen } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 const word = () => `Sd${randomUUID().slice(0, 8)}`
@@ -79,8 +80,7 @@ test('an editor gets a Wikidata-sourced suggestion and accepts it into the form,
     expect(requested.details).toMatchObject({ outcome: 'ok', via: 'wikidata', cost_usd: 0.008 })
     expect(accepted.details).toMatchObject({ year: 1908, cost_usd: 0.008 })
 
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible()
+    await saveAndReopen(page)
     expect((await getCard(db, id))?.date).toEqual({
         decade: 1900,
         year: 1908,
@@ -174,9 +174,7 @@ test('accepting a new year on a verified card asks to clear the verification on 
     await gotoHydrated(page, `/admin/cards/${id}`)
     await page.getByRole('button', { name: 'Suggest date' }).click()
     await panel(page).getByRole('button', { name: 'Accept 1908' }).click()
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-
-    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible()
+    await saveAndReopen(page)
     expect(dialogs).toEqual([
         'This card’s date was verified, and you changed it. Clear the verification? (Cancel keeps it.)',
     ])

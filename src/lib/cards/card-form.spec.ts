@@ -113,6 +113,11 @@ describe('parseCardForm', () => {
         expect(result).toEqual({ ok: false, errors: { day: 'A day needs a month.' } })
         const decade = parseCardForm(form({ decade: '1495' }))
         expect(decade).toEqual({ ok: false, errors: { decade: 'Not a decade.' } })
+        const yearless = parseCardForm(form({ decade: '1500' }))
+        expect(yearless).toEqual({
+            ok: false,
+            errors: { decade: 'Cards from 1500 onwards need a year.' },
+        })
         const zero = parseCardForm(form({ year: '0' }))
         expect(zero).toEqual({
             ok: false,

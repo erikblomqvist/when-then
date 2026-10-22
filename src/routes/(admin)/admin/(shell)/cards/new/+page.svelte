@@ -15,4 +15,5 @@
     values={form?.values ?? data.values}
     categories={data.categories}
     errors={form?.errors}
+    publishError={form?.publishError}
     canCreateCategory={data.role === 'admin'} />

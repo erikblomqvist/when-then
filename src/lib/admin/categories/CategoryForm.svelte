@@ -21,7 +21,9 @@
     } from '#lib/categories/look.js'
     import CategoryIcon from '#lib/ui/CategoryIcon.svelte'
     import CategoryBadge from './CategoryBadge.svelte'
+    import Keys from '../Keys.svelte'
     import { LiveErrors } from '../live-errors.svelte.js'
+    import { ariaKeyshortcuts, formShortcut } from '../shortcut.js'
 
     type Props = {
         values: CategoryFormValues
@@ -81,10 +83,17 @@
     {/if}
 {/snippet}
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- the save shortcut, for the fields inside -->
 <form
     method="POST"
     {action}
     onfocusout={live.onfocusout}
+    onkeydown={(event) => {
+        // Cmd/Ctrl + S saves.
+        if (formShortcut(event) !== 'save') return
+        event.preventDefault()
+        event.currentTarget.requestSubmit()
+    }}
     use:enhance={onsubmit}
     class="flex max-w-3xl flex-col gap-8">
     {#if refusal}
@@ -157,7 +166,12 @@
     </fieldset>
 
     <div class="flex items-center gap-4">
-        <Button type="submit">Save</Button>
+        <Button
+            type="submit"
+            aria-keyshortcuts={ariaKeyshortcuts(['mod', 's'])}>
+            Save
+            <Keys keys={['mod', 's']} />
+        </Button>
         {#if isCategoryIcon(values.icon) && isCategoryColour(values.colour)}
             <span class="flex items-center gap-2 text-sm text-muted-foreground">
                 Preview

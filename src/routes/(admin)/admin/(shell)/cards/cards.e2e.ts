@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { openCard, saveAndReopen, saveInEditor } from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -21,10 +22,8 @@ async function createCard(page: Page, text: string) {
     await page.getByLabel('Category').selectOption({ label: 'Inventions' })
     await page.getByLabel('Source URL').fill('https://example.com/made-up')
     await page.getByLabel('Source quote').fill('It was made up in 1492.')
-    await page.getByRole('button', { name: 'Save' }).click()
-
-    await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
-    return page.url().split('/').pop() ?? ''
+    await saveInEditor(page)
+    return openCard(page, text)
 }
 
 test('an editor creates a draft card and sees it in the list', async ({ page }) => {
@@ -67,8 +66,7 @@ test('entering a year fills the decade; a decade can be entered alone', async ({
     await page.getByLabel('Era').selectOption('BC')
     await page.getByLabel('Decade').fill('490')
     await page.getByLabel('Category').selectOption({ label: 'Events' })
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
+    await saveInEditor(page)
 
     await gotoHydrated(page, findCard(text))
     await expect(cardRow(page, text)).toContainText('490s BC')
@@ -81,7 +79,7 @@ test('the editor shows what is wrong and keeps what was typed', async ({ page })
     await page.getByLabel('English text').fill('A made-up moon landing')
     await page.getByLabel('Year').fill('1969')
     await page.getByLabel('Day').fill('20')
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
 
     await expect(page.getByText('A day needs a month.')).toBeVisible()
     await expect(page.getByText('Pick a category.')).toBeVisible()
@@ -97,8 +95,7 @@ test('an editor edits a card, and the change is audited with who did it', async 
     const edited = unique('A made-up comet visits twice')
     await page.getByLabel('English text').fill(edited)
     await page.getByLabel('Month').selectOption({ label: 'March' })
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('status')).toHaveText('Saved.')
+    await saveAndReopen(page)
 
     await reloadHydrated(page)
     await expect(page.getByLabel('English text')).toHaveValue(edited)

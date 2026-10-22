@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { openCard, saveInEditor } from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -41,7 +42,7 @@ test('errors show after leaving a field or saving, and go away once fixed', asyn
     await page.getByLabel('Source URL').fill('https://example.com/made-up')
     await expect(page.getByText('Use a full web address')).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText('Write the card in English.')).toBeVisible()
     await expect(page.getByText('Pick a category.')).toBeVisible()
     await page.getByLabel('English text').fill('A made-up harbour opens')
@@ -75,8 +76,8 @@ test('an admin adds a category from the card editor and keeps the card', async (
     await expect(page.getByLabel('English text')).toHaveValue(text)
     await expect(page.getByLabel('Year')).toHaveValue('1888')
 
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
+    await saveInEditor(page)
+    await openCard(page, text)
     await expect(page.getByLabel('Category').locator('option:checked')).toHaveText(name)
 })
 
@@ -125,7 +126,7 @@ test('fixing one tab’s error keeps that tab open while another still has one',
     await tab(page, 'Norwegian').click()
     await page.getByLabel('Norwegian note').fill('Et notat')
     await tab(page, 'Swedish').click()
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText('Write the Swedish text, or clear the note.')).toBeVisible()
 
     await page.getByLabel('Swedish text').fill('E')
@@ -151,4 +152,53 @@ test('a duplicate English name stays on that field until the name changes', asyn
     await expect(refusal).toBeVisible()
     await page.getByLabel('English name').fill(`${name} 2`)
     await expect(refusal).toHaveCount(0)
+})
+
+test('a decade from 1500 on needs a year, even for a draft', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    await page.getByLabel('Decade').fill('1700')
+    await page.getByLabel('Year').focus()
+    await expect(page.getByText('Cards from 1500 onwards need a year.')).toBeVisible()
+
+    await page.getByLabel('Year').fill('1704')
+    await expect(page.getByText('Cards from 1500 onwards need a year.')).toHaveCount(0)
+})
+
+test('Publish on a new card saves and publishes it, and goes back to the list', async ({
+    page,
+}) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    const publish = page.getByRole('button', { name: 'Publish', exact: true })
+    await expect(publish).toBeDisabled()
+    await expect(page.getByRole('complementary', { name: 'Card' })).toContainText(
+        'Write the card in English.',
+    )
+
+    const text = unique('A made-up tram departs')
+    await page.getByLabel('English text').fill(text)
+    await page.getByLabel('Year').fill('1901')
+    await page.getByLabel('Category').selectOption({ label: 'Events' })
+    await expect(publish).toBeEnabled()
+    await saveInEditor(page, 'Publish')
+
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}`)
+    await expect(page.getByRole('row').filter({ hasText: text })).toContainText('Published')
+})
+
+test('Cmd/Ctrl + S saves the card', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveAttribute(
+        'aria-keyshortcuts',
+        'Control+S Meta+S',
+    )
+    const text = unique('A made-up ferry is launched')
+    await page.getByLabel('English text').fill(text)
+    await page.getByLabel('Year').fill('1912')
+    await page.getByLabel('Category').selectOption({ label: 'Events' })
+    await page.getByLabel('Year').press('ControlOrMeta+s')
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await openCard(page, text)
 })

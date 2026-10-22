@@ -4,6 +4,7 @@ import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { saveAndReopen } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 
@@ -29,8 +30,7 @@ test("a card's history shows who changed what, field by field", async ({ page })
     const edited = `${text}, seen twice`
     await page.getByLabel('English text').fill(edited)
     await page.getByLabel('Year').fill('1493')
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('status')).toHaveText('Saved.')
+    await saveAndReopen(page)
 
     // Newest first: the text edit, the date edit, then the two creates.
     const entries = history.getByRole('article')

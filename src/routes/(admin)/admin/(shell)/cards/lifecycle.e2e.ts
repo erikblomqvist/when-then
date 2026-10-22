@@ -1,4 +1,5 @@
-// The card editor's sidebar: Publish / Archive / Unarchive, Delete draft and verification.
+// The card editor's sidebar: Publish (the editor's, which saves too) / Archive / Unarchive,
+// Delete draft and verification.
 
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
@@ -7,6 +8,7 @@ import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
+import { saveAndReopen, saveInEditor } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
@@ -43,7 +45,10 @@ test('an editor publishes, archives and unarchives a card from the sidebar', asy
     const status = page.getByTestId('card-status')
     await expect(status).toHaveText('Draft')
 
+    // Publishing goes back to the card list.
     await sidebar(page).getByRole('button', { name: 'Publish' }).click()
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await gotoHydrated(page, `/admin/cards/${id}`)
     await expect(status).toHaveText('Published')
     await sidebar(page).getByRole('button', { name: 'Archive' }).click()
     await expect(status).toHaveText('Archived')
@@ -80,14 +85,17 @@ test('Publish says what is missing, and the server refuses it too', async ({ pag
     await expect(page.getByTestId('card-status')).toHaveText('Draft')
 })
 
-test('Publish waits for unsaved changes to be saved', async ({ page }) => {
+test('Publish on a draft saves what was changed, then publishes', async ({ page }) => {
     const { userId } = await signInAs(page, 'editor')
     const id = await draft(userId, unique('A made-up bell rings'), year1969)
     await gotoHydrated(page, `/admin/cards/${id}`)
 
-    await page.getByLabel('English text').fill(unique('A made-up bell rings twice'))
-    await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeDisabled()
-    await expect(sidebar(page)).toContainText('Save your changes first.')
+    const edited = unique('A made-up bell rings twice')
+    await page.getByLabel('English text').fill(edited)
+    await saveInEditor(page, 'Publish')
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    await expect(page.getByLabel('English text')).toHaveValue(edited)
+    await expect(page.getByTestId('card-status')).toHaveText('Published')
 })
 
 test('an admin deletes a never-published draft; editors cannot', async ({
@@ -121,6 +129,8 @@ test('a published card cannot be deleted', async ({ page }) => {
     const id = await draft(userId, unique('A made-up statue is unveiled'), year1969)
     await gotoHydrated(page, `/admin/cards/${id}`)
     await sidebar(page).getByRole('button', { name: 'Publish' }).click()
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await gotoHydrated(page, `/admin/cards/${id}`)
     await expect(page.getByTestId('card-status')).toHaveText('Published')
     await expect(sidebar(page).getByRole('button', { name: 'Delete draft' })).toHaveCount(0)
 })
@@ -140,14 +150,12 @@ test('marking the date verified, then changing the date asks to clear it', async
     })
     // Text only: no question asked.
     await page.getByLabel('English text').fill(unique('A made-up bridge opens at last'))
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('status')).toHaveText('Saved.')
+    await saveAndReopen(page)
     expect(dialogs).toEqual([])
     await expect(sidebar(page)).toContainText(`Verified by ${email}`)
 
     await page.getByLabel('Year').fill('1968')
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('status')).toHaveText('Saved.')
+    await saveAndReopen(page)
     expect(dialogs).toEqual([
         'This card’s date was verified, and you changed it. Clear the verification? (Cancel keeps it.)',
     ])

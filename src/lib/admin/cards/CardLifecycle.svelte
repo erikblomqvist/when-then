@@ -2,7 +2,8 @@
     The card editor sidebar's status actions and date verification, rendered through
     CardEditor's `sidebar` snippet. Each button is its own small form posting to an action from
     `cardLifecycleActions` (#lib/server/card-editor.js). Status actions wait while the editor
-    has unsaved changes, so what gets published is what was saved.
+    has unsaved changes, so what gets published is what was saved. A draft is published from
+    the editor instead, which saves it first.
 -->
 <script lang="ts">
     import { enhance } from '$app/forms'
@@ -36,9 +37,7 @@
         }
     }
 
-    const ruleBlocks = $derived(
-        (card.status === 'draft' || card.status === 'archived') && blockers.length > 0,
-    )
+    const ruleBlocks = $derived(card.status === 'archived' && blockers.length > 0)
     const verifiedOn = $derived(
         card.verifiedAt
             ? new Date(card.verifiedAt).toLocaleDateString('en-GB', {
@@ -82,15 +81,14 @@
         class="sr-only">
         Status actions
     </h2>
-    {#if card.status === 'draft'}
-        {@render action('publish', 'Publish', { disabled: dirty || ruleBlocks })}
-    {:else if card.status === 'published'}
+    <!-- A draft's Publish is the editor's: it saves what is in the form too. -->
+    {#if card.status === 'published'}
         {@render action('archive', 'Archive', { disabled: dirty, variant: 'outline' })}
-    {:else}
+    {:else if card.status === 'archived'}
         {@render action('unarchive', 'Unarchive', { disabled: dirty || ruleBlocks })}
     {/if}
 
-    {#if dirty || ruleBlocks}
+    {#if card.status !== 'draft' && (dirty || ruleBlocks)}
         <div
             id="lifecycle-why"
             class="text-muted-foreground">

@@ -1,10 +1,13 @@
 <!--
     The card editor: one form, saved explicitly (no autosave), with an unsaved-changes guard.
-    Used by /admin/cards/new and /admin/cards/[id]; both post to their own `?/save` action.
+    Used by /admin/cards/new and /admin/cards/[id]; both post to their own `?/save` action,
+    which goes back to the card list.
 
     Extension points:
     - Locale tabs (sv, nb): `TranslationTabs`, inside the <form>, sharing this save and guard.
       `translationActions` renders in each tab with `{ locale, english, fill }` (see there).
+    - Publish: in the <aside>, for a new card or a draft, posting this form to the page's
+      `?/saveAndPublish` (it saves and publishes); it goes back to the card list.
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
@@ -26,6 +29,7 @@
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
         cardFormErrors,
+        parseCardFormValues,
         cardFormValues,
         settledCardFormValues,
         cardTextMaxLength,
@@ -36,10 +40,13 @@
         type SuggestedDate,
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
+    import { publishBlockers, yearRequiredFrom } from '#lib/cards/publish-rule.js'
     import type { Category } from '#lib/server/categories.js'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
     import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
+    import Keys from '../Keys.svelte'
     import { LiveErrors } from '../live-errors.svelte.js'
+    import { ariaKeyshortcuts, formShortcut } from '../shortcut.js'
 
     type Props = {
         /** The values the form starts from (the saved card, or empty). */
@@ -47,9 +54,10 @@
         categories: Category[]
         /** The saved card, or undefined for a new one. */
         card?: Card
-        /** From the action result: errors per field, or `saved` after a successful save. */
+        /** From the action result: errors per field. */
         errors?: CardFormErrors
-        saved?: boolean
+        /** Why the last Publish didn't publish. */
+        publishError?: string
         sidebar?: Snippet<[{ dirty: boolean }]>
         /** Rendered in each locale tab, e.g. a machine translation button. */
         translationActions?: TranslationActions
@@ -64,7 +72,7 @@
         categories,
         card,
         errors = {},
-        saved = false,
+        publishError,
         sidebar,
         translationActions,
         dateActions,
@@ -72,6 +80,19 @@
     }: Props = $props()
 
     let creatingCategory = $state(false)
+
+    // Cmd/Ctrl + S saves, Cmd/Ctrl + Enter publishes (when that is offered). Not while the
+    // new-category dialog is open: its own form takes the shortcut.
+    let formElement: HTMLFormElement | undefined = $state()
+    let saveButton: HTMLButtonElement | null = $state(null)
+    let publishButton: HTMLButtonElement | null = $state(null)
+    function onkeydown(event: KeyboardEvent) {
+        const shortcut = formShortcut(event)
+        if (!shortcut || creatingCategory) return
+        event.preventDefault()
+        const button = shortcut === 'save' ? saveButton : publishButton
+        if (button && !button.disabled) formElement?.requestSubmit(button)
+    }
 
     // "New category…" is an option of the category select: picking it opens the dialog and
     // leaves the card's category as it was until one is created.
@@ -117,13 +138,26 @@
     const decadeFromYear = $derived(decadeFromYearOf(values))
 
     // Errors follow what is typed (#52); the decade is checked as the form shows it.
+    // The values as the form posts them: the decade as shown (from the year, when there is one).
+    const posted = (current: CardFormValues) => ({
+        ...current,
+        decade: decadeFromYearOf(current) ?? current.decade,
+    })
     const live = new LiveErrors(
         () => values,
-        (current) =>
-            cardFormErrors({ ...current, decade: decadeFromYearOf(current) ?? current.decade }),
+        (current) => cardFormErrors(posted(current)),
         () => errors,
     )
     const shown = $derived(live.shown)
+
+    // Publish (a new card or a draft) saves what is in the form and publishes it: held back,
+    // with the reasons, by what the form or the publish rule still miss.
+    const offerPublish = $derived(!card || card.status === 'draft')
+    const publishBlocked = $derived.by(() => {
+        const parsed = parseCardFormValues(posted(values))
+        if (parsed.ok) return publishBlockers(parsed.card)
+        return [...new Set(Object.values(parsed.errors))]
+    })
 
     // Changing a verified date asks whether to clear the verification (sent with the save).
     const dateFields = ['era', 'decade', 'year', 'month', 'day'] as const
@@ -158,8 +192,12 @@
     {/if}
 {/snippet}
 
+<svelte:window {onkeydown} />
+
 <div class="grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
     <form
+        bind:this={formElement}
+        id="card-editor"
         method="POST"
         action="?/save"
         class="flex flex-col gap-6"
@@ -282,7 +320,8 @@
                 </div>
             </div>
             <p class="text-sm text-muted-foreground">
-                Fill in what is known. A year fills the decade; month and day are optional.
+                Fill in what is known. A year fills the decade; from {yearRequiredFrom} on, a card needs
+                one. Month and day are optional.
             </p>
             {@render error('decade')}
             {@render error('year')}
@@ -353,14 +392,17 @@
 
         <div class="flex items-center gap-4">
             <Button
+                bind:ref={saveButton}
                 type="submit"
-                disabled={saving}>
+                disabled={saving}
+                aria-keyshortcuts={ariaKeyshortcuts(['mod', 's'])}>
                 Save
+                <Keys keys={['mod', 's']} />
             </Button>
             <p
                 role="status"
                 class="text-sm text-muted-foreground">
-                {#if dirty}Unsaved changes{:else if saved}Saved.{/if}
+                {#if dirty}Unsaved changes{/if}
             </p>
         </div>
     </form>
@@ -380,6 +422,43 @@
                 <span class="text-muted-foreground">Not saved yet</span>
             {/if}
         </div>
+        {#if offerPublish}
+            <div class="flex flex-col gap-2">
+                <Button
+                    type="submit"
+                    form="card-editor"
+                    formaction="?/saveAndPublish"
+                    bind:ref={publishButton}
+                    aria-keyshortcuts={ariaKeyshortcuts(['mod', 'enter'])}
+                    class="w-full"
+                    disabled={saving || publishBlocked.length > 0}
+                    aria-describedby={publishBlocked.length > 0
+                        ? 'save-and-publish-why'
+                        : undefined}>
+                    Publish
+                    <Keys keys={['mod', 'enter']} />
+                </Button>
+                {#if publishBlocked.length > 0}
+                    <div
+                        id="save-and-publish-why"
+                        class="text-muted-foreground">
+                        <p>Before it can be published:</p>
+                        <ul class="list-disc pl-5">
+                            {#each publishBlocked as blocker (blocker)}
+                                <li>{blocker}</li>
+                            {/each}
+                        </ul>
+                    </div>
+                {/if}
+                {#if publishError}
+                    <p
+                        role="alert"
+                        class="text-destructive">
+                        {publishError}
+                    </p>
+                {/if}
+            </div>
+        {/if}
         {@render sidebar?.({ dirty })}
     </aside>
 </div>

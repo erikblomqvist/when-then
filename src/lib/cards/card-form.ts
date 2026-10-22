@@ -9,6 +9,7 @@
 // and `cardFormValues` together.
 
 import type { CardFields, CardInput, CardLocale, TranslationInput } from './card'
+import { yearRequiredFrom } from './publish-rule'
 import {
     decadeFromLabel,
     decadeLabel,
@@ -237,6 +238,11 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     const date: DateParts = { decade, year, month: numbers.month, day: numbers.day }
     const dateIsReadable = !errors.year && !errors.month && !errors.day && !errors.decade
     if (dateIsReadable) Object.assign(errors, validateDateParts(date))
+    // The publish rule's year, asked for already when saving: a decade alone from 1500 on is
+    // never enough (on the decade, the field that was filled in).
+    if (dateIsReadable && year === null && decade !== null && decade >= yearRequiredFrom) {
+        errors.decade = `Cards from ${yearRequiredFrom} onwards need a year.`
+    }
 
     const sourceUrl = field(form, 'source_url')
     if (sourceUrl && !isWebAddress(sourceUrl)) {
@@ -282,11 +288,16 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     }
 }
 
-/** What `parseCardForm` would find wrong with these values, for live validation in the editor. */
-export function cardFormErrors(values: CardFormValues): CardFormErrors {
+/** `parseCardForm` of the values the editor holds, as if they were posted. */
+export function parseCardFormValues(values: CardFormValues): ParsedCardForm {
     const form = new FormData()
     for (const [name, value] of Object.entries(values)) form.set(name, value)
-    const parsed = parseCardForm(form)
+    return parseCardForm(form)
+}
+
+/** What `parseCardForm` would find wrong with these values, for live validation in the editor. */
+export function cardFormErrors(values: CardFormValues): CardFormErrors {
+    const parsed = parseCardFormValues(values)
     return parsed.ok ? {} : parsed.errors
 }
 
