@@ -6,6 +6,12 @@
     import '#lib/styles/components.css'
 
     let { children }: LayoutProps = $props()
+
+    // A hydration signal for e2e tests (`#lib/testing/e2e-hydration.ts`), as in the admin.
+    $effect(() => {
+        document.documentElement.dataset.hydrated = ''
+        return () => delete document.documentElement.dataset.hydrated
+    })
 </script>
 
 {@render children()}

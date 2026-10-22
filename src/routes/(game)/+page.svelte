@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Button, Card, sampleCategories, Surface, Text } from '#lib'
+    import { Card, sampleCategories, Surface, Text } from '#lib'
     import { m } from '#lib/paraglide/messages.js'
 </script>
 
@@ -20,9 +20,9 @@
             text="Columbus reaches America"
             state="locked" />
     </div>
-    <Button
-        variant="ghost"
-        disabled>{m.create_game()}</Button>
+    <a
+        class="ui-button ui-button--lg"
+        href="/new">{m.create_game()}</a>
 </Surface>
 
 <style>

@@ -923,6 +923,11 @@ button.ui-chip:focus-visible {
     font-variant-numeric: tabular-nums;
     color: var(--text-on-paper-subtle);
 }
+.ui-player-row__icon {
+    display: grid;
+    place-items: center;
+    color: var(--text-on-paper-secondary);
+}
 .ui-player-row__name {
     flex: 1;
     overflow: hidden;

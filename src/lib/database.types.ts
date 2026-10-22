@@ -240,6 +240,71 @@ export type Database = {
                     },
                 ]
             }
+            game_players: {
+                Row: {
+                    game_id: string
+                    icon: string
+                    is_host: boolean
+                    joined_at: string
+                    name: string
+                    user_id: string
+                }
+                Insert: {
+                    game_id: string
+                    icon: string
+                    is_host?: boolean
+                    joined_at?: string
+                    name: string
+                    user_id: string
+                }
+                Update: {
+                    game_id?: string
+                    icon?: string
+                    is_host?: boolean
+                    joined_at?: string
+                    name?: string
+                    user_id?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: 'game_players_game_id_fkey'
+                        columns: ['game_id']
+                        isOneToOne: false
+                        referencedRelation: 'games'
+                        referencedColumns: ['id']
+                    },
+                ]
+            }
+            games: {
+                Row: {
+                    card_language: Database['public']['Enums']['card_locale']
+                    code: string
+                    created_at: string
+                    ended_at: string | null
+                    exact_year: boolean
+                    id: string
+                    target_score: number
+                }
+                Insert: {
+                    card_language: Database['public']['Enums']['card_locale']
+                    code: string
+                    created_at?: string
+                    ended_at?: string | null
+                    exact_year?: boolean
+                    id?: string
+                    target_score?: number
+                }
+                Update: {
+                    card_language?: Database['public']['Enums']['card_locale']
+                    code?: string
+                    created_at?: string
+                    ended_at?: string | null
+                    exact_year?: boolean
+                    id?: string
+                    target_score?: number
+                }
+                Relationships: []
+            }
             role_invites: {
                 Row: {
                     created_at: string
@@ -359,6 +424,16 @@ export type Database = {
                     isOneToOne: false
                     isSetofReturn: true
                 }
+            }
+            create_game: {
+                Args: {
+                    card_language: Database['public']['Enums']['card_locale']
+                    code: string
+                    host: string
+                    host_icon: string
+                    host_name: string
+                }
+                Returns: string
             }
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
