@@ -27,6 +27,11 @@ export const variables = defineEnvVars({
         description:
             'Override for the Anthropic API URL. Leave unset in production; e2e points it at a local stub.',
     },
+    WIKIDATA_API_URL: {
+        schema: optional,
+        description:
+            'Override for the Wikidata API (https://www.wikidata.org/w/api.php), used by date suggestions. Leave unset in production; e2e points it at a local stub.',
+    },
     PUBLIC_SUPABASE_URL: {
         public: true,
         schema: optional,

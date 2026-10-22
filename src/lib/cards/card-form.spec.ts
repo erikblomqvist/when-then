@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
     cardFormValues,
+    emptyCardFormValues,
     fillMachineTranslationField,
     parseCardForm,
     settledCardFormValues,
     translationDraft,
+    withSuggestedDate,
 } from './card-form'
 
 const categoryId = '6f1c1d5e-8f0a-4c43-9d1e-2b7a0f6c1a01'
@@ -256,5 +258,51 @@ describe('settledCardFormValues', () => {
             machineText: null,
         })
         expect(settled.reviewed_nb).toBe('')
+    })
+})
+
+describe('withSuggestedDate', () => {
+    const before = {
+        ...emptyCardFormValues,
+        year: '1900',
+        decade: '1900',
+        month: '5',
+        day: '1',
+        source_url: 'https://example.com/old',
+        source_quote: 'Old quote',
+    }
+
+    it('fills the year and source, and drops a month and day that belonged to another year', () => {
+        expect(
+            withSuggestedDate(before, {
+                year: 1908,
+                sourceUrl: 'https://example.com/new',
+                sourceQuote: 'In 1908',
+            }),
+        ).toEqual({
+            ...before,
+            year: '1908',
+            month: '',
+            day: '',
+            source_url: 'https://example.com/new',
+            source_quote: 'In 1908',
+        })
+    })
+
+    it('keeps the month and day when the year stays the same', () => {
+        const after = withSuggestedDate(before, { year: 1900, sourceUrl: null, sourceQuote: null })
+        expect(after).toMatchObject({ month: '5', day: '1' })
+    })
+
+    it('writes a BCE year as BC with a positive number', () => {
+        expect(
+            withSuggestedDate(before, { year: -44, sourceUrl: null, sourceQuote: null }),
+        ).toMatchObject({ era: 'BC', year: '44' })
+    })
+
+    it('leaves the source alone when the suggestion has none', () => {
+        expect(
+            withSuggestedDate(before, { year: 2012, sourceUrl: null, sourceQuote: null }),
+        ).toMatchObject({ source_url: 'https://example.com/old', source_quote: 'Old quote' })
     })
 })
