@@ -1,8 +1,5 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
     "framework": "sveltekit-1",
-    "buildCommand": "vp build",
-    "git": {
-        "deploymentEnabled": false
-    }
+    "buildCommand": "vp build"
 }
