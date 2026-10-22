@@ -5,7 +5,7 @@
 
 import type { AppRole } from './roles'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
-import { supabaseService } from './supabase'
+import type { Db } from './supabase'
 
 export type Person = { userId: string; email: string; role: AppRole }
 export type Invite = { email: string; role: AppRole }
@@ -24,8 +24,8 @@ const check = (error: Parameters<typeof checkRpc>[0]) => checkRpc(error, refusal
  * The role someone has right now, read from `user_roles` on each request rather than from
  * the JWT, so a change or revoke takes effect on their next request, not their next token.
  */
-export async function currentRole(userId: string): Promise<AppRole | null> {
-    const { data, error } = await supabaseService()
+export async function currentRole(db: Db, userId: string): Promise<AppRole | null> {
+    const { data, error } = await db
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
@@ -35,11 +35,10 @@ export async function currentRole(userId: string): Promise<AppRole | null> {
 }
 
 /** Everyone with a role, and the invites not yet taken up, each sorted by email. */
-export async function listPeople(): Promise<{ people: Person[]; invites: Invite[] }> {
-    const service = supabaseService()
+export async function listPeople(db: Db): Promise<{ people: Person[]; invites: Invite[] }> {
     const [people, invites] = await Promise.all([
-        service.rpc('list_people'),
-        service.from('role_invites').select('email, role').order('email'),
+        db.rpc('list_people'),
+        db.from('role_invites').select('email, role').order('email'),
     ])
     if (people.error) throw people.error
     if (invites.error) throw invites.error
@@ -54,11 +53,12 @@ export async function listPeople(): Promise<{ people: Person[]; invites: Invite[
  * invite that attaches at their first Google sign-in.
  */
 export async function invitePerson(
+    db: Db,
     actorId: string,
     email: string,
     role: AppRole,
 ): Promise<'granted' | 'invited'> {
-    const { data, error } = await supabaseService().rpc('invite_person', {
+    const { data, error } = await db.rpc('invite_person', {
         actor: actorId,
         email,
         role,
@@ -68,8 +68,13 @@ export async function invitePerson(
 }
 
 /** Changes someone's role, or revokes it with `null`. */
-export async function setPersonRole(actorId: string, personId: string, role: AppRole | null) {
-    const { error } = await supabaseService().rpc('set_person_role', {
+export async function setPersonRole(
+    db: Db,
+    actorId: string,
+    personId: string,
+    role: AppRole | null,
+) {
+    const { error } = await db.rpc('set_person_role', {
         actor: actorId,
         person_id: personId,
         ...(role && { new_role: role }),
@@ -78,8 +83,8 @@ export async function setPersonRole(actorId: string, personId: string, role: App
 }
 
 /** Changes a pending invite's role, or withdraws it with `null`. */
-export async function setInviteRole(actorId: string, email: string, role: AppRole | null) {
-    const { error } = await supabaseService().rpc('set_invite_role', {
+export async function setInviteRole(db: Db, actorId: string, email: string, role: AppRole | null) {
+    const { error } = await db.rpc('set_invite_role', {
         actor: actorId,
         invite_email: email,
         ...(role && { new_role: role }),

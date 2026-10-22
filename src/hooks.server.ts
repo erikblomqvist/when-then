@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
 import { isPublicAdminPath, requireRole, type Viewer } from '#lib/server/guard.js'
 import { currentRole } from '#lib/server/people.js'
+import { supabaseService } from '#lib/server/supabase.js'
 import { acceptsAdminSession } from '#lib/server/sign-in-method.js'
 
 // Locale comes from the cookie, then the browser's preferred language, then English
@@ -85,7 +86,7 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
                 await event.locals.supabase.auth.signOut({ scope: 'local' })
                 return nulls
             }
-            return { user, role: await currentRole(user.id) }
+            return { user, role: await currentRole(supabaseService(), user.id) }
         }))
 
     return resolve(event, {

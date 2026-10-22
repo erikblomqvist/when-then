@@ -8,11 +8,12 @@ import {
     setPersonRole,
 } from '#lib/server/people.js'
 import { field, readEmail, readRole } from '#lib/server/people-form.js'
+import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async (event) => {
     const { user } = await requireRole(event, 'admin')
-    const { people, invites } = await listPeople()
+    const { people, invites } = await listPeople(supabaseService())
     return {
         people,
         invites,
@@ -52,7 +53,7 @@ export const actions: Actions = {
             const email = readEmail(form)
             const role = readRole(form)
             if (!email || !role) return invalid()
-            const outcome = await invitePerson(actorId, email, role)
+            const outcome = await invitePerson(supabaseService(), actorId, email, role)
             return {
                 message:
                     outcome === 'granted'
@@ -65,13 +66,13 @@ export const actions: Actions = {
         act(event, async (actorId, form) => {
             const role = readRole(form)
             if (!role) return invalid()
-            await setPersonRole(actorId, userId(form), role)
+            await setPersonRole(supabaseService(), actorId, userId(form), role)
             return { message: `${shown(form)} is now ${role}.` }
         }),
 
     revoke: (event) =>
         act(event, async (actorId, form) => {
-            await setPersonRole(actorId, userId(form), null)
+            await setPersonRole(supabaseService(), actorId, userId(form), null)
             return { message: `Revoked the role of ${shown(form)}.` }
         }),
 
@@ -80,7 +81,7 @@ export const actions: Actions = {
             const email = readEmail(form)
             const role = readRole(form)
             if (!email || !role) return invalid()
-            await setInviteRole(actorId, email, role)
+            await setInviteRole(supabaseService(), actorId, email, role)
             return { message: `${email} will be ${role}.` }
         }),
 
@@ -88,7 +89,7 @@ export const actions: Actions = {
         act(event, async (actorId, form) => {
             const email = readEmail(form)
             if (!email) return invalid()
-            await setInviteRole(actorId, email, null)
+            await setInviteRole(supabaseService(), actorId, email, null)
             return { message: `Withdrew the invite for ${email}.` }
         }),
 }
