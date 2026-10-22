@@ -92,8 +92,11 @@ export class LiveErrors<Values extends Record<keyof Values, string>> {
      */
     attempt() {
         this.#tried = true
-        this.#posted = { ...this.#values() }
-        return Object.keys(this.#validate(this.#posted)).length === 0
+        const posted = { ...this.#values() }
+        // Not sent: the server's errors still belong to the values sent before.
+        if (Object.keys(this.#validate(posted)).length > 0) return false
+        this.#posted = posted
+        return true
     }
 
     /** The save went through: the form starts over from what it now shows. */

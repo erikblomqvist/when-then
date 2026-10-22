@@ -20,6 +20,8 @@ export const categoryFormValues = (category: Category): CategoryFormValues => ({
     name_nb: category.names.nb ?? '',
 })
 
+const englishNameRefusals = new Set(['english_name_required', 'category_translations_en_name_key'])
+
 /**
  * Runs an admin's category change with their id as the actor; a `CategoryError` from the
  * database becomes a 409 with its message (and `values`, to show the form again).
@@ -34,6 +36,12 @@ export async function asAdmin<T>(
         return await run(user.id)
     } catch (error) {
         if (error instanceof CategoryError) {
+            // A refusal of the English name goes on that field, so the form keeps showing it
+            // until the name changes (#52).
+            if (englishNameRefusals.has(error.code)) {
+                const errors: CategoryFormErrors = { name_en: error.message }
+                return fail(409, { error: undefined, errors, values })
+            }
             const errors: CategoryFormErrors = {}
             return fail(409, { error: error.message, errors, values })
         }
