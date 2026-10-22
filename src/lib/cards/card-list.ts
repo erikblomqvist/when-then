@@ -9,6 +9,13 @@
 
 import { Constants } from '../database.types'
 import type { CardStatus } from './card'
+import {
+    translationLocales,
+    translationStateLabel,
+    translationStates,
+    type TranslationLocale,
+    type TranslationState,
+} from './translation'
 
 const cardStatuses: readonly CardStatus[] = Constants.public.Enums.card_status
 
@@ -17,6 +24,17 @@ export type CardEra = 'before-1500' | 'from-1500'
 export const cardEraLabel: Record<CardEra, string> = {
     'before-1500': 'Before 1500',
     'from-1500': '1500 and later',
+}
+
+/** A translation state to filter one locale by; `needs-review` is machine or stale. */
+export type TranslationFilter = TranslationState | 'needs-review'
+export const translationFilters: readonly TranslationFilter[] = [
+    ...translationStates,
+    'needs-review',
+]
+export const translationFilterLabel: Record<TranslationFilter, string> = {
+    ...translationStateLabel,
+    'needs-review': 'Needs review',
 }
 
 /** Which cards to show. Every field is optional; an absent field doesn't narrow. */
@@ -30,6 +48,8 @@ export type CardFilter = {
     hasSource?: boolean
     /** By the card's date (year, or decade when only that is known); undated cards match neither. */
     era?: CardEra
+    /** By each locale's translation state (URL keys `sv`, `nb`). */
+    translations?: Partial<Record<TranslationLocale, TranslationFilter>>
 }
 
 /** Sort key, `-` for descending. Date sorts undated cards last either way. */
@@ -68,6 +88,10 @@ export function parseFilter(params: URLSearchParams): CardFilter {
     if (hasSource !== undefined) filter.hasSource = hasSource
     const era = oneOf(['before-1500', 'from-1500'], params.get('era'))
     if (era) filter.era = era
+    for (const locale of translationLocales) {
+        const state = oneOf(translationFilters, params.get(locale))
+        if (state) filter.translations = { ...filter.translations, [locale]: state }
+    }
     return filter
 }
 
@@ -92,6 +116,10 @@ export function filterParams(filter: CardFilter): URLSearchParams {
     if (filter.verified !== undefined) params.set('verified', yesNoParam(filter.verified))
     if (filter.hasSource !== undefined) params.set('source', yesNoParam(filter.hasSource))
     if (filter.era) params.set('era', filter.era)
+    for (const locale of translationLocales) {
+        const state = filter.translations?.[locale]
+        if (state) params.set(locale, state)
+    }
     return params
 }
 
@@ -113,3 +141,7 @@ export function cardListHref({
 
 /** Whether the filter narrows the list at all (for "No cards match" vs "No cards yet"). */
 export const isFiltered = (filter: CardFilter) => filterParams(filter).size > 0
+
+/** The review queue for a locale: cards whose translation there is machine or stale. */
+export const reviewQueueHref = (locale: TranslationLocale) =>
+    cardListHref({ filter: { translations: { [locale]: 'needs-review' } } })
