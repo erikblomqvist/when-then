@@ -101,6 +101,23 @@ export const fillMachineTranslationField = (
         fillMachineTranslation(translationDraft(values, locale), text),
     )
 
+/**
+ * The form's values once saved: the "reviewed" ticks and machine-translation marks are spent,
+ * since the saved status now carries them (an untouched machine translation stays machine).
+ */
+export const settledCardFormValues = (values: CardFormValues): CardFormValues => {
+    let settled = values
+    for (const locale of translationLocales) {
+        const draft = translationDraft(settled, locale)
+        settled = withTranslationDraft(settled, locale, {
+            ...draft,
+            reviewed: false,
+            machineText: null,
+        })
+    }
+    return settled
+}
+
 export const emptyCardFormValues: CardFormValues = {
     text_en: '',
     category_id: '',

@@ -3,6 +3,7 @@ import {
     cardFormValues,
     fillMachineTranslationField,
     parseCardForm,
+    settledCardFormValues,
     translationDraft,
 } from './card-form'
 
@@ -228,5 +229,32 @@ describe('locale tabs', () => {
             ok: false,
             errors: { text_sv: 'Keep the card under 500 characters.' },
         })
+    })
+})
+
+describe('settledCardFormValues', () => {
+    it('spends the ticks and machine marks once saved, keeping the text', () => {
+        const values = {
+            ...fillMachineTranslationField(
+                cardFormValues({
+                    categoryId,
+                    date: { decade: null, year: null, month: null, day: null },
+                    sourceUrl: null,
+                    sourceQuote: null,
+                    translations: { en: { text: 'A made-up bridge opens' } },
+                }),
+                'sv',
+                'En påhittad bro öppnas',
+            ),
+            reviewed_nb: 'true',
+        }
+        const settled = settledCardFormValues(values)
+        expect(translationDraft(settled, 'sv')).toEqual({
+            text: 'En påhittad bro öppnas',
+            note: '',
+            reviewed: false,
+            machineText: null,
+        })
+        expect(settled.reviewed_nb).toBe('')
     })
 })
