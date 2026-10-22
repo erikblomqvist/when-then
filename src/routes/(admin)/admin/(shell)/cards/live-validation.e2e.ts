@@ -205,3 +205,57 @@ test('Cmd/Ctrl + S saves the card', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
     await openCard(page, text)
 })
+
+test('Cmd/Ctrl + Enter publishes the card', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveAttribute(
+        'aria-keyshortcuts',
+        'Control+Enter Meta+Enter',
+    )
+    const text = unique('A made-up canal opens')
+    await page.getByLabel('English text').fill(text)
+    await page.getByLabel('Year').fill('1914')
+    await page.getByLabel('Category').selectOption({ label: 'Events' })
+    await page.getByLabel('Year').press('ControlOrMeta+Enter')
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}`)
+    await expect(page.getByRole('row').filter({ hasText: text })).toContainText('Published')
+})
+
+test('clicking Save straight from a field whose error appears still reaches Save', async ({
+    page,
+}) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    await page.getByLabel('English text').fill('A made-up kite flies')
+    await page.getByLabel('Year').fill('1901')
+    // Leaving Day for Save reveals its error, which moves Save down the page.
+    await page.getByLabel('Day').fill('20')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    // Only a save attempt shows the untouched category's error: the click reached Save.
+    await expect(editorForm(page).getByText('Pick a category.')).toBeVisible()
+    await expect(editorForm(page).getByText('A day needs a month.')).toBeVisible()
+})
+
+test('the new-category dialog opens in the middle of the window', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/new')
+    await page.getByLabel('Category').selectOption({ label: 'New category…' })
+    const box = await page.getByRole('dialog', { name: 'New category' }).boundingBox()
+    const viewport = page.viewportSize()
+    expect(box && viewport).toBeTruthy()
+    if (!box || !viewport) return
+    expect(Math.abs(box.x - (viewport.width - box.width) / 2)).toBeLessThan(2)
+    expect(Math.abs(box.y - (viewport.height - box.height) / 2)).toBeLessThan(2)
+})
+
+test('Cmd/Ctrl + S saves the category form', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/categories/new')
+    await page.getByLabel('English name').fill(unique('Canals'))
+    await page.getByRole('radio', { name: 'ship' }).check()
+    await page.getByRole('radio', { name: 'teal' }).check()
+    await page.getByLabel('English name').press('ControlOrMeta+s')
+    await expect(page).toHaveURL(/\/admin\/categories$/)
+})
