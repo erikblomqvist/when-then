@@ -8,6 +8,8 @@
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
+    - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
+      suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
 <script lang="ts">
     import type { Snippet } from 'svelte'
@@ -25,8 +27,10 @@
         settledCardFormValues,
         cardTextMaxLength,
         sourceQuoteMaxLength,
+        withSuggestedDate,
         type CardFormErrors,
         type CardFormValues,
+        type SuggestedDate,
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
     import type { Category } from '#lib/server/categories.js'
@@ -44,6 +48,8 @@
         sidebar?: Snippet<[{ dirty: boolean }]>
         /** Rendered in each locale tab, e.g. a machine translation button. */
         translationActions?: TranslationActions
+        /** Rendered under the date fields, e.g. an AI date suggestion. */
+        dateActions?: Snippet<[{ english: string; apply: (date: SuggestedDate) => void }]>
     }
 
     let {
@@ -54,6 +60,7 @@
         saved = false,
         sidebar,
         translationActions,
+        dateActions,
     }: Props = $props()
 
     // svelte-ignore state_referenced_locally -- the form owns its values once it is shown
@@ -94,6 +101,8 @@
         const now = { ...values, decade: decadeFromYear ?? values.decade }
         return dateFields.some((name) => now[name].trim() !== saved[name].trim())
     }
+
+    const applyDate = (date: SuggestedDate) => (values = withSuggestedDate(values, date))
 
     beforeNavigate((navigation) => {
         if (!dirty || saving) return
@@ -241,6 +250,7 @@
             {@render error('year')}
             {@render error('month')}
             {@render error('day')}
+            {@render dateActions?.({ english: values.text_en, apply: applyDate })}
         </fieldset>
 
         <div class="flex flex-col gap-2">

@@ -7,8 +7,8 @@ if (existsSync('.env.local')) process.loadEnvFile('.env.local')
 
 // E2E_PORT lets parallel checkouts run their own preview server side by side.
 const port = Number(process.env.E2E_PORT ?? 4173)
-// The Anthropic API stand-in (src/lib/testing/anthropic-stub.ts): AI features never reach
-// the real API from tests.
+// The Anthropic and Wikidata API stand-in (src/lib/testing/anthropic-stub.ts): AI features
+// never reach the real services from tests.
 const anthropicStubPort = port + 1000
 
 export default defineConfig({
@@ -23,6 +23,7 @@ export default defineConfig({
             env: {
                 ANTHROPIC_API_KEY: 'e2e-stub-key',
                 ANTHROPIC_BASE_URL: `http://127.0.0.1:${anthropicStubPort}`,
+                WIKIDATA_API_URL: `http://127.0.0.1:${anthropicStubPort}/w/api.php`,
             },
         },
     ],

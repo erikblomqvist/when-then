@@ -118,6 +118,33 @@ export const settledCardFormValues = (values: CardFormValues): CardFormValues =>
     return settled
 }
 
+/** A year to put into the form, from an AI date suggestion (#42); source null = keep. */
+export type SuggestedDate = {
+    /** Signed: BCE negative. */
+    year: number
+    sourceUrl: string | null
+    sourceQuote: string | null
+}
+
+/**
+ * The form with a suggested year (and its source, when it has one) filled in. A month and day
+ * that belonged to a different year are dropped. The decade follows the year in the editor.
+ */
+export function withSuggestedDate(values: CardFormValues, date: SuggestedDate): CardFormValues {
+    const era = date.year < 0 ? 'BC' : 'AD'
+    const year = String(Math.abs(date.year))
+    const sameYear = values.era === era && values.year.trim() === year
+    return {
+        ...values,
+        era,
+        year,
+        ...(sameYear ? {} : { month: '', day: '' }),
+        ...(date.sourceUrl
+            ? { source_url: date.sourceUrl, source_quote: date.sourceQuote ?? '' }
+            : {}),
+    }
+}
+
 export const emptyCardFormValues: CardFormValues = {
     text_en: '',
     category_id: '',

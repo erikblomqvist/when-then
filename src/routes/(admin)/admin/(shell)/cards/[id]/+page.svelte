@@ -1,4 +1,5 @@
 <script lang="ts">
+    import AiDateSuggestion from '#lib/admin/cards/AiDateSuggestion.svelte'
     import AiTranslateButton from '#lib/admin/cards/AiTranslateButton.svelte'
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
     import CardHistory from '#lib/admin/cards/CardHistory.svelte'
@@ -28,6 +29,12 @@
                 {locale}
                 {english}
                 {fill} />
+        {/snippet}
+        {#snippet dateActions({ english, apply })}
+            <AiDateSuggestion
+                cardId={data.card.id}
+                {english}
+                {apply} />
         {/snippet}
         {#snippet sidebar({ dirty })}
             <CardLifecycle

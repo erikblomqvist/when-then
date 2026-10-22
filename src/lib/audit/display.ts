@@ -57,6 +57,9 @@ const actionLabels: Record<string, string> = {
     revoke: 'Revoked role',
     accept_invite: 'Accepted invite',
     ai_translate: 'Machine translated with AI',
+    ai_suggest_date: 'Suggested a date with AI',
+    accept_date_suggestion: 'Accepted the AI date suggestion',
+    reject_date_suggestion: 'Rejected the AI date suggestion',
 }
 
 /** What happened, as a past-tense phrase: 'update' → 'Edited'. Unknown actions humanized. */
@@ -121,6 +124,13 @@ const fieldLabels: Record<string, string> = {
     cost_usd: 'Cost',
     locales: 'Languages',
     error: 'Error',
+    calls: 'Model calls',
+    // AI date suggestions (#42)
+    via: 'Found via',
+    confidence: 'Confidence',
+    sources: 'Sources retrieved',
+    request_id: 'Suggestion request',
+    suggested_year: 'Suggested year',
 }
 
 export const fieldLabel = (field: string) => fieldLabels[field] ?? humanize(field)

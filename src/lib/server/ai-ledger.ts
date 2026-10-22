@@ -18,15 +18,20 @@ export function dbLedger(db: Db): AiLedger {
             return count ?? 0
         },
         async record({ actorId, entity, entityId, locale, action, details }) {
-            const { error } = await db.from('audit_log').insert({
-                actor_id: actorId,
-                entity,
-                entity_id: entityId,
-                locale,
-                action,
-                details: details as Json,
-            })
+            const { data, error } = await db
+                .from('audit_log')
+                .insert({
+                    actor_id: actorId,
+                    entity,
+                    entity_id: entityId,
+                    locale,
+                    action,
+                    details: details as Json,
+                })
+                .select('id')
+                .single()
             if (error) throw new Error(`Logging the AI call failed: ${error.message}`)
+            return data.id
         },
     }
 }
