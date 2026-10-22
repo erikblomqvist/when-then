@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { PUBLIC_SUPABASE_PUBLISHABLE_KEY, PUBLIC_SUPABASE_URL } from '$app/env/public'
 import { sequence } from '@sveltejs/kit/hooks'
-import type { Handle } from '@sveltejs/kit/hooks'
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
@@ -9,6 +9,7 @@ import { isPublicAdminPath, requireRole, type Viewer } from '#lib/server/guard.j
 import { currentRole } from '#lib/server/people.js'
 import { supabaseService } from '#lib/server/supabase.js'
 import { acceptsAdminSession } from '#lib/server/sign-in-method.js'
+import { describeError } from '#lib/server/describe-error.js'
 
 // Locale comes from the cookie, then the browser's preferred language, then English
 // (strategy in vite.config.ts). There is no locale in the URL, so the request is not rewritten.
@@ -110,3 +111,9 @@ const handleAdmin: Handle = async ({ event, resolve }) => {
 }
 
 export const handle = sequence(handleParaglide, handleSupabase, handleAdmin)
+
+// Unexpected errors reach the log readably; the visitor still sees only the generic message.
+export const handleError: HandleServerError = ({ kind, error, event }) => {
+    if (kind !== 'unknown') return
+    console.error(`${event.request.method} ${event.url.pathname}:`, describeError(error))
+}
