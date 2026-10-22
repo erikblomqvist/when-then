@@ -104,6 +104,9 @@ test('bulk translate fills the missing locales of the selected cards and reports
         sv: { text: 'En påhittad kanal öppnas', status: 'reviewed' },
         nb: { text: `NB: ${canal}`, status: 'machine' },
     })
+    // The action's redirect drops `?q=`, and other tests' fresh cards can push this one off
+    // page 1 of the unfiltered list, so search for it again.
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
     await expect(
         page.getByRole('row').filter({ hasText: tower }).getByTestId('translation-sv'),
     ).toContainText('Machine')
