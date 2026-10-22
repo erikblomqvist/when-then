@@ -62,7 +62,8 @@
                     name="name"
                     required
                     maxlength={playerNameMaxLength}
-                    autocomplete="nickname"
+                    autocomplete="off"
+                    data-1p-ignore
                     value={form?.values.name ?? ''} />
             </label>
             <PlayerIconPicker
