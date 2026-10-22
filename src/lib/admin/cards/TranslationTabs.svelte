@@ -3,8 +3,9 @@
     the editor's form so they share its save and unsaved-changes guard. Every panel stays in
     the form (inactive ones are hidden), so a save posts all locales.
 
-    Each tab shows the saved state and, when a save would change it, what it becomes
-    (`statusOnSave` in `#lib/cards/translation.js`, mirroring the database's rules).
+    Each tab's badge shows the state a save would give it, as it is typed (#52), marked unsaved
+    while that differs from the saved state (`statusOnSave` in `#lib/cards/translation.js`,
+    mirroring the database's rules).
 
     `actions` renders inside each panel with `{ locale, english, fill }`: `fill(text)` puts a
     machine translation into the tab, unsaved (status machine until someone edits it or ticks
@@ -54,9 +55,10 @@
 
     // svelte-ignore state_referenced_locally -- the starting tab; later errors switch below
     let active: TranslationLocale = $state(erroredLocale() ?? 'sv')
+    // Errors follow typing, so switch only when a different locale gets one.
+    const errored = $derived(erroredLocale())
     $effect(() => {
-        const locale = erroredLocale()
-        if (locale) active = locale
+        if (errored) active = errored
     })
 
     const englishChanged = $derived(
@@ -102,6 +104,8 @@
         class="flex gap-1 border-b"
         {onkeydown}>
         {#each translationLocales as locale (locale)}
+            {@const onSave = stateOnSave(locale)}
+            {@const unsaved = onSave !== savedState(locale)}
             <button
                 bind:this={tabs[locale]}
                 type="button"
@@ -116,7 +120,13 @@
                     : 'border-transparent text-muted-foreground'}"
                 onclick={() => (active = locale)}>
                 {localeName[locale]}
-                <TranslationBadge state={savedState(locale)} />
+                <TranslationBadge state={onSave} />
+                {#if unsaved}
+                    <span
+                        class="size-1.5 rounded-full bg-primary"
+                        aria-hidden="true"></span>
+                    <span class="sr-only">(unsaved)</span>
+                {/if}
             </button>
         {/each}
     </div>

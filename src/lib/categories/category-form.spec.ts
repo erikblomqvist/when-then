@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { moveItem, parseCategoryForm } from './category-form'
+import {
+    categoryFormErrors,
+    emptyCategoryFormValues,
+    moveItem,
+    parseCategoryForm,
+} from './category-form'
 
 const form = (fields: Record<string, string>) => {
     const data = new FormData()
@@ -65,5 +70,23 @@ describe('moveItem', () => {
         expect(moveItem(order, 1, 1)).toEqual(order)
         expect(moveItem(order, 1, 9)).toEqual(order)
         expect(moveItem(order, -1, 0)).toEqual(order)
+    })
+})
+
+describe('categoryFormErrors', () => {
+    it('finds what a save would refuse, from the values the form holds', () => {
+        expect(categoryFormErrors(emptyCategoryFormValues)).toEqual({
+            name_en: 'Enter an English name.',
+            icon: 'Pick an icon.',
+            colour: 'Pick a colour.',
+        })
+        expect(
+            categoryFormErrors({
+                ...emptyCategoryFormValues,
+                name_en: 'Royals',
+                icon: 'crown',
+                colour: 'purple',
+            }),
+        ).toEqual({})
     })
 })

@@ -8,6 +8,8 @@
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
+    - Category: with `canCreateCategory`, "New category" opens `NewCategoryDialog` and picks
+      the category it creates, keeping everything typed (#52).
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -23,6 +25,7 @@
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
+        cardFormErrors,
         cardFormValues,
         settledCardFormValues,
         cardTextMaxLength,
@@ -35,6 +38,8 @@
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
     import type { Category } from '#lib/server/categories.js'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
+    import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
+    import { LiveErrors } from '../live-errors.svelte.js'
 
     type Props = {
         /** The values the form starts from (the saved card, or empty). */
@@ -50,6 +55,8 @@
         translationActions?: TranslationActions
         /** Rendered under the date fields, e.g. an AI date suggestion. */
         dateActions?: Snippet<[{ english: string; apply: (date: SuggestedDate) => void }]>
+        /** Offer "New category" (admins), posting to the page's `?/createCategory`. */
+        canCreateCategory?: boolean
     }
 
     let {
@@ -61,7 +68,10 @@
         sidebar,
         translationActions,
         dateActions,
+        canCreateCategory = false,
     }: Props = $props()
+
+    let creatingCategory = $state(false)
 
     // svelte-ignore state_referenced_locally -- the form owns its values once it is shown
     let values = $state({ ...initial })
@@ -86,12 +96,22 @@
     ]
 
     // Entering a year fills the decade (and locks it); without a year the decade is typed.
-    const yearNumber = $derived(/^\d+$/.test(values.year.trim()) ? Number(values.year) : 0)
-    const decadeFromYear = $derived(
-        yearNumber > 0
-            ? String(decadeLabel(decadeOf(values.era === 'BC' ? -yearNumber : yearNumber)))
-            : null,
+    const decadeFromYearOf = ({ year, era }: CardFormValues) => {
+        const yearNumber = /^\d+$/.test(year.trim()) ? Number(year) : 0
+        return yearNumber > 0
+            ? String(decadeLabel(decadeOf(era === 'BC' ? -yearNumber : yearNumber)))
+            : null
+    }
+    const decadeFromYear = $derived(decadeFromYearOf(values))
+
+    // Errors follow what is typed (#52); the decade is checked as the form shows it.
+    const live = new LiveErrors(
+        () => values,
+        (current) =>
+            cardFormErrors({ ...current, decade: decadeFromYearOf(current) ?? current.decade }),
+        () => errors,
     )
+    const shown = $derived(live.shown)
 
     // Changing a verified date asks whether to clear the verification (sent with the save).
     const dateFields = ['era', 'decade', 'year', 'month', 'day'] as const
@@ -113,15 +133,15 @@
         }
     })
 
-    const describedBy = (name: keyof CardFormValues) => (errors[name] ? `${name}-error` : undefined)
+    const describedBy = (name: keyof CardFormValues) => (shown[name] ? `${name}-error` : undefined)
 </script>
 
 {#snippet error(name: keyof CardFormValues)}
-    {#if errors[name]}
+    {#if shown[name]}
         <p
             id="{name}-error"
             class="text-sm text-destructive">
-            {errors[name]}
+            {shown[name]}
         </p>
     {/if}
 {/snippet}
@@ -131,7 +151,9 @@
         method="POST"
         action="?/save"
         class="flex flex-col gap-6"
-        use:enhance={({ formData }) => {
+        onfocusout={live.onfocusout}
+        use:enhance={({ formData, cancel }) => {
+            if (!live.attempt()) return cancel()
             if (
                 card?.verifiedAt &&
                 dateChanged() &&
@@ -149,6 +171,7 @@
                     const settled = settledCardFormValues(submitted)
                     if (JSON.stringify(values) === JSON.stringify(submitted)) values = settled
                     baseline = JSON.stringify(settled)
+                    live.settle()
                 }
                 await update({ reset: false })
                 saving = false
@@ -169,7 +192,7 @@
                 rows={3}
                 maxlength={cardTextMaxLength}
                 bind:value={values.text_en}
-                aria-invalid={errors.text_en ? 'true' : undefined}
+                aria-invalid={shown.text_en ? 'true' : undefined}
                 aria-describedby={describedBy('text_en')} />
             {@render error('text_en')}
         </section>
@@ -177,7 +200,7 @@
         <TranslationTabs
             bind:values
             {card}
-            {errors}
+            errors={shown}
             actions={translationActions} />
 
         <fieldset class="flex flex-col gap-3">
@@ -203,7 +226,7 @@
                         value={decadeFromYear ?? values.decade}
                         oninput={(event) => (values.decade = event.currentTarget.value)}
                         disabled={decadeFromYear !== null}
-                        aria-invalid={errors.decade ? 'true' : undefined}
+                        aria-invalid={shown.decade ? 'true' : undefined}
                         aria-describedby={describedBy('decade')} />
                 </div>
                 <div class="flex w-28 flex-col gap-2">
@@ -213,7 +236,7 @@
                         name="year"
                         inputmode="numeric"
                         bind:value={values.year}
-                        aria-invalid={errors.year ? 'true' : undefined}
+                        aria-invalid={shown.year ? 'true' : undefined}
                         aria-describedby={describedBy('year')} />
                 </div>
                 <div class="flex flex-col gap-2">
@@ -222,7 +245,7 @@
                         id="month"
                         name="month"
                         bind:value={values.month}
-                        aria-invalid={errors.month ? 'true' : undefined}
+                        aria-invalid={shown.month ? 'true' : undefined}
                         aria-describedby={describedBy('month')}>
                         <NativeSelect.Option value="">Unknown</NativeSelect.Option>
                         {#each months as month, index (month)}
@@ -239,7 +262,7 @@
                         name="day"
                         inputmode="numeric"
                         bind:value={values.day}
-                        aria-invalid={errors.day ? 'true' : undefined}
+                        aria-invalid={shown.day ? 'true' : undefined}
                         aria-describedby={describedBy('day')} />
                 </div>
             </div>
@@ -255,23 +278,37 @@
 
         <div class="flex flex-col gap-2">
             <Label for="category_id">Category</Label>
-            <NativeSelect.Root
-                id="category_id"
-                name="category_id"
-                bind:value={values.category_id}
-                aria-invalid={errors.category_id ? 'true' : undefined}
-                aria-describedby={describedBy('category_id')}>
-                <NativeSelect.Option
-                    value=""
-                    disabled>
-                    Choose a category
-                </NativeSelect.Option>
-                {#each categories as category (category.id)}
-                    <NativeSelect.Option value={category.id}>
-                        {category.name}{category.archived ? ' (archived)' : ''}
+            <div class="flex flex-wrap items-center gap-2">
+                <NativeSelect.Root
+                    id="category_id"
+                    name="category_id"
+                    bind:value={values.category_id}
+                    aria-invalid={shown.category_id ? 'true' : undefined}
+                    aria-describedby={describedBy('category_id')}>
+                    <NativeSelect.Option
+                        value=""
+                        disabled>
+                        {categories.length > 0 ? 'Choose a category' : 'No categories yet'}
                     </NativeSelect.Option>
-                {/each}
-            </NativeSelect.Root>
+                    {#each categories as category (category.id)}
+                        <NativeSelect.Option value={category.id}>
+                            {category.name}{category.archived ? ' (archived)' : ''}
+                        </NativeSelect.Option>
+                    {/each}
+                </NativeSelect.Root>
+                {#if canCreateCategory}
+                    <Button
+                        variant="outline"
+                        onclick={() => (creatingCategory = true)}>
+                        New category
+                    </Button>
+                {/if}
+            </div>
+            {#if !canCreateCategory}
+                <p class="text-sm text-muted-foreground">
+                    No fitting category? Ask an admin to add one.
+                </p>
+            {/if}
             {@render error('category_id')}
         </div>
 
@@ -285,7 +322,7 @@
                     type="url"
                     placeholder="https://"
                     bind:value={values.source_url}
-                    aria-invalid={errors.source_url ? 'true' : undefined}
+                    aria-invalid={shown.source_url ? 'true' : undefined}
                     aria-describedby={describedBy('source_url')} />
                 {@render error('source_url')}
             </div>
@@ -297,7 +334,7 @@
                     rows={2}
                     maxlength={sourceQuoteMaxLength}
                     bind:value={values.source_quote}
-                    aria-invalid={errors.source_quote ? 'true' : undefined}
+                    aria-invalid={shown.source_quote ? 'true' : undefined}
                     aria-describedby={describedBy('source_quote')} />
                 {@render error('source_quote')}
             </div>
@@ -335,3 +372,9 @@
         {@render sidebar?.({ dirty })}
     </aside>
 </div>
+
+{#if canCreateCategory}
+    <NewCategoryDialog
+        bind:open={creatingCategory}
+        oncreated={(id) => (values.category_id = id)} />
+{/if}

@@ -22,7 +22,8 @@
         categories={data.categories}
         card={data.card}
         errors={form?.errors}
-        saved={form?.saved ?? false}>
+        saved={form?.saved ?? false}
+        canCreateCategory={data.role === 'admin'}>
         {#snippet translationActions({ locale, english, fill })}
             <AiTranslateButton
                 cardId={data.card.id}

@@ -10,6 +10,7 @@ import {
 } from '#lib/server/card-editor.js'
 import { cardHistory } from '#lib/server/cards.js'
 import { supabaseService } from '#lib/server/supabase.js'
+import { createCategoryAction } from '#lib/server/category-editor.js'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async ({ params }) => {
 }
 
 export const actions: Actions = {
+    createCategory: createCategoryAction,
     save: async (event) => {
         const saved = await saveCardAction(event, await loadCard(event.params.id))
         if (typeof saved !== 'string') return saved

@@ -1,11 +1,18 @@
 <!-- The category form of /admin/categories/new and /admin/categories/[id]: names per locale,
-     an icon from the curated set and a colour from the palette. Posts to the page's `?/save`. -->
+     an icon from the curated set and a colour from the palette. Posts to the page's `?/save`,
+     or to `action` with `submit` handling the result (the card editor's dialog). Errors follow
+     what is typed (#52). -->
 <script lang="ts">
+    import type { SubmitFunction } from '$app/forms'
     import { enhance } from '$app/forms'
     import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
-    import type { CategoryFormErrors, CategoryFormValues } from '#lib/categories/category-form.js'
+    import {
+        categoryFormErrors,
+        type CategoryFormErrors,
+        type CategoryFormValues,
+    } from '#lib/categories/category-form.js'
     import {
         categoryColours,
         categoryIcons,
@@ -14,18 +21,45 @@
     } from '#lib/categories/look.js'
     import CategoryIcon from '#lib/ui/CategoryIcon.svelte'
     import CategoryBadge from './CategoryBadge.svelte'
+    import { LiveErrors } from '../live-errors.svelte.js'
 
     type Props = {
         values: CategoryFormValues
         errors?: CategoryFormErrors
         /** A refusal from the database (a duplicate English name, say). */
         error?: string
+        action?: string
+        /** Handles the result instead of the page (see `enhance`). */
+        submit?: SubmitFunction
+        /** Cancel calls this instead of going back to the categories page. */
+        oncancel?: () => void
     }
 
-    let { values: initial, errors = {}, error }: Props = $props()
+    let {
+        values: initial,
+        errors = {},
+        error,
+        action = '?/save',
+        submit,
+        oncancel,
+    }: Props = $props()
 
     // svelte-ignore state_referenced_locally -- the form owns its values once it is shown
     let values = $state({ ...initial })
+
+    const live = new LiveErrors(
+        () => values,
+        categoryFormErrors,
+        () => errors,
+    )
+    const shown = $derived(live.shown)
+    // A refusal is about what was posted: it goes once something changes.
+    const refusal = $derived(error && live.unchangedSincePosted ? error : undefined)
+
+    const onsubmit: SubmitFunction = (input) => {
+        if (!live.attempt()) return input.cancel()
+        return submit?.(input)
+    }
 
     const names = [
         { field: 'name_en', label: 'English name', hint: 'Required. CSV import matches on it.' },
@@ -38,25 +72,26 @@
 </script>
 
 {#snippet fieldError(name: keyof CategoryFormValues)}
-    {#if errors[name]}
+    {#if shown[name]}
         <p
             id="{name}-error"
             class="text-sm text-destructive">
-            {errors[name]}
+            {shown[name]}
         </p>
     {/if}
 {/snippet}
 
 <form
     method="POST"
-    action="?/save"
-    use:enhance
+    {action}
+    onfocusout={live.onfocusout}
+    use:enhance={onsubmit}
     class="flex max-w-3xl flex-col gap-8">
-    {#if error}
+    {#if refusal}
         <p
             role="alert"
             class="rounded-md border border-destructive px-3 py-2 text-sm text-destructive">
-            {error}
+            {refusal}
         </p>
     {/if}
 
@@ -69,8 +104,8 @@
                     name={field}
                     bind:value={values[field]}
                     autocomplete="off"
-                    aria-invalid={errors[field] ? 'true' : undefined}
-                    aria-describedby={errors[field] ? `${field}-error` : `${field}-hint`} />
+                    aria-invalid={shown[field] ? 'true' : undefined}
+                    aria-describedby={shown[field] ? `${field}-error` : `${field}-hint`} />
                 <p
                     id="{field}-hint"
                     class="text-xs text-muted-foreground">
@@ -132,10 +167,18 @@
                     colour={values.colour} />
             </span>
         {/if}
-        <Button
-            href="/admin/categories"
-            variant="ghost">
-            Cancel
-        </Button>
+        {#if oncancel}
+            <Button
+                variant="ghost"
+                onclick={oncancel}>
+                Cancel
+            </Button>
+        {:else}
+            <Button
+                href="/admin/categories"
+                variant="ghost">
+                Cancel
+            </Button>
+        {/if}
     </div>
 </form>

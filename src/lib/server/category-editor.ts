@@ -12,14 +12,6 @@ import { CategoryError, saveCategory } from './categories'
 import { requireRole } from './guard'
 import { supabaseService } from './supabase'
 
-export const emptyCategoryFormValues: CategoryFormValues = {
-    icon: '',
-    colour: '',
-    name_en: '',
-    name_sv: '',
-    name_nb: '',
-}
-
 export const categoryFormValues = (category: Category): CategoryFormValues => ({
     icon: category.icon,
     colour: category.colour,
@@ -68,4 +60,15 @@ export async function saveCategoryAction(event: RequestEvent, id?: string) {
         (actor) => saveCategory(supabaseService(), actor, parsed.input, id),
         values,
     )
+}
+
+/**
+ * The card editor's "New category" (#52), on /admin/cards/new and /admin/cards/[id]: the new
+ * category's id, so the editor can pick it. A failure comes back under `category`, apart from
+ * the card form's own errors.
+ */
+export async function createCategoryAction(event: RequestEvent) {
+    const saved = await saveCategoryAction(event)
+    if (typeof saved !== 'string') return fail(saved.status, { category: saved.data })
+    return { createdCategory: saved }
 }
