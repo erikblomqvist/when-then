@@ -39,8 +39,9 @@
     const seats = $derived(startingFrom(seating, anchor))
     let history = $state<Seating[]>([])
     let table = $state<HTMLElement>()
-    // The dragged player and where their name is, in fractions of the table box.
-    let drag = $state<{ id: string; x: number; y: number }>()
+    // The dragged player, the finger dragging them, and where their name is, in fractions of the
+    // table box. Other fingers on the screen are ignored, so a second touch can't steal the drag.
+    let drag = $state<{ id: string; pointer: number; x: number; y: number }>()
 
     const name = (id: string) => players.find((p) => p.id === id)?.name ?? id
     const you = (id: string) => (id === anchor ? 'you' : name(id))
@@ -90,14 +91,19 @@
 
     function start(e: PointerEvent, id: string) {
         e.preventDefault()
-        drag = { id, ...point(e) }
+        if (drag) return
+        drag = { id, pointer: e.pointerId, ...point(e) }
     }
     function move(e: PointerEvent) {
-        if (drag) Object.assign(drag, point(e))
+        if (drag?.pointer === e.pointerId) Object.assign(drag, point(e))
     }
-    function drop() {
-        if (drag && target) commit(apply(drag.id, target))
+    function drop(e: PointerEvent) {
+        if (drag?.pointer !== e.pointerId) return
+        if (target) commit(apply(drag.id, target))
         drag = undefined
+    }
+    function cancel(e: PointerEvent) {
+        if (drag?.pointer === e.pointerId) drag = undefined
     }
 
     function commit(next: Seating) {
@@ -113,7 +119,7 @@
 <svelte:window
     onpointermove={move}
     onpointerup={drop}
-    onpointercancel={() => (drag = undefined)} />
+    onpointercancel={cancel} />
 
 <div class="seating-editor">
     <div
