@@ -40,7 +40,7 @@ test('valid rows become drafts with reviewed translations, each logged as an imp
             header,
             `A made-up canal opens ${tag},,1822,5,,Events,https://example.com/canal,Opened in May,En påhittad kanal öppnas,En oppdiktet kanal åpner,canals; ${tag}`,
             `,,1822,,,Events,,,,,`,
-            `Made-up Sampleby walls rise ${tag},-49,,,,places,,,,,`,
+            `Made-up harbour walls rise ${tag},-49,,,,places,,,,,`,
         ].join('\r\n'),
     )
 

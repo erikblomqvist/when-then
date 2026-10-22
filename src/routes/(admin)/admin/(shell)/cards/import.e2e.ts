@@ -22,7 +22,7 @@ test('an admin previews a CSV with per-row errors, then imports the valid rows a
     await signInAs(page, 'admin')
     const tag = `Import${randomUUID().slice(0, 8)}`
     const canal = `A made-up canal opens ${tag}`
-    const walls = `Made-up Sampleby walls rise ${tag}`
+    const walls = `Made-up harbour walls rise ${tag}`
     const csv = [
         header,
         `${canal},,1822,5,,Events,https://example.com/canal,,En påhittad kanal öppnas,,canals`,
