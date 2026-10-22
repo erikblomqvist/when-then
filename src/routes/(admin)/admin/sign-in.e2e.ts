@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { signInAs } from '../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../lib/testing/e2e-hydration'
 
 test('signed out, the admin sends you to sign in and back to where you were going', async ({
     page,
@@ -33,7 +34,7 @@ test('"Sign in with Google" hands over to Google through Supabase', async ({ pag
         route.fulfill({ body: 'Google would take over here' }),
     )
 
-    await page.goto('/admin/sign-in?redirectTo=%2Fadmin%2Fcards')
+    await gotoHydrated(page, '/admin/sign-in?redirectTo=%2Fadmin%2Fcards')
     await page.getByRole('button', { name: 'Sign in with Google' }).click()
 
     const url = new URL((await authorize).url())
@@ -55,7 +56,7 @@ test('a failed return from Google lands back on sign-in with a message', async (
 test('signed in without a role,you see the no-access page and can sign out', async ({ page }) => {
     const { email } = await signInAs(page, null)
 
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
 
     await expect(page).toHaveURL('/admin/no-access')
     await expect(page.getByRole('heading', { name: "You don't have access yet" })).toBeVisible()
@@ -69,7 +70,7 @@ for (const role of ['editor', 'admin'] as const) {
     test(`an ${role} reaches the admin shell and can sign out`, async ({ page }) => {
         const { email } = await signInAs(page, role)
 
-        await page.goto('/admin')
+        await gotoHydrated(page, '/admin')
 
         await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible()
         await expect(page.getByTestId('signed-in-as')).toHaveText(`${email} · ${role}`)
