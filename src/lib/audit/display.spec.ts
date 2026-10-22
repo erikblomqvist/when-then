@@ -6,8 +6,10 @@ import {
     entityLabel,
     fieldChanges,
     formatTime,
+    humanize,
     type AuditRecord,
 } from './display'
+import { auditActions } from './actions'
 
 const cardId = '11111111-1111-4111-8111-111111111111'
 const noNames = { categories: {}, people: {} }
@@ -104,6 +106,15 @@ describe('labels', () => {
         expect(actionLabel('update')).toBe('Edited')
         expect(actionLabel('revoke')).toBe('Revoked role')
         expect(actionLabel('ai_suggestion_accepted')).toBe('Ai suggestion accepted')
+    })
+
+    it('names a CSV import', () => {
+        expect(actionLabel('import')).toBe('Imported from CSV')
+    })
+
+    it('gives every action something writes its own label', () => {
+        const humanized = auditActions.filter((action) => actionLabel(action) === humanize(action))
+        expect(humanized).toEqual([])
     })
 
     it('names entities with their language, and humanizes new ones', () => {

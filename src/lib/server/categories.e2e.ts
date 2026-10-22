@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { historyOf } from './audit'
 import { saveCard } from './cards'
 import {
@@ -20,17 +20,6 @@ import {
 } from './categories'
 
 const db = localServiceClient()
-
-async function newPerson(role: 'admin' | 'editor') {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `${role}-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    const inserted = await db.from('user_roles').insert({ user_id: data.user.id, role })
-    if (inserted.error) throw inserted.error
-    return data.user.id
-}
 
 const input = (name: string, extra: Partial<CategoryInput> = {}): CategoryInput => ({
     icon: 'crown',
@@ -47,7 +36,7 @@ async function find(id: string) {
 }
 
 test('an admin creates a category: last in the draw, with its names, look and an audit row', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const name = unique('Royals')
     const before = await listCategories(db, { includeArchived: true })
 
@@ -78,7 +67,7 @@ test('an admin creates a category: last in the draw, with its names, look and an
 })
 
 test('renaming per locale keeps English required and drops a cleared translation', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const name = unique('Ships')
     const id = await saveCategory(db, admin, input(name, { names: { en: name, nb: 'Skip' } }))
 
@@ -97,7 +86,7 @@ test('renaming per locale keeps English required and drops a cleared translation
 })
 
 test('two categories cannot share an English name, whatever the case', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const name = unique('Rivers')
     await saveCategory(db, admin, input(name))
 
@@ -107,7 +96,7 @@ test('two categories cannot share an English name, whatever the case', async () 
 })
 
 test('CSV import finds a category by its English name, ignoring case and spaces', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const name = unique('Mountains')
     const id = await saveCategory(db, admin, input(name))
 
@@ -118,7 +107,7 @@ test('CSV import finds a category by its English name, ignoring case and spaces'
 })
 
 test('reordering moves categories among their own positions and is audited', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const a = await saveCategory(db, admin, input(unique('First')))
     const b = await saveCategory(db, admin, input(unique('Second')))
     const c = await saveCategory(db, admin, input(unique('Third')))
@@ -139,7 +128,7 @@ test('reordering moves categories among their own positions and is audited', asy
 })
 
 test('archiving takes a category out of the draw list and unarchiving brings it back', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const id = await saveCategory(db, admin, input(unique('Storms')))
 
     await setCategoryArchived(db, admin, id, true)
@@ -156,7 +145,7 @@ test('archiving takes a category out of the draw list and unarchiving brings it 
 })
 
 test('only a category without cards can be deleted', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const full = await saveCategory(db, admin, input(unique('Harbours')))
     await saveCard(db, admin, {
         categoryId: full,
@@ -184,8 +173,8 @@ test('only a category without cards can be deleted', async () => {
 })
 
 test('editors cannot manage categories', async () => {
-    const admin = await newPerson('admin')
-    const editor = await newPerson('editor')
+    const admin = (await newPerson('admin')).id
+    const editor = (await newPerson('editor')).id
     const id = await saveCategory(db, admin, input(unique('Bridges')))
     const refused = 'Only admins can manage categories.'
 

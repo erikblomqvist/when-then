@@ -5,24 +5,13 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { planCardImport, type ImportRow } from '../cards/card-import'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { historyOf } from './audit'
 import { getCard } from './cards'
 import { categoriesByEnglishName } from './categories'
 import { importCards } from './card-import'
 
 const db = localServiceClient()
-
-async function newPerson(role: 'admin' | 'editor') {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `${role}-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    const inserted = await db.from('user_roles').insert({ user_id: data.user.id, role })
-    if (inserted.error) throw inserted.error
-    return data.user.id
-}
 
 async function planned(csv: string): Promise<ImportRow[]> {
     const plan = planCardImport(csv, await categoriesByEnglishName(db, { includeArchived: true }))
@@ -33,7 +22,7 @@ async function planned(csv: string): Promise<ImportRow[]> {
 const header = 'text_en,decade,year,month,day,category,source_url,source_quote,text_sv,text_nb,tags'
 
 test('valid rows become drafts with reviewed translations, each logged as an import', async () => {
-    const admin = await newPerson('admin')
+    const admin = (await newPerson('admin')).id
     const tag = `Import${randomUUID().slice(0, 8)}`
     const rows = await planned(
         [
@@ -78,7 +67,7 @@ test('valid rows become drafts with reviewed translations, each logged as an imp
 })
 
 test('an editor cannot import, and nothing is written', async () => {
-    const editor = await newPerson('editor')
+    const editor = (await newPerson('editor')).id
     const tag = `Import${randomUUID().slice(0, 8)}`
     const rows = await planned(`${header}\r\nA made-up mill turns ${tag},,1822,,,Events,,,,,`)
 

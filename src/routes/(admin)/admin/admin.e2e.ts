@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { signInAs } from '../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../lib/testing/e2e-hydration'
 
 // `--surface-table` is a game token (tokens.css); `--background` is a shadcn token (admin.css).
 const rootVariable = (page: Page, name: string) =>
@@ -42,7 +43,7 @@ test('the link from admin to the game reloads the page, leaving admin styles beh
     page,
 }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await page.getByRole('link', { name: 'Back to the game' }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'When Then?' })).toBeVisible()
 

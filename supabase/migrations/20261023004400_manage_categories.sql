@@ -1,29 +1,13 @@
 -- Category management (#44): create and edit (names per locale, icon, colour), reorder,
 -- archive and unarchive, delete when empty. Admin only, so every function checks the actor
--- with public.require_admin (#45) and names it for the audit triggers (#37) before writing.
+-- with public.require_admin (from the card lifecycle migration, #38) and names it for the
+-- audit triggers (#37) before writing.
 -- The server calls these with the service client and turns the raised codes into messages.
 
 -- CSV import (#48) matches categories by English name, so no two may share one.
 create unique index category_translations_en_name_key
     on public.category_translations (lower(btrim(name)))
     where locale = 'en';
-
--- Raises 'not_admin' unless the actor is an admin. (Like #45's require_admin, which this
--- migration can't rely on: it runs first.)
-create function public.require_category_admin(actor uuid)
-returns void
-language plpgsql
-stable
-set search_path = ''
-as $$
-begin
-    if actor is null or not exists (
-        select 1 from public.user_roles as r where r.user_id = actor and r.role = 'admin'
-    ) then
-        raise exception 'not_admin' using detail = 'Only admins manage categories.';
-    end if;
-end;
-$$;
 
 -- Serialises writes that hand out or shuffle positions, so concurrent creates and reorders
 -- never collide on categories_position_key.
@@ -55,7 +39,7 @@ declare
     entry record;
     name text;
 begin
-    perform public.require_category_admin(actor);
+    perform public.require_admin(actor, 'Only admins manage categories.');
     perform public.set_actor(actor);
 
     if nullif(btrim(names ->> 'en'), '') is null then
@@ -111,7 +95,7 @@ security invoker
 set search_path = ''
 as $$
 begin
-    perform public.require_category_admin(actor);
+    perform public.require_admin(actor, 'Only admins manage categories.');
     perform public.set_actor(actor);
     perform public.lock_category_positions();
 
@@ -150,7 +134,7 @@ security invoker
 set search_path = ''
 as $$
 begin
-    perform public.require_category_admin(actor);
+    perform public.require_admin(actor, 'Only admins manage categories.');
     perform public.set_actor(actor);
 
     update public.categories as c
@@ -172,7 +156,7 @@ security invoker
 set search_path = ''
 as $$
 begin
-    perform public.require_category_admin(actor);
+    perform public.require_admin(actor, 'Only admins manage categories.');
     perform public.set_actor(actor);
 
     if exists (select 1 from public.cards as k where k.category_id = delete_category.category_id)
@@ -189,7 +173,6 @@ end;
 $$;
 
 revoke execute on function
-    public.require_category_admin(uuid),
     public.lock_category_positions(),
     public.save_category(uuid, jsonb, jsonb, uuid),
     public.reorder_categories(uuid, uuid[]),
@@ -198,7 +181,6 @@ revoke execute on function
 from anon, authenticated, public;
 
 grant execute on function
-    public.require_category_admin(uuid),
     public.lock_category_positions(),
     public.save_category(uuid, jsonb, jsonb, uuid),
     public.reorder_categories(uuid, uuid[]),

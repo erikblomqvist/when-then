@@ -2,21 +2,13 @@
 // filters, paging and the names the pages show. Other tests write to the log at the same
 // time, so every query here is narrowed to a fresh actor.
 
-import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { auditActors, auditKinds, auditLog } from './audit'
 import { saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor() {
-    const email = `editor-${randomUUID()}@example.com`
-    const { data, error } = await db.auth.admin.createUser({ email, email_confirm: true })
-    if (error) throw error
-    return { id: data.user.id, email }
-}
 
 async function cardBy(actorId: string, text: string, cardId?: string) {
     const [category] = await listCategories(db)
@@ -35,8 +27,8 @@ async function cardBy(actorId: string, text: string, cardId?: string) {
 }
 
 test('filters the log by actor, entity and action', async () => {
-    const actor = await newActor()
-    const other = await newActor()
+    const actor = await newPerson()
+    const other = await newPerson()
     const id = await cardBy(actor.id, 'A made-up audited card')
     await cardBy(actor.id, 'A made-up audited card, edited', id)
     await cardBy(other.id, 'A made-up card by someone else')
@@ -56,7 +48,7 @@ test('filters the log by actor, entity and action', async () => {
 })
 
 test('pages through the log newest first, both ways', async () => {
-    const actor = await newActor()
+    const actor = await newPerson()
     const id = await cardBy(actor.id, 'A made-up paged card')
     await cardBy(actor.id, 'A made-up paged card, edited', id)
     const query = { actorId: actor.id, pageSize: 2 }
@@ -81,7 +73,7 @@ test('pages through the log newest first, both ways', async () => {
 })
 
 test('names the actors and lists the kinds of entries for the filters', async () => {
-    const actor = await newActor()
+    const actor = await newPerson()
     await cardBy(actor.id, 'A made-up card for the filters')
 
     expect(await auditActors(db)).toContainEqual({ id: actor.id, email: actor.email })

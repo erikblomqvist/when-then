@@ -20,7 +20,10 @@ test("a card's history shows who changed what, field by field", async ({ page })
     })
 
     await gotoHydrated(page, `/admin/cards/${id}`)
-    const history = page.getByRole('region', { name: 'History' })
+    // In the editor's sidebar, below the status actions (#14).
+    const history = page
+        .getByRole('complementary', { name: 'Card' })
+        .getByRole('region', { name: 'History' })
     await expect(history.getByRole('article')).toHaveCount(2)
 
     const edited = `${text}, seen twice`
@@ -36,20 +39,22 @@ test("a card's history shows who changed what, field by field", async ({ page })
     const textEdit = entries.nth(0)
     await expect(textEdit.getByRole('heading')).toHaveText('Edited Card text (English)')
     await expect(textEdit).toContainText(email)
-    const textRow = textEdit.getByRole('row').filter({ hasText: 'Text' })
-    await expect(textRow.getByRole('cell').nth(0)).toHaveText(text)
-    await expect(textRow.getByRole('cell').nth(1)).toHaveText(edited)
+    // Each change stacks its field, the old value and the new one, to fit the sidebar.
+    const textChange = textEdit.getByRole('listitem').filter({ hasText: 'Text' })
+    await expect(textChange.getByRole('deletion')).toHaveText(text)
+    await expect(textChange.getByRole('insertion')).toHaveText(edited)
 
     const dateEdit = entries.nth(1)
     await expect(dateEdit.getByRole('heading')).toHaveText('Edited Card')
-    const yearRow = dateEdit.getByRole('row').filter({ hasText: 'Year' })
-    await expect(yearRow.getByRole('cell')).toHaveText(['1492', '1493'])
+    const yearChange = dateEdit.getByRole('listitem').filter({ hasText: 'Year' })
+    await expect(yearChange.getByRole('deletion')).toHaveText('1492')
+    await expect(yearChange.getByRole('insertion')).toHaveText('1493')
     // Unchanged fields are left out.
-    await expect(dateEdit.getByRole('row').filter({ hasText: 'Decade' })).toHaveCount(0)
+    await expect(dateEdit.getByRole('listitem').filter({ hasText: 'Decade' })).toHaveCount(0)
 
     const creation = entries.nth(3)
     await expect(creation.getByRole('heading')).toHaveText('Created Card')
-    await expect(creation.getByRole('row').filter({ hasText: 'Category' })).toContainText(
+    await expect(creation.getByRole('listitem').filter({ hasText: 'Category' })).toContainText(
         category.name,
     )
 })

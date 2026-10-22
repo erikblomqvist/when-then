@@ -23,9 +23,14 @@
         level?: 2 | 3
         /** Name or link the thing the entry is about (the global log; a card's own history doesn't). */
         showSubject?: boolean
+        /**
+         * 'table' puts field, before and after side by side (the global log); 'stacked' lists
+         * each change as its field over the old and new value, to fit a sidebar.
+         */
+        layout?: 'table' | 'stacked'
     }
 
-    let { entry, names, level = 3, showSubject = false }: Props = $props()
+    let { entry, names, level = 3, showSubject = false, layout = 'table' }: Props = $props()
 
     const changes = $derived(fieldChanges(entry, names))
     const details = $derived(detailItems(entry.details))
@@ -77,7 +82,26 @@
         {/if}
     </header>
 
-    {#if changes.length > 0}
+    {#if changes.length > 0 && layout === 'stacked'}
+        <ul
+            aria-label="Changes"
+            class="flex flex-col gap-2">
+            {#each changes as change (change.field)}
+                <li class="flex flex-col gap-0.5 border-t pt-2">
+                    <span class="text-xs font-medium">{change.label}</span>
+                    <span class="break-words">{@render value(change.before, 'before')}</span>
+                    <span class="break-words">
+                        <span
+                            aria-hidden="true"
+                            class="text-muted-foreground">
+                            →
+                        </span>
+                        {@render value(change.after, 'after')}
+                    </span>
+                </li>
+            {/each}
+        </ul>
+    {:else if changes.length > 0}
         <table class="w-full table-fixed border-collapse text-left">
             <caption class="sr-only">Changes</caption>
             <thead class="text-xs text-muted-foreground">

@@ -6,20 +6,11 @@ import { expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import type { CardInput } from '../cards/card'
 import type { CardFilter } from '../cards/card-list'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { cardHistory, getCard, listCards, matchingCardIds, saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor() {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `editor-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    return data.user.id
-}
 
 async function eventsCategory() {
     const categories = await listCategories(db)
@@ -49,7 +40,7 @@ test('lists active categories in draw order with English names', async () => {
 })
 
 test('a new card is saved as a draft and reads back as written', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const text = `A made-up landing ${randomUUID()}`
 
@@ -64,8 +55,8 @@ test('a new card is saved as a draft and reads back as written', async () => {
 })
 
 test('creating and editing a card writes audit rows with actor, before and after', async () => {
-    const creator = await newActor()
-    const editor = await newActor()
+    const creator = (await newPerson()).id
+    const editor = (await newPerson()).id
     const events = await eventsCategory()
     const id = await saveCard(db, creator, card(events.id, 'A made-up first draft'))
 
@@ -101,7 +92,7 @@ test('creating and editing a card writes audit rows with actor, before and after
 })
 
 test('saving without changes writes no audit rows', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const input = card(events.id, 'A made-up unchanged card')
     const id = await saveCard(db, actor, input)
@@ -112,7 +103,7 @@ test('saving without changes writes no audit rows', async () => {
 })
 
 test('the database holds the date-part rules', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const { id: categoryId } = await eventsCategory()
     const rejected = [
         { decade: 1960, year: 1969, month: null, day: 20 }, // day needs month
@@ -150,7 +141,7 @@ test('a write without an actor is refused', async () => {
 })
 
 test('the list shows cards newest first with English text, date, category and status', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const text = `A made-up listed card ${randomUUID()}`
     const id = await saveCard(db, actor, {
@@ -210,7 +201,7 @@ const tokenCard = (
 const undated = { decade: null, year: null, month: null, day: null }
 
 test('search matches card text in any locale, ignoring case and wildcards', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const token = randomUUID().slice(0, 8)
     const id = await saveCard(db, actor, {
@@ -232,7 +223,7 @@ test('search matches card text in any locale, ignoring case and wildcards', asyn
 })
 
 test('sorting by date puts BC before AD, a decade at its earliest year and undated last', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const token = randomUUID().slice(0, 8)
     const dates = {
@@ -280,7 +271,7 @@ test('sorting by date puts BC before AD, a decade at its earliest year and undat
 })
 
 test('filters by category, source and before/after 1500, and pages the result', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const [events, people] = await listCategories(db)
     const token = randomUUID().slice(0, 8)
     const source = { sourceUrl: 'https://example.com/made-up', sourceQuote: null }
@@ -343,7 +334,7 @@ test('filters seeded cards by status and verified', async () => {
 })
 
 test('the ids of every card matching a filter, beyond one page', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const events = await eventsCategory()
     const token = randomUUID().slice(0, 8)
     const saved = []

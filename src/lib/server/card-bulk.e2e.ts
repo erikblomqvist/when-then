@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { DateParts } from '../cards/date-parts'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { archiveCards, moveCards, publishCards } from './card-bulk'
 import { publishCard } from './card-lifecycle'
 import { resolveCardSelection } from './card-selection'
@@ -13,17 +13,6 @@ import { getCard, saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor() {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `editor-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    const roles = await db.from('user_roles').insert({ user_id: data.user.id, role: 'editor' })
-    if (roles.error) throw roles.error
-    return data.user.id
-}
 
 const year1969: DateParts = { decade: 1960, year: 1969, month: null, day: null }
 const decade1960: DateParts = { decade: 1960, year: null, month: null, day: null }
@@ -54,7 +43,7 @@ async function auditActions(cardIds: string[]) {
 const status = async (id: string) => (await getCard(db, id))?.status
 
 test('bulk publish publishes what it can and skips the rest with the reason', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const first = await newCard(actor, `A made-up kite ${randomUUID()}`)
     const second = await newCard(actor, `A made-up raft ${randomUUID()}`)
     const blockedText = `A made-up canoe ${randomUUID()}`
@@ -81,7 +70,7 @@ test('bulk publish publishes what it can and skips the rest with the reason', as
 })
 
 test('bulk archive archives published cards and skips drafts', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const published = await newCard(actor, `A made-up kite ${randomUUID()}`)
     await publishCard(db, actor, published)
     const draftText = `A made-up raft ${randomUUID()}`
@@ -101,7 +90,7 @@ test('bulk archive archives published cards and skips drafts', async () => {
 })
 
 test('bulk move puts cards in another category, one audit row each', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const categories = await listCategories(db)
     const target = categories[1].id
     const first = await newCard(actor, `A made-up kite ${randomUUID()}`)
@@ -126,14 +115,14 @@ test('bulk move puts cards in another category, one audit row each', async () =>
 })
 
 test('bulk move refuses a category that does not exist', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const card = await newCard(actor, `A made-up kite ${randomUUID()}`)
     await expect(moveCards(db, actor, [card], randomUUID())).rejects.toThrow()
     expect((await getCard(db, card))?.categoryId).toBe((await listCategories(db))[0].id)
 })
 
 test('a selection resolves to the picked cards or to every card matching the filter', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const word = `Bulkword${randomUUID().slice(0, 8)}`
     const first = await newCard(actor, `A made-up ${word} kite`)
     const second = await newCard(actor, `A made-up ${word} raft`)

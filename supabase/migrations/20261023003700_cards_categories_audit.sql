@@ -108,6 +108,37 @@ create trigger audit_log_no_truncate
     before truncate on public.audit_log
     for each statement execute function public.audit_log_is_append_only();
 
+-- The one way the app writes its own audit rows (AI calls, decisions on AI suggestions, role
+-- changes, imports), naming the actor explicitly: the service client has no auth.uid(), and
+-- the server may not insert into the log directly. Returns the new row's id.
+create function public.record_audit(
+    actor uuid,
+    entity text,
+    entity_id text,
+    action text,
+    before jsonb default null,
+    after jsonb default null,
+    locale public.card_locale default null,
+    details jsonb default null
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    id bigint;
+begin
+    if actor is null then
+        raise exception 'record_audit needs an actor';
+    end if;
+    insert into public.audit_log (actor_id, entity, entity_id, locale, action, before, after, details)
+    values (actor, entity, entity_id, locale, action, before, after, details)
+    returning audit_log.id into id;
+    return id;
+end;
+$$;
+
 -- Trigger arguments: the entity name and the column holding the card or category id.
 create function public.audit_change()
 returns trigger
@@ -395,10 +426,11 @@ grant select, insert, update, delete on table
     public.cards,
     public.card_translations
 to service_role;
--- Append-only: the app reads the log and adds its own rows (AI calls), nothing else.
-grant select, insert on table public.audit_log to service_role;
+-- Append-only: the app reads the log and adds its own rows through record_audit only.
+grant select on table public.audit_log to service_role;
 
 revoke execute on function
+    public.record_audit(uuid, text, text, text, jsonb, jsonb, public.card_locale, jsonb),
     public.set_actor(uuid),
     public.current_actor(),
     public.save_card(uuid, jsonb, jsonb, uuid),
@@ -407,6 +439,7 @@ revoke execute on function
 from anon, authenticated, public;
 
 grant execute on function
+    public.record_audit(uuid, text, text, text, jsonb, jsonb, public.card_locale, jsonb),
     public.set_actor(uuid),
     public.current_actor(),
     public.save_card(uuid, jsonb, jsonb, uuid),
