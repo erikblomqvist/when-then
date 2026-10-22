@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { CardInput } from '../cards/card'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import type { AiDeps, CreateMessage } from './ai'
 import { dbLedger } from './ai-ledger'
 import { cardHistory, getCard, saveCard } from './cards'
@@ -12,15 +12,6 @@ import { translateMissingCards } from './card-ai-translate'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor() {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `editor-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    return data.user.id
-}
 
 async function newCard(
     actor: string,
@@ -78,7 +69,7 @@ const deps = (more: Partial<AiDeps> = {}): AiDeps => ({
 })
 
 test('fills the missing locales of each selected card as machine translations', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const tag = randomUUID().slice(0, 8)
     const blank = await newCard(actor, `A made-up tower opens ${tag}`)
     const halfDone = await newCard(actor, `A made-up canal opens ${tag}`, {
@@ -106,7 +97,7 @@ test('fills the missing locales of each selected card as machine translations', 
 })
 
 test('each call is in the card history as an AI translation with its cost', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor, `A made-up lighthouse is lit ${randomUUID().slice(0, 8)}`)
     await translateMissingCards(deps(), db, actor, [id])
 
@@ -127,7 +118,7 @@ test('each call is in the card history as an AI translation with its cost', asyn
 })
 
 test('reports per card what was skipped and why', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const tag = randomUUID().slice(0, 8)
     const failing = await newCard(actor, `A made-up dam bursts [fail] ${tag}`)
     const complete = await newCard(actor, `A made-up fair opens ${tag}`, {
@@ -157,7 +148,7 @@ test('reports per card what was skipped and why', async () => {
 })
 
 test('stops calling the model at the rate limit and says so for the rest', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const tag = randomUUID().slice(0, 8)
     const ids = [
         await newCard(actor, `A made-up road opens ${tag}`),
@@ -183,7 +174,7 @@ test('stops calling the model at the rate limit and says so for the rest', async
 })
 
 test('an unknown card id is skipped, not fatal', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const missing = randomUUID()
     expect(await translateMissingCards(deps(), db, actor, [missing])).toEqual({
         done: [],

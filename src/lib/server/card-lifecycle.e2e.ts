@@ -4,8 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { CardInput } from '../cards/card'
-import type { AppRole } from './roles'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import {
     archiveCard,
     clearVerification,
@@ -18,17 +17,6 @@ import { cardHistory, getCard, saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor(role: AppRole = 'editor') {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `${role}-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    const roles = await db.from('user_roles').insert({ user_id: data.user.id, role })
-    if (roles.error) throw roles.error
-    return data.user.id
-}
 
 async function newCard(actor: string, date: CardInput['date'] = moonLanding) {
     const categories = await listCategories(db)
@@ -50,7 +38,7 @@ const statusActions = async (id: string) =>
         .reverse()
 
 test('a card goes draft → published → archived → published, each step audited', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor)
 
     await publishCard(db, actor, id)
@@ -68,7 +56,7 @@ test('a card goes draft → published → archived → published, each step audi
 })
 
 test('the server refuses to publish a card the publish rule blocks', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor, { decade: 1960, year: null, month: null, day: null })
 
     await expect(publishCard(db, actor, id)).rejects.toMatchObject({
@@ -79,7 +67,7 @@ test('the server refuses to publish a card the publish rule blocks', async () =>
 })
 
 test('only the listed transitions are allowed', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor)
 
     await expect(archiveCard(db, actor, id)).rejects.toMatchObject({ code: 'invalid_transition' })
@@ -94,7 +82,7 @@ test('only the listed transitions are allowed', async () => {
 })
 
 test('an admin deletes a never-published draft, and the deletion is audited', async () => {
-    const admin = await newActor('admin')
+    const admin = (await newPerson('admin')).id
     const id = await newCard(admin)
 
     await deleteDraft(db, admin, id)
@@ -109,8 +97,8 @@ test('an admin deletes a never-published draft, and the deletion is audited', as
 })
 
 test('editors cannot delete drafts, and nobody deletes a card once published', async () => {
-    const editor = await newActor('editor')
-    const admin = await newActor('admin')
+    const editor = (await newPerson('editor')).id
+    const admin = (await newPerson('admin')).id
     const draft = await newCard(editor)
     await expect(deleteDraft(db, editor, draft)).rejects.toMatchObject({ code: 'not_admin' })
 
@@ -123,7 +111,7 @@ test('editors cannot delete drafts, and nobody deletes a card once published', a
 })
 
 test('marking the date verified records who and when; clearing it is audited too', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor)
 
     const created = await getCard(db, id)
@@ -145,7 +133,7 @@ test('marking the date verified records who and when; clearing it is audited too
 })
 
 test('saving can clear the verification, and keeps it otherwise', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor)
     await markVerified(db, actor, id)
     const card = await getCard(db, id)
@@ -164,7 +152,7 @@ test('saving can clear the verification, and keeps it otherwise', async () => {
 })
 
 test('an edit that would break the publish rule is refused on a published card', async () => {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const id = await newCard(actor)
     await publishCard(db, actor, id)
     const card = await getCard(db, id)

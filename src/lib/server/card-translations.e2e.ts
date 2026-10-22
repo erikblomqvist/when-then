@@ -5,27 +5,18 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { CardInput } from '../cards/card'
-import { localServiceClient } from '../testing/e2e-auth'
+import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { cardHistory, getCard, matchingCardIds, saveCard } from './cards'
 import { listCategories } from './categories'
 
 const db = localServiceClient()
-
-async function newActor() {
-    const { data, error } = await db.auth.admin.createUser({
-        email: `editor-${randomUUID()}@example.com`,
-        email_confirm: true,
-    })
-    if (error) throw error
-    return data.user.id
-}
 
 // `tag`: a word only this test's cards have, to find them in the list.
 async function newCard(
     translations: Partial<CardInput['translations']> = {},
     tag = `Tag${randomUUID().slice(0, 8)}`,
 ) {
-    const actor = await newActor()
+    const actor = (await newPerson()).id
     const [category] = await listCategories(db)
     const input = (more: Partial<CardInput['translations']> = {}): CardInput => ({
         categoryId: category.id,

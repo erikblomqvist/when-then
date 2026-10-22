@@ -40,6 +40,23 @@ export function localServiceClient() {
 }
 
 /**
+ * Creates a fresh confirmed user (`<role>-<uuid>@example.com`) with `role` (editor unless
+ * given; `null` for none), for tests that call the server modules directly instead of
+ * signing in a page. Returns its id and email.
+ */
+export async function newPerson(role: AppRole | null = 'editor') {
+    const db = localServiceClient()
+    const email = `${role ?? 'no-role'}-${randomUUID()}@example.com`
+    const { data, error } = await db.auth.admin.createUser({ email, email_confirm: true })
+    if (error) throw error
+    if (role) {
+        const inserted = await db.from('user_roles').insert({ user_id: data.user.id, role })
+        if (inserted.error) throw inserted.error
+    }
+    return { id: data.user.id, email }
+}
+
+/**
  * Creates a fresh confirmed user (`<role>-<uuid>@example.com`, or `options.email`), gives it
  * `role` (or none), signs it in with a password and puts the auth cookies in the page's
  * browser context, the same cookies the app's `@supabase/ssr` client reads. The user looks
