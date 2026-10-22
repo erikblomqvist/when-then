@@ -44,7 +44,8 @@ export type AiAuditRecord = {
 export type AiLedger = {
     /** How many AI calls this person made since then (any `ai_*` action). */
     callsSince(actorId: string, since: Date): Promise<number>
-    record(record: AiAuditRecord): Promise<void>
+    /** Logs the call; may return the audit row's id (a later decision refers to it). */
+    record(record: AiAuditRecord): Promise<number | void>
 }
 
 export type RateLimit = { calls: number; windowMinutes: number }
@@ -89,6 +90,20 @@ export class AiCallError extends Error {}
 
 /** The model declined (after the server-side fallback). Already logged. */
 export class AiRefusedError extends AiCallError {}
+
+/**
+ * The answer came back but can't be used (e.g. it cites a source it never retrieved). Thrown
+ * by a `runModel` step; logged with `outcome` and `details`, then rethrown.
+ */
+export class AiAnswerRejectedError extends AiCallError {
+    constructor(
+        readonly outcome: string,
+        message: string,
+        readonly details: Record<string, unknown> = {},
+    ) {
+        super(message)
+    }
+}
 
 type Price = { input: number; output: number; cacheWrite: number; cacheRead: number }
 
@@ -157,56 +172,121 @@ export async function aiAllowance(deps: AiDeps, actorId: string): Promise<number
     return Math.max(0, rateLimit.calls - (await deps.ledger.callsSince(actorId, since)))
 }
 
+/** What a `runModel` step decides after each reply: call again, or stop with a result. */
+export type AiStep<T> =
+    | { next: AiRequest['params'] }
+    | { done: T; /** Extra facts for the audit row. */ details?: Record<string, unknown> }
+
+/** Most calls one `runModel` may make (tool rounds, `pause_turn` continuations). */
+const maxCalls = 8
+
+const sumCost = (replies: BetaMessage[]): number | null => {
+    let total = 0
+    for (const reply of replies) {
+        const cost = costOf(reply)
+        if (cost === null) return null
+        total += cost
+    }
+    return Math.round(total * 1_000_000) / 1_000_000
+}
+
 /**
- * Makes one Claude call for `actorId`: checks the rate limit (throws `AiRateLimitError`
- * without calling), sends the request with the pinned model and refusal fallback, and logs
- * an audit row with model, tokens and cost whatever happens. Returns the reply; throws
- * `AiRefusedError` on a refusal and `AiCallError` on a failure or a cut-off answer.
+ * Runs a multi-call AI task as ONE audited request: checks the rate limit once (throws
+ * `AiRateLimitError` without calling), sends `request.params`, then hands each reply to
+ * `step`, which returns the next params (a tool round, a continuation) or the result. Logs a
+ * single audit row with the summed tokens and cost whatever happens, and returns the result
+ * with that row's id. Throws `AiRefusedError` on a refusal, `AiCallError` on a failure, a
+ * cut-off answer or too many calls, and rethrows a step's `AiAnswerRejectedError`.
  */
-export async function callModel(deps: AiDeps, request: AiRequest): Promise<BetaMessage> {
+export async function runModel<T>(
+    deps: AiDeps,
+    request: AiRequest,
+    step: (reply: BetaMessage, round: number) => AiStep<T> | Promise<AiStep<T>>,
+): Promise<{ value: T; auditId: number | null }> {
     if ((await aiAllowance(deps, request.actorId)) === 0) {
         throw new AiRateLimitError(deps.rateLimit ?? defaultRateLimit)
     }
 
-    const record = (details: Record<string, unknown>) =>
-        deps.ledger.record({
+    const replies: BetaMessage[] = []
+    const record = async (outcome: string, details: Record<string, unknown> = {}) => {
+        const id = await deps.ledger.record({
             actorId: request.actorId,
             entity: request.entity,
             entityId: request.entityId,
             locale: request.locale ?? null,
             action: request.action,
-            details: { ...details, ...request.details },
+            details: {
+                outcome,
+                model: replies.at(-1)?.model ?? aiModel,
+                ...(replies.length > 1 ? { calls: replies.length } : {}),
+                ...(replies.length > 0
+                    ? {
+                          input_tokens: replies.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+                          output_tokens: replies.reduce((sum, r) => sum + r.usage.output_tokens, 0),
+                      }
+                    : {}),
+                cost_usd: sumCost(replies),
+                ...request.details,
+                ...details,
+            },
         })
-
-    let reply: BetaMessage
-    try {
-        reply = await deps.createMessage({
-            ...request.params,
-            model: aiModel,
-            betas: [fallbackBeta],
-            fallbacks: 'default',
-        })
-    } catch (error) {
-        await record({ outcome: 'failed', model: aiModel, cost_usd: 0, error: errorMessage(error) })
-        throw new AiCallError(`The AI request failed: ${errorMessage(error)}`, { cause: error })
+        return typeof id === 'number' ? id : null
     }
 
-    const outcome =
-        reply.stop_reason === 'refusal'
-            ? 'refused'
-            : reply.stop_reason === 'max_tokens'
-              ? 'cut_off'
-              : 'ok'
-    await record({
-        outcome,
-        model: reply.model,
-        input_tokens: reply.usage.input_tokens,
-        output_tokens: reply.usage.output_tokens,
-        cost_usd: costOf(reply),
-    })
-    if (outcome === 'refused') throw new AiRefusedError('The AI declined this request.')
-    if (outcome === 'cut_off') throw new AiCallError('The AI answer was cut off.')
-    return reply
+    let params = request.params
+    for (let round = 1; round <= maxCalls; round++) {
+        let reply: BetaMessage
+        try {
+            reply = await deps.createMessage({
+                ...params,
+                model: aiModel,
+                betas: [fallbackBeta],
+                fallbacks: 'default',
+            })
+        } catch (error) {
+            await record('failed', { error: errorMessage(error) })
+            throw new AiCallError(`The AI request failed: ${errorMessage(error)}`, { cause: error })
+        }
+        replies.push(reply)
+        if (reply.stop_reason === 'refusal') {
+            await record('refused')
+            throw new AiRefusedError('The AI declined this request.')
+        }
+        if (reply.stop_reason === 'max_tokens') {
+            await record('cut_off')
+            throw new AiCallError('The AI answer was cut off.')
+        }
+
+        let decision: AiStep<T>
+        try {
+            decision = await step(reply, round)
+        } catch (error) {
+            if (error instanceof AiAnswerRejectedError) {
+                await record(error.outcome, { error: error.message, ...error.details })
+                throw error
+            }
+            await record('failed', { error: errorMessage(error) })
+            throw new AiCallError(`The AI answer could not be used: ${errorMessage(error)}`, {
+                cause: error,
+            })
+        }
+        if ('done' in decision) {
+            return { value: decision.done, auditId: await record('ok', decision.details) }
+        }
+        params = decision.next
+    }
+    await record('too_many_steps')
+    throw new AiCallError('The AI took too many steps to answer.')
+}
+
+/**
+ * Makes one Claude call for `actorId` (`runModel` with a single call): rate limit, pinned
+ * model and refusal fallback, one audit row with model, tokens and cost. Returns the reply;
+ * throws `AiRefusedError` on a refusal and `AiCallError` on a failure or a cut-off answer.
+ */
+export async function callModel(deps: AiDeps, request: AiRequest): Promise<BetaMessage> {
+    const { value } = await runModel(deps, request, (reply) => ({ done: reply }))
+    return value
 }
 
 /** The reply's text (structured output arrives as one text block). */

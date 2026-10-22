@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
+    AiAnswerRejectedError,
     AiCallError,
     AiRateLimitError,
     AiRefusedError,
     callModel,
     costOf,
+    runModel,
     type AiAuditRecord,
     type AiLedger,
     type AiRequest,
@@ -225,5 +227,78 @@ describe('callModel', () => {
                 details: expect.objectContaining({ outcome: 'refused', cost_usd: 0.007 }),
             }),
         ])
+    })
+})
+
+describe('runModel', () => {
+    it('keeps calling while the step asks for more, and logs one row with the summed cost', async () => {
+        const { ledger, records } = fakeLedger()
+        const sent: unknown[] = []
+        const result = await runModel(
+            {
+                createMessage: async (params) => {
+                    sent.push(params)
+                    return message()
+                },
+                ledger,
+            },
+            request,
+            (_reply, round) =>
+                round < 3
+                    ? {
+                          next: {
+                              max_tokens: 1000,
+                              messages: [{ role: 'user', content: `${round}` }],
+                          },
+                      }
+                    : { done: 'finished', details: { year: 1908 } },
+        )
+        expect(result).toEqual({ value: 'finished', auditId: null })
+        expect(sent).toHaveLength(3)
+        expect(records).toEqual([
+            expect.objectContaining({
+                action: 'ai_translate',
+                details: {
+                    outcome: 'ok',
+                    model: 'claude-sonnet-5-5',
+                    calls: 3,
+                    input_tokens: 3000,
+                    output_tokens: 1500,
+                    cost_usd: 0.021,
+                    locales: ['sv'],
+                    year: 1908,
+                },
+            }),
+        ])
+    })
+
+    it('logs what the calls cost so far when the step rejects the answer', async () => {
+        const { ledger, records } = fakeLedger()
+        const run = runModel({ createMessage: async () => message(), ledger }, request, () => {
+            throw new AiAnswerRejectedError('unsourced', 'The source was not retrieved.', {
+                source_url: 'https://example.com/x',
+            })
+        })
+        await expect(run).rejects.toBeInstanceOf(AiAnswerRejectedError)
+        expect(records).toEqual([
+            expect.objectContaining({
+                details: expect.objectContaining({
+                    outcome: 'unsourced',
+                    cost_usd: 0.007,
+                    error: 'The source was not retrieved.',
+                    source_url: 'https://example.com/x',
+                }),
+            }),
+        ])
+    })
+
+    it('returns the id of the audit row when the ledger gives one', async () => {
+        const ledger: AiLedger = { callsSince: async () => 0, record: async () => 42 }
+        const result = await runModel(
+            { createMessage: async () => message(), ledger },
+            request,
+            () => ({ done: true }),
+        )
+        expect(result.auditId).toBe(42)
     })
 })
