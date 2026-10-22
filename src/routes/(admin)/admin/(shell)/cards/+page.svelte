@@ -4,6 +4,7 @@
     import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
+    import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
     import ExportCards from '#lib/admin/cards/ExportCards.svelte'
@@ -12,14 +13,14 @@
     import {
         cardEraLabel,
         cardListHref,
-        cardSortLabel,
-        cardSorts,
         isFiltered,
         parseCardListView,
+        parseFilter,
         reviewQueueHref,
         translationFilterLabel,
         translationFilters,
         type CardEra,
+        type CardSort,
     } from '#lib/cards/card-list.js'
     import { localeName, translationLocales } from '#lib/cards/translation.js'
     import { formatCardDate } from '#lib/cards/date-parts.js'
@@ -27,6 +28,11 @@
     import BulkActionBar from '#lib/admin/cards/BulkActionBar.svelte'
     import { CardListSelection } from '#lib/admin/cards/card-list-selection.svelte.js'
     import { untrack } from 'svelte'
+    import ArrowDownIcon from '@lucide/svelte/icons/arrow-down'
+    import ArrowUpDownIcon from '@lucide/svelte/icons/arrow-up-down'
+    import ArrowUpIcon from '@lucide/svelte/icons/arrow-up'
+    import PlusIcon from '@lucide/svelte/icons/plus'
+    import XIcon from '@lucide/svelte/icons/x'
     import type { PageProps } from './$types'
 
     let { data, form: result }: PageProps = $props()
@@ -54,6 +60,116 @@
     }
 
     const submit = () => form?.requestSubmit()
+
+    // The filters a list can be narrowed by, keyed by their URL parameter. Only the ones in use
+    // show in the toolbar; "Add filter" brings in another, which holds no value until chosen.
+    type FilterOption = {
+        name: string
+        label: string
+        value: string
+        choices: { value: string; label: string }[]
+    }
+    const filterOptions: FilterOption[] = $derived([
+        {
+            name: 'status',
+            label: 'Status',
+            value: filter.status ?? '',
+            choices: statuses.map((status) => ({ value: status, label: cardStatusLabel[status] })),
+        },
+        {
+            name: 'category',
+            label: 'Category',
+            value: filter.categoryId ?? '',
+            choices: data.categories.map((category) => ({
+                value: category.id,
+                label: `${category.name}${category.archived ? ' (archived)' : ''}`,
+            })),
+        },
+        {
+            name: 'verified',
+            label: 'Verified',
+            value: yesNo(filter.verified),
+            choices: [
+                { value: 'yes', label: 'Verified' },
+                { value: 'no', label: 'Not verified' },
+            ],
+        },
+        {
+            name: 'source',
+            label: 'Source',
+            value: yesNo(filter.hasSource),
+            choices: [
+                { value: 'yes', label: 'Has a source' },
+                { value: 'no', label: 'No source' },
+            ],
+        },
+        {
+            name: 'era',
+            label: 'Date',
+            value: filter.era ?? '',
+            choices: eras.map((era) => ({ value: era, label: cardEraLabel[era] })),
+        },
+        ...translationLocales.map((locale) => ({
+            name: locale,
+            label: localeName[locale],
+            value: filter.translations?.[locale] ?? '',
+            choices: translationFilters.map((state) => ({
+                value: state,
+                label: translationFilterLabel[state],
+            })),
+        })),
+    ])
+
+    /** Filters added in the toolbar, in the order added, with or without a value yet. */
+    let added: string[] = $state([])
+    /** The filter just added, whose select takes focus once it shows. */
+    let justAdded: string | undefined = $state()
+    // Filters from the URL first, in their usual order; then the added ones, newest last.
+    const shownFilters = $derived(
+        filterOptions
+            .filter((option) => option.value || added.includes(option.name))
+            .toSorted((a, b) => added.indexOf(a.name) - added.indexOf(b.name)),
+    )
+    const hiddenFilters = $derived(filterOptions.filter((option) => !shownFilters.includes(option)))
+
+    function add(name: string) {
+        added = [...added, name]
+        justAdded = name
+    }
+
+    const forget = (name: string) => (added = added.filter((other) => other !== name))
+
+    /** The list without one filter, keeping the rest and the sort. */
+    function withoutFilter(name: string) {
+        const params = filterParams(filter)
+        params.delete(name)
+        return cardListHref({ filter: parseFilter(params), sort: data.view.sort })
+    }
+
+    // Sorting by a column header: the first click picks the column's usual direction (oldest
+    // date first, most recently updated first), the next reverses it.
+    const sortColumns = {
+        date: { ascending: 'date', descending: '-date', first: 'date' },
+        updated: { ascending: 'updated', descending: '-updated', first: '-updated' },
+    } satisfies Record<string, { ascending: CardSort; descending: CardSort; first: CardSort }>
+    type SortColumn = keyof typeof sortColumns
+
+    function sortState(column: SortColumn): 'ascending' | 'descending' | undefined {
+        const { ascending, descending } = sortColumns[column]
+        return data.view.sort === ascending
+            ? 'ascending'
+            : data.view.sort === descending
+              ? 'descending'
+              : undefined
+    }
+
+    function sortHref(column: SortColumn) {
+        const { ascending, descending, first } = sortColumns[column]
+        const current = sortState(column)
+        const sort =
+            current === undefined ? first : current === 'ascending' ? descending : ascending
+        return cardListHref({ filter, sort })
+    }
 
     // Row selection for the bulk actions; kept across pages, cleared when the filter changes.
     const selected = new CardListSelection(() => ({
@@ -115,119 +231,118 @@
     action="/admin/cards"
     role="search"
     aria-label="Find cards"
-    class="mt-6 flex flex-wrap items-end gap-3"
+    class="mt-6 flex flex-col gap-3"
     onsubmit={apply}>
-    <div class="flex min-w-64 flex-1 flex-col gap-2">
-        <Label for="q">Search</Label>
+    <div class="flex flex-wrap items-center gap-2">
+        <Label
+            for="q"
+            class="sr-only">Search</Label>
         <Input
             id="q"
             name="q"
             type="search"
-            placeholder="Text in any language"
+            placeholder="Search text in any language"
+            class="min-w-64 flex-1"
             value={filter.search ?? ''} />
-    </div>
-    <div class="flex flex-col gap-2">
-        <Label for="status">Status</Label>
-        <NativeSelect.Root
-            id="status"
-            name="status"
-            value={filter.status ?? ''}
-            onchange={submit}>
-            <NativeSelect.Option value="">Any</NativeSelect.Option>
-            {#each statuses as status (status)}
-                <NativeSelect.Option value={status}>{cardStatusLabel[status]}</NativeSelect.Option>
-            {/each}
-        </NativeSelect.Root>
-    </div>
-    <div class="flex flex-col gap-2">
-        <Label for="category">Category</Label>
-        <NativeSelect.Root
-            id="category"
-            name="category"
-            value={filter.categoryId ?? ''}
-            onchange={submit}>
-            <NativeSelect.Option value="">Any</NativeSelect.Option>
-            {#each data.categories as category (category.id)}
-                <NativeSelect.Option value={category.id}>
-                    {category.name}{category.archived ? ' (archived)' : ''}
-                </NativeSelect.Option>
-            {/each}
-        </NativeSelect.Root>
-    </div>
-    <div class="flex flex-col gap-2">
-        <Label for="verified">Verified</Label>
-        <NativeSelect.Root
-            id="verified"
-            name="verified"
-            value={yesNo(filter.verified)}
-            onchange={submit}>
-            <NativeSelect.Option value="">Any</NativeSelect.Option>
-            <NativeSelect.Option value="yes">Verified</NativeSelect.Option>
-            <NativeSelect.Option value="no">Not verified</NativeSelect.Option>
-        </NativeSelect.Root>
-    </div>
-    <div class="flex flex-col gap-2">
-        <Label for="source">Source</Label>
-        <NativeSelect.Root
-            id="source"
-            name="source"
-            value={yesNo(filter.hasSource)}
-            onchange={submit}>
-            <NativeSelect.Option value="">Any</NativeSelect.Option>
-            <NativeSelect.Option value="yes">Has a source</NativeSelect.Option>
-            <NativeSelect.Option value="no">No source</NativeSelect.Option>
-        </NativeSelect.Root>
-    </div>
-    <div class="flex flex-col gap-2">
-        <Label for="era">Date</Label>
-        <NativeSelect.Root
-            id="era"
-            name="era"
-            value={filter.era ?? ''}
-            onchange={submit}>
-            <NativeSelect.Option value="">Any</NativeSelect.Option>
-            {#each eras as era (era)}
-                <NativeSelect.Option value={era}>{cardEraLabel[era]}</NativeSelect.Option>
-            {/each}
-        </NativeSelect.Root>
-    </div>
-    {#each translationLocales as locale (locale)}
-        <div class="flex flex-col gap-2">
-            <Label for="translation-{locale}">{localeName[locale]}</Label>
-            <NativeSelect.Root
-                id="translation-{locale}"
-                name={locale}
-                value={filter.translations?.[locale] ?? ''}
-                onchange={submit}>
-                <NativeSelect.Option value="">Any</NativeSelect.Option>
-                {#each translationFilters as state (state)}
-                    <NativeSelect.Option value={state}>
-                        {translationFilterLabel[state]}
-                    </NativeSelect.Option>
-                {/each}
-            </NativeSelect.Root>
-        </div>
-    {/each}
-    <div class="flex flex-col gap-2">
-        <Label for="sort">Sort by</Label>
-        <NativeSelect.Root
-            id="sort"
-            name="sort"
-            value={data.view.sort}
-            onchange={submit}>
-            {#each cardSorts as sort (sort)}
-                <NativeSelect.Option value={sort}>{cardSortLabel[sort]}</NativeSelect.Option>
-            {/each}
-        </NativeSelect.Root>
-    </div>
-    <Button type="submit">Search</Button>
-    {#if filtered}
         <Button
-            variant="ghost"
-            href={cardListHref({ sort: data.view.sort })}>
-            Clear filters
-        </Button>
-    {/if}
+            type="submit"
+            variant="outline">Search</Button>
+        {#if filtered || added.length > 0}
+            <Button
+                variant="ghost"
+                href={cardListHref({ sort: data.view.sort })}
+                onclick={() => (added = [])}>
+                Clear filters
+            </Button>
+        {/if}
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+        {#each shownFilters as option (option.name)}
+            <div
+                class="flex items-center rounded-md border border-border bg-background shadow-xs dark:border-input dark:bg-input/30"
+                data-testid="filter-{option.name}">
+                <label
+                    for="filter-{option.name}"
+                    class="pr-1 pl-2.5 text-sm text-muted-foreground">
+                    {option.label}
+                </label>
+                <NativeSelect.Root
+                    id="filter-{option.name}"
+                    name={option.name}
+                    value={option.value}
+                    class="[&_select]:border-0 [&_select]:shadow-none [&_select]:dark:bg-transparent"
+                    onchange={submit}
+                    {@attach (select) => {
+                        if (option.name !== justAdded) return
+                        justAdded = undefined
+                        select.focus()
+                        try {
+                            ;(select as HTMLSelectElement).showPicker()
+                        } catch {
+                            // Not supported, or no user activation: focus is enough.
+                        }
+                    }}>
+                    {#if !option.value}
+                        <NativeSelect.Option
+                            value=""
+                            disabled>Choose…</NativeSelect.Option>
+                    {/if}
+                    {#each option.choices as choice (choice.value)}
+                        <NativeSelect.Option value={choice.value}
+                            >{choice.label}</NativeSelect.Option>
+                    {/each}
+                </NativeSelect.Root>
+                {#if option.value}
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="rounded-l-none"
+                        aria-label="Remove {option.label} filter"
+                        href={withoutFilter(option.name)}
+                        onclick={() => forget(option.name)}>
+                        <XIcon />
+                    </Button>
+                {:else}
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="rounded-l-none"
+                        aria-label="Remove {option.label} filter"
+                        onclick={() => forget(option.name)}>
+                        <XIcon />
+                    </Button>
+                {/if}
+            </div>
+        {/each}
+        <DropdownMenu.Root>
+            <DropdownMenu.Trigger disabled={hiddenFilters.length === 0}>
+                {#snippet child({ props })}
+                    <Button
+                        {...props}
+                        variant="ghost"
+                        size="sm">
+                        <PlusIcon />
+                        Add filter
+                    </Button>
+                {/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content
+                class="w-48"
+                onCloseAutoFocus={(event) => {
+                    if (justAdded) event.preventDefault()
+                }}>
+                {#each hiddenFilters as option (option.name)}
+                    <DropdownMenu.Item onSelect={() => add(option.name)}>
+                        {option.label}
+                    </DropdownMenu.Item>
+                {/each}
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+    </div>
+    <input
+        type="hidden"
+        name="sort"
+        value={data.view.sort} />
 </form>
 
 <BulkActionBar
@@ -246,6 +361,24 @@
     {/snippet}
 </BulkActionBar>
 
+{#snippet sortableHead(column: SortColumn, label: string)}
+    {@const state = sortState(column)}
+    <Table.Head aria-sort={state ?? 'none'}>
+        <a
+            class="-mx-2 inline-flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted"
+            href={sortHref(column)}>
+            {label}
+            {#if state === 'ascending'}
+                <ArrowUpIcon class="size-3.5" />
+            {:else if state === 'descending'}
+                <ArrowDownIcon class="size-3.5" />
+            {:else}
+                <ArrowUpDownIcon class="size-3.5 text-muted-foreground" />
+            {/if}
+        </a>
+    </Table.Head>
+{/snippet}
+
 <Table.Root class="mt-6">
     <Table.Header>
         <Table.Row>
@@ -262,12 +395,12 @@
                     onchange={() => selected.togglePage()} />
             </Table.Head>
             <Table.Head>Card</Table.Head>
-            <Table.Head>Date</Table.Head>
+            {@render sortableHead('date', 'Date')}
             <Table.Head>Category</Table.Head>
             <Table.Head>Status</Table.Head>
             <Table.Head>Translations</Table.Head>
             <Table.Head>Verified</Table.Head>
-            <Table.Head>Updated</Table.Head>
+            {@render sortableHead('updated', 'Updated')}
         </Table.Row>
     </Table.Header>
     <Table.Body>

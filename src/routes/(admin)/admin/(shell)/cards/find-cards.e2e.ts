@@ -41,22 +41,33 @@ test('a filter and a sort narrow and order the list, and the URL keeps them', as
     await signInAs(page, 'editor')
     await gotoHydrated(page, '/admin/cards?q=Sample')
 
-    await page.getByLabel('Sort by').selectOption({ label: 'Date, oldest first' })
+    const dateHeader = page.getByRole('columnheader', { name: 'Date' })
+    await dateHeader.getByRole('link').click()
     await expect(page).toHaveURL(/\?q=Sample&sort=date$/)
+    await expect(dateHeader).toHaveAttribute('aria-sort', 'ascending')
     await expect.poll(() => listed(page)).toEqual([sampleby, balloonist, samplebridge])
 
-    await page.getByLabel('Sort by').selectOption({ label: 'Date, newest first' })
+    await dateHeader.getByRole('link').click()
+    await expect(page).toHaveURL(/\?q=Sample&sort=-date$/)
     await expect.poll(() => listed(page)).toEqual([samplebridge, balloonist, sampleby])
 
-    await page.getByLabel('Status').selectOption({ label: 'Published' })
+    // Filters show only once added.
+    await expect(page.getByLabel('Status', { exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Add filter' }).click()
+    await page.getByRole('menuitem', { name: 'Status' }).click()
+    await page.getByLabel('Status', { exact: true }).selectOption({ label: 'Published' })
     await expect(page).toHaveURL(/\?q=Sample&status=published&sort=-date$/)
     await expect.poll(() => listed(page)).toEqual([samplebridge, sampleby])
     await expect(page.getByTestId('card-count')).toHaveText('2 cards match')
 
     await reloadHydrated(page)
-    await expect(page.getByLabel('Status')).toHaveValue('published')
-    await expect(page.getByLabel('Sort by')).toHaveValue('-date')
+    await expect(page.getByLabel('Status', { exact: true })).toHaveValue('published')
+    await expect(dateHeader).toHaveAttribute('aria-sort', 'descending')
     await expect.poll(() => listed(page)).toEqual([samplebridge, sampleby])
+
+    await page.getByRole('link', { name: 'Remove Status filter' }).click()
+    await expect(page).toHaveURL(/\?q=Sample&sort=-date$/)
+    await expect(page.getByLabel('Status', { exact: true })).toHaveCount(0)
 
     await page.getByRole('link', { name: 'Clear filters' }).click()
     await expect(page).toHaveURL(/\/admin\/cards\?sort=-date$/)
@@ -67,5 +78,5 @@ test('no matches says so', async ({ page }) => {
     await signInAs(page, 'editor')
     await gotoHydrated(page, '/admin/cards?q=no-such-made-up-card&verified=yes')
     await expect(page.getByText('No cards match these filters.')).toBeVisible()
-    await expect(page.getByLabel('Verified')).toHaveValue('yes')
+    await expect(page.getByLabel('Verified', { exact: true })).toHaveValue('yes')
 })
