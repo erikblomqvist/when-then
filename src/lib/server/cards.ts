@@ -44,6 +44,7 @@ const filterArgs = (filter: CardFilter) => ({
     verified: filter.verified,
     has_source: filter.hasSource,
     era: filter.era,
+    translations: filter.translations,
 })
 
 /**

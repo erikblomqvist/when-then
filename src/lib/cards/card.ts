@@ -23,19 +23,24 @@ export const cardStatusLabel: Record<CardStatus, string> = {
 /** A translation's state: machine until a person reviews it, stale when the English changed. */
 export type TranslationStatus = Enums['translation_status']
 
-/** One locale's text. `note` is the per-translation hook (ADR 0001); the editor adds it later. */
-export type TranslationInput = { text: string; note?: string | null }
+/**
+ * One locale's text and its note for the reader (ADR 0001). A note left out keeps the saved
+ * one. `status` only when someone decided it (ticked reviewed, a machine translation);
+ * otherwise the save works it out (`#lib/cards/translation.js`).
+ */
+export type TranslationInput = { text: string; note?: string | null; status?: TranslationStatus }
 
 /**
  * What the editor saves: the language-neutral card plus the translations it touches. Only the
- * locales present are written, so the English form and later per-locale tabs share one save.
+ * locales present are written, so the English form and the locale tabs share one save; a
+ * translation given as null is removed.
  */
 export type CardInput = {
     categoryId: string
     date: DateParts
     sourceUrl: string | null
     sourceQuote: string | null
-    translations: Partial<Record<CardLocale, TranslationInput>> & { en: TranslationInput }
+    translations: Partial<Record<CardLocale, TranslationInput | null>> & { en: TranslationInput }
     /** Clear the date's verification with this save (the editor asks when a verified date changes). */
     clearVerification?: boolean
 }

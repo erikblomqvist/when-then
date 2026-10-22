@@ -2,13 +2,12 @@
 // the editor (Publish stays disabled and says why), the server actions (single and bulk
 // publish) and mirrored in SQL by `public.card_publish_blockers`, which `publish_card` checks.
 
-import type { CardLocale } from './card'
 import type { DateParts } from './date-parts'
 
 /** The parts of a card the rule looks at; a `Card` or `CardInput` fits. */
 export type PublishableCard = {
     date: DateParts
-    translations: Partial<Record<CardLocale, { text: string } | undefined>>
+    translations: { en?: { text: string } }
 }
 
 /** From this year on, the standard game mode places cards by year, so they need one. */
