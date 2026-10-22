@@ -126,13 +126,9 @@
                     : 'border-transparent text-muted-foreground'}"
                 onclick={() => (active = locale)}>
                 {localeName[locale]}
-                <TranslationBadge state={onSave} />
-                {#if unsaved}
-                    <span
-                        class="size-1.5 rounded-full bg-primary"
-                        aria-hidden="true"></span>
-                    <span class="sr-only">(unsaved)</span>
-                {/if}
+                <TranslationBadge
+                    state={onSave}
+                    {unsaved} />
             </button>
         {/each}
     </div>
