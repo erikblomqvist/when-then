@@ -1,6 +1,11 @@
 name: Install Playwright's Chromium
 description: Headless Chromium for Vitest browser mode and e2e, cached per Playwright version.
 
+# No system packages (`--with-deps` / `install-deps`): the runner image already has every
+# library headless Chromium needs, and the rest (extra fonts, xvfb) is for headed browsers and
+# screenshots. Installing them took 10 minutes once, apt downloading at 41 kB/s while Supabase
+# pulled its images alongside.
+
 runs:
     using: composite
     steps:
@@ -15,8 +20,4 @@ runs:
               key: playwright-${{ runner.os }}-${{ steps.version.outputs.playwright }}-chromium-shell
         - if: steps.cache.outputs.cache-hit != 'true'
           shell: bash
-          run: vp exec playwright install --with-deps --only-shell chromium
-        # The cache holds the browser, not the system libraries it needs.
-        - if: steps.cache.outputs.cache-hit == 'true'
-          shell: bash
-          run: vp exec playwright install-deps chromium
+          run: vp exec playwright install --only-shell chromium
