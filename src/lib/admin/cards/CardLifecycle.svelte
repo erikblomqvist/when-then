@@ -64,7 +64,6 @@
         use:enhance={submit(options.confirm)}>
         <Button
             type="submit"
-            class="w-full"
             variant={options.variant ?? 'default'}
             disabled={busy || options.disabled}
             aria-describedby={options.disabled ? 'lifecycle-why' : undefined}>

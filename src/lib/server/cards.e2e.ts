@@ -317,7 +317,8 @@ test('filters by category, source and before/after 1500, and pages the result', 
 test('filters seeded cards by status and verified', async () => {
     const list = async (filter: CardFilter) =>
         (await listCards(db, { page: 1, pageSize: 50, filter })).cards
-    const published = await list({ status: 'published' })
+    // Narrowed to the seeded cards: other tests publish cards too, more than a page of them.
+    const published = await list({ status: 'published', search: 'Sampleb' })
     expect(published.every((listed) => listed.status === 'published')).toBe(true)
     expect(published.map((listed) => listed.text)).toContain(
         'The made-up port of Sampleby lights its first lighthouse',

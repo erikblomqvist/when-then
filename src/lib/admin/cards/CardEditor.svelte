@@ -425,14 +425,13 @@
             {/if}
         </div>
         {#if offerPublish}
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col items-start gap-2">
                 <Button
                     type="submit"
                     form="card-editor"
                     formaction="?/saveAndPublish"
                     bind:ref={publishButton}
                     aria-keyshortcuts={ariaKeyshortcuts(['mod', 'enter'])}
-                    class="w-full"
                     disabled={saving || publishBlocked.length > 0}
                     aria-describedby={publishBlocked.length > 0
                         ? 'save-and-publish-why'

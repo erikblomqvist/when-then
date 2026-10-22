@@ -19,8 +19,10 @@
 </script>
 
 {#if mac !== null}
+    <!-- data-icon: the button keeps less padding on this side (see Button's sizes). -->
     <span
-        class="ms-1 inline-flex gap-0.5"
+        data-icon="inline-end"
+        class="ms-1 inline-flex -translate-y-px gap-0.5"
         aria-hidden="true">
         {#each keys as key (key)}
             <kbd
