@@ -1,6 +1,7 @@
 <!--
     A card's history panel: every change to the card and its translations, newest first, with
-    who made it and a field-by-field diff. Read-only. The card page mounts it below the editor
+    who made it and a field-by-field diff. Read-only. The card page mounts it in the editor's
+    sidebar, below the status actions (#14), so it lays each change out stacked to fit there,
     and passes `cardHistory()` and `auditNames()` from its load.
 -->
 <script lang="ts">
@@ -13,10 +14,10 @@
 
 <section
     aria-labelledby="history-heading"
-    class="flex max-w-3xl flex-col gap-3">
+    class="flex flex-col gap-3 border-t pt-4">
     <h2
         id="history-heading"
-        class="text-lg font-semibold tracking-tight">
+        class="font-medium">
         History
     </h2>
     {#if entries.length === 0}
@@ -27,7 +28,8 @@
                 <li>
                     <AuditEntry
                         {entry}
-                        {names} />
+                        {names}
+                        layout="stacked" />
                 </li>
             {/each}
         </ol>

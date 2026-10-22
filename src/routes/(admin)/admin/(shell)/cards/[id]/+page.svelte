@@ -44,10 +44,7 @@
                 {dirty}
                 verifiedByEmail={data.verifiedByEmail}
                 error={form?.lifecycleError} />
+            <CardHistory {...data.history} />
         {/snippet}
     </CardEditor>
 {/key}
-
-<div class="mt-12">
-    <CardHistory {...data.history} />
-</div>
