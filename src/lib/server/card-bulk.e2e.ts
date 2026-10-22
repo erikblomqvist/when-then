@@ -69,23 +69,27 @@ test('bulk publish publishes what it can and skips the rest with the reason', as
     expect(await auditActions([published])).toEqual(before)
 })
 
-test('bulk archive archives published cards and skips drafts', async () => {
+test('bulk archive archives published cards and drafts, and skips archived ones', async () => {
     const actor = (await newPerson()).id
     const published = await newCard(actor, `A made-up kite ${randomUUID()}`)
     await publishCard(db, actor, published)
-    const draftText = `A made-up raft ${randomUUID()}`
-    const draft = await newCard(actor, draftText)
+    const draft = await newCard(actor, `A made-up raft ${randomUUID()}`)
+    const archivedText = `A made-up sled ${randomUUID()}`
+    const archived = await newCard(actor, archivedText)
+    await archiveCards(db, actor, [archived])
 
-    const result = await archiveCards(db, actor, [published, draft])
+    const result = await archiveCards(db, actor, [published, draft, archived])
 
     expect(result).toEqual({
-        done: [published],
-        skipped: [{ id: draft, text: draftText, reason: 'Only a published card can be archived.' }],
+        done: [published, draft],
+        skipped: [{ id: archived, text: archivedText, reason: 'The card is archived already.' }],
     })
     expect(await status(published)).toBe('archived')
+    expect(await status(draft)).toBe('archived')
     expect(await auditActions([published, draft])).toEqual([
         [published, 'publish', actor],
         [published, 'archive', actor],
+        [draft, 'archive', actor],
     ])
 })
 

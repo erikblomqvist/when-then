@@ -55,6 +55,22 @@ test('a card goes draft → published → archived → published, each step audi
     ])
 })
 
+test('a draft can be archived and comes back as a draft, without the publish rule', async () => {
+    const actor = (await newPerson()).id
+    // From 1500 on without a year: a draft that couldn't be published.
+    const id = await newCard(actor, { decade: 1960, year: null, month: null, day: null })
+
+    await archiveCard(db, actor, id)
+    expect(await getCard(db, id)).toMatchObject({ status: 'archived', archivedFrom: 'draft' })
+    await unarchiveCard(db, actor, id)
+    expect(await getCard(db, id)).toMatchObject({ status: 'draft', archivedFrom: null })
+
+    expect(await statusActions(id)).toEqual([
+        ['archive', actor],
+        ['unarchive', actor],
+    ])
+})
+
 test('the server refuses to publish a card the publish rule blocks', async () => {
     const actor = (await newPerson()).id
     const id = await newCard(actor, { decade: 1960, year: null, month: null, day: null })
@@ -70,10 +86,12 @@ test('only the listed transitions are allowed', async () => {
     const actor = (await newPerson()).id
     const id = await newCard(actor)
 
-    await expect(archiveCard(db, actor, id)).rejects.toMatchObject({ code: 'invalid_transition' })
     await expect(unarchiveCard(db, actor, id)).rejects.toMatchObject({
         code: 'invalid_transition',
     })
+    await archiveCard(db, actor, id)
+    await expect(archiveCard(db, actor, id)).rejects.toMatchObject({ code: 'invalid_transition' })
+    await unarchiveCard(db, actor, id)
     await publishCard(db, actor, id)
     await expect(publishCard(db, actor, id)).rejects.toMatchObject({ code: 'invalid_transition' })
     await expect(publishCard(db, actor, randomUUID())).rejects.toMatchObject({

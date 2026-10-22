@@ -39,7 +39,7 @@ async function bulk(
 export const publishCards = (db: Db, actorId: string, cardIds: string[]) =>
     bulk(db, actorId, 'publish', cardIds)
 
-/** Archives the published cards; skips the rest, saying why. */
+/** Archives the drafts and published cards; skips the archived ones, saying why. */
 export const archiveCards = (db: Db, actorId: string, cardIds: string[]) =>
     bulk(db, actorId, 'archive', cardIds)
 

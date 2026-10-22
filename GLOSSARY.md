@@ -19,7 +19,7 @@ A set of cards on one subject, such as Sports or Music, that a game can be playe
 _Avoid_: Pack, theme pack, category
 
 **Draft / Published / Archived**:
-The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but no longer dealt. A card can only be published with its English text and a date of at least a decade (a year from 1500 onwards). Categories can be archived too, taking them out of the category draw for new games.
+The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but not dealt. Drafts and published cards can both be archived, and unarchiving returns a card to what it was. A card can only be published with its English text and a date of at least a decade (a year from 1500 onwards). Categories can be archived too, taking them out of the category draw for new games.
 _Avoid_: Retired, deleted, inactive
 
 **Anchor year**:
