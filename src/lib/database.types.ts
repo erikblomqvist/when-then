@@ -314,7 +314,7 @@ export type Database = {
             audit_role_change: {
                 Args: {
                     action: string
-                    actor_id: string
+                    actor: string
                     after: Json
                     before: Json
                     entity: string
@@ -388,7 +388,7 @@ export type Database = {
             }
             invite_person: {
                 Args: {
-                    actor_id: string
+                    actor: string
                     email: string
                     role: Database['public']['Enums']['app_role']
                 }
@@ -422,8 +422,10 @@ export type Database = {
                 Args: { actor: string; ids: string[] }
                 Returns: undefined
             }
-            require_admin: { Args: { actor_id: string }; Returns: undefined }
-            require_category_admin: { Args: { actor: string }; Returns: undefined }
+            require_admin: {
+                Args: { actor: string; reason?: string }
+                Returns: undefined
+            }
             require_publishable: { Args: { card_id: string }; Returns: undefined }
             save_card: {
                 Args: {
@@ -454,7 +456,7 @@ export type Database = {
             }
             set_invite_role: {
                 Args: {
-                    actor_id: string
+                    actor: string
                     invite_email: string
                     new_role?: Database['public']['Enums']['app_role']
                 }
@@ -462,7 +464,7 @@ export type Database = {
             }
             set_person_role: {
                 Args: {
-                    actor_id: string
+                    actor: string
                     new_role?: Database['public']['Enums']['app_role']
                     person_id: string
                 }

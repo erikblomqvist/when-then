@@ -8,7 +8,7 @@
 -- takes the actor explicitly.
 
 create or replace function public.audit_role_change(
-    actor_id uuid,
+    actor uuid,
     entity text,
     entity_id text,
     action text,
@@ -21,7 +21,7 @@ security definer
 set search_path = ''
 as $$
     insert into public.audit_log (actor_id, entity, entity_id, action, before, after)
-    values (actor_id, entity, entity_id, action, before, after);
+    values (actor, entity, entity_id, action, before, after);
 $$;
 
 insert into public.audit_log (at, actor_id, entity, entity_id, action, before, after)

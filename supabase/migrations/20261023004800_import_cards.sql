@@ -24,11 +24,7 @@ begin
     if actor is null then
         raise exception 'import_cards needs an actor';
     end if;
-    if not exists (
-        select 1 from public.user_roles r where r.user_id = actor and r.role = 'admin'
-    ) then
-        raise exception 'not_admin' using detail = 'Only admins import cards.';
-    end if;
+    perform public.require_admin(actor, 'Only admins import cards.');
     perform public.set_actor(actor);
 
     for entry in select value, ordinality from jsonb_array_elements(cards) with ordinality loop

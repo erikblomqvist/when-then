@@ -7,6 +7,26 @@
 -- not_found, invalid_transition, publish_blocked, not_admin, not_draft.
 
 -- ---------------------------------------------------------------------------------------------
+-- The admin check every admin-only function makes (delete draft here; category management,
+-- People and CSV import later). Raises 'not_admin' with `reason` as the detail unless the
+-- actor holds the admin role in `user_roles` right now.
+
+create function public.require_admin(actor uuid, reason text default 'Only admins can do this.')
+returns void
+language plpgsql
+stable
+set search_path = ''
+as $$
+begin
+    if actor is null or not exists (
+        select 1 from public.user_roles r where r.user_id = actor and r.role = 'admin'
+    ) then
+        raise exception 'not_admin' using detail = reason;
+    end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------
 -- The publish rule, same as src/lib/cards/publish-rule.ts (same sentences, same order).
 
 create function public.card_publish_blockers(card_id uuid)
@@ -129,12 +149,8 @@ security invoker
 set search_path = ''
 as $$
 begin
+    perform public.require_admin(actor, 'Only admins can delete drafts.');
     perform public.set_actor(actor);
-    if not exists (
-        select 1 from public.user_roles r where r.user_id = actor and r.role = 'admin'
-    ) then
-        raise exception 'not_admin' using detail = 'Only admins can delete drafts.';
-    end if;
     if public.lock_card(card_id) <> 'draft' then
         raise exception 'not_draft' using detail = 'Only a never-published draft can be deleted.';
     end if;
@@ -309,6 +325,7 @@ $$;
 -- Access: the server's service client only.
 
 revoke execute on function
+    public.require_admin(uuid, text),
     public.card_publish_blockers(uuid),
     public.require_publishable(uuid),
     public.lock_card(uuid),
@@ -320,6 +337,7 @@ revoke execute on function
 from anon, authenticated, public;
 
 grant execute on function
+    public.require_admin(uuid, text),
     public.card_publish_blockers(uuid),
     public.require_publishable(uuid),
     public.lock_card(uuid),

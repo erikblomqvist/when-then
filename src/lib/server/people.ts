@@ -64,7 +64,7 @@ export async function invitePerson(
     role: AppRole,
 ): Promise<'granted' | 'invited'> {
     const { data, error } = await supabaseService().rpc('invite_person', {
-        actor_id: actorId,
+        actor: actorId,
         email,
         role,
     })
@@ -75,7 +75,7 @@ export async function invitePerson(
 /** Changes someone's role, or revokes it with `null`. */
 export async function setPersonRole(actorId: string, personId: string, role: AppRole | null) {
     const { error } = await supabaseService().rpc('set_person_role', {
-        actor_id: actorId,
+        actor: actorId,
         person_id: personId,
         ...(role && { new_role: role }),
     })
@@ -85,7 +85,7 @@ export async function setPersonRole(actorId: string, personId: string, role: App
 /** Changes a pending invite's role, or withdraws it with `null`. */
 export async function setInviteRole(actorId: string, email: string, role: AppRole | null) {
     const { error } = await supabaseService().rpc('set_invite_role', {
-        actor_id: actorId,
+        actor: actorId,
         invite_email: email,
         ...(role && { new_role: role }),
     })
