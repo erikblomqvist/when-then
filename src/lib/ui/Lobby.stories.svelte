@@ -35,6 +35,22 @@
     </Surface>
 </Story>
 
+<!-- Joining: icons other players have taken are greyed out and can't be picked. -->
+<Story
+    name="Icon picker with taken icons"
+    asChild>
+    <Surface
+        kind="sheet"
+        style="max-width: 360px;">
+        <PlayerIconPicker
+            name="icon"
+            legend="Pick an icon"
+            {labels}
+            taken={['cat', 'dog', 'pizza']}
+            value="fish" />
+    </Surface>
+</Story>
+
 <!-- The join link as a QR code, for friends at the table to scan. -->
 <Story
     name="Join QR code"

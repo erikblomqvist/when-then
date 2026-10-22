@@ -1,10 +1,11 @@
 <script lang="ts">
     /**
      * Fixed-length play code. Shows N boxes over one invisible field.
-     * `readonly` renders the small paper display variant.
+     * `readonly` renders the small paper display variant. `name` posts the field with its form.
      */
     type Props = {
         value?: string
+        name?: string
         length?: number
         readonly?: boolean
         label?: string
@@ -13,6 +14,7 @@
 
     let {
         value = $bindable(''),
+        name,
         length = 4,
         readonly = false,
         label = 'Play code',
@@ -49,6 +51,7 @@
     {#if !readonly}
         <input
             class="ui-code-input__field"
+            {name}
             type="text"
             inputmode="text"
             autocomplete="one-time-code"

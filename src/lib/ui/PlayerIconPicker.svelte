@@ -4,19 +4,26 @@
 
     /**
      * Pick one icon from the curated player set: a grid of radio buttons named `name`, so it
-     * posts with its form. `labels` names each icon for screen readers.
+     * posts with its form. `labels` names each icon for screen readers. `taken` icons belong to
+     * other players: greyed out and disabled, and a picked icon that becomes taken is unpicked.
      */
     let {
         name,
         legend,
         labels,
+        taken = [],
         value = $bindable(),
     }: {
         name: string
         legend: string
         labels: Record<Icon, string>
+        taken?: readonly Icon[]
         value?: Icon
     } = $props()
+
+    $effect(() => {
+        if (value && taken.includes(value)) value = undefined
+    })
 </script>
 
 <fieldset class="picker">
@@ -31,6 +38,7 @@
                     {name}
                     value={icon}
                     required
+                    disabled={taken.includes(icon)}
                     aria-label={labels[icon]}
                     bind:group={value} />
                 <PlayerIcon {icon} />
@@ -71,6 +79,10 @@
     }
     .option:has(input:focus-visible) {
         box-shadow: var(--focus-ring);
+    }
+    .option:has(input:disabled) {
+        opacity: 0.35;
+        cursor: default;
     }
     /* Invisible, over the whole tile: the tile is what you see and tap. */
     input {

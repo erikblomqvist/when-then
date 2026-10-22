@@ -1,9 +1,10 @@
 // The game lifecycle, played through on phones (spec #59, seam 3): one flow that grows with
-// each lifecycle ticket. So far: the host creates a game and lands in its lobby.
+// each lifecycle ticket. So far: the host creates a game and lands in its lobby, one player
+// joins by link and another by the code typed on the home page, and every lobby updates live.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
-import { gotoHydrated, reloadHydrated } from '../../lib/testing/e2e-hydration'
+import { gotoHydrated, reloadHydrated, waitForHydration } from '../../lib/testing/e2e-hydration'
 import { qrPath } from '../../lib/ui/qr-path'
 
 const db = localServiceClient()
@@ -57,6 +58,50 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await expect(host.getByRole('heading', { name: 'Lobby' })).toBeVisible()
     await expect(players.first()).toContainText('Astrid')
 
+    // A second player opens the join link (the QR code holds the same URL).
+    const boContext = await browser.newContext()
+    const bo = await boContext.newPage()
+    await gotoHydrated(bo, joinUrl)
+    await expect(bo.getByRole('heading', { name: `Join game ${code}` })).toBeVisible()
+    // The host's icon is taken, and so is their name, ignoring case.
+    await expect(bo.getByRole('radio', { name: 'Cat' })).toBeDisabled()
+    const nameTaken = bo.getByText('Someone in this game already has that name.')
+    await bo.getByLabel('Your name').fill('ASTRID')
+    await expect(nameTaken).toBeVisible()
+    await expect(bo.getByRole('button', { name: 'Join game' })).toBeDisabled()
+    await bo.getByLabel('Your name').fill('Bo')
+    await expect(nameTaken).toHaveCount(0)
+    await bo.getByRole('radio', { name: 'Dog' }).check()
+    await bo.getByRole('button', { name: 'Join game' }).click()
+
+    await bo.waitForURL(new RegExp(`/game/${code}$`))
+    const boPlayers = bo.locator('.ui-player-row')
+    await expect(boPlayers).toHaveCount(2)
+    await expect(boPlayers.nth(1)).toContainText('Bo')
+    await expect(boPlayers.nth(1)).toContainText('You')
+    // The host's lobby shows Bo without a reload.
+    await expect(players).toHaveCount(2)
+    await expect(players.nth(1)).toContainText('Bo')
+
+    // A third player types the code on the home page, in lower case.
+    const caroContext = await browser.newContext()
+    const caro = await caroContext.newPage()
+    await gotoHydrated(caro, '/')
+    await caro.getByLabel('Game code').fill(code.toLowerCase())
+    await caro.getByRole('button', { name: 'Join game' }).click()
+    await caro.waitForURL(new RegExp(`/join/${code}$`))
+    await waitForHydration(caro)
+    await expect(caro.getByRole('radio', { name: 'Dog' })).toBeDisabled()
+    await caro.getByLabel('Your name').fill('Caro')
+    await caro.getByRole('radio', { name: 'Fish' }).check()
+    await caro.getByRole('button', { name: 'Join game' }).click()
+
+    await caro.waitForURL(new RegExp(`/game/${code}$`))
+    await expect(caro.locator('.ui-player-row')).toHaveCount(3)
+    await expect(players).toHaveCount(3)
+    await expect(boPlayers).toHaveCount(3)
+    await expect(boPlayers.nth(2)).toContainText('Caro')
+
     // Someone without a seat can't open it.
     const strangerContext = await browser.newContext()
     const stranger = await strangerContext.newPage()
@@ -64,5 +109,7 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     expect(response?.status()).toBe(403)
     await expect(stranger.getByText('Astrid')).toHaveCount(0)
 
-    await Promise.all([hostContext.close(), strangerContext.close()])
+    await Promise.all(
+        [hostContext, boContext, caroContext, strangerContext].map((context) => context.close()),
+    )
 })

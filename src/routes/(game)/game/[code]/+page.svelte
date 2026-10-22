@@ -1,13 +1,22 @@
 <script lang="ts">
+    import { invalidateAll } from '$app/navigation'
     import { Button, CodeInput, Notepad, PlayerRow, QrCode, Surface, Text } from '#lib'
     import { maxPlayers } from '#lib/game/player.js'
     import { m } from '#lib/paraglide/messages.js'
+    import { watchGame } from '#lib/supabase-browser.js'
     import type { PageProps } from './$types'
 
     let { data }: PageProps = $props()
 
     const lobby = $derived(data.lobby)
     let copied = $state(false)
+
+    // The player list updates live: refetch the lobby on every nudge newer than what's shown.
+    $effect(() =>
+        watchGame(lobby.gameId, (nudge) => {
+            if (!nudge || nudge.version > data.lobby.version) void invalidateAll()
+        }),
+    )
 
     async function copyLink() {
         try {
