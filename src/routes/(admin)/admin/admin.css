@@ -8,6 +8,8 @@
 @source "../../../lib/admin";
 @import "tw-animate-css";
 @import "shadcn-svelte/tailwind.css";
+/* Category colour scopes (.cat-<colour>), shared with the game; no names Tailwind uses. */
+@import "../../../lib/styles/category-colours.css";
 
 @custom-variant dark (&:is(.dark *));
 

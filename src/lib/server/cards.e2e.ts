@@ -38,7 +38,8 @@ const card = (categoryId: string, text: string): CardInput => ({
 
 test('lists active categories in draw order with English names', async () => {
     const categories = await listCategories(db)
-    expect(categories.map((category) => category.name)).toEqual([
+    // The seed's four come first; other tests (categories.e2e.ts) add theirs after them.
+    expect(categories.slice(0, 4).map((category) => category.name)).toEqual([
         'Events',
         'People',
         'Inventions',
