@@ -14,6 +14,10 @@ _Avoid_: Event, statement, fact, question
 How obscure the knowledge on a card is, from 1 (most people know it) to 4.
 _Avoid_: Obscurity
 
+**Theme**:
+A set of cards on one subject, such as Sports or Music, that a game can be played with, like an expansion to a board game. Unrelated to a card's category, which is the type of card and what the category draw picks.
+_Avoid_: Pack, theme pack, category
+
 **Draft / Published / Archived**:
 The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but no longer dealt. A card can only be published with its English text and a date of at least a decade (a year from 1500 onwards). Categories can be archived too, taking them out of the category draw for new games.
 _Avoid_: Retired, deleted, inactive
@@ -73,8 +77,36 @@ The player seated before the active player, who reads the card aloud.
 _Avoid_: Asker, quizmaster
 
 **Host**:
-The player who created the game. The host also plays, and is the only one who can start the game and skip or remove an absent player.
+The player who created the game. The host also plays, and is the only one who can change the game's settings, start the game, skip or remove an absent player, end the game early and start a rematch.
 _Avoid_: Admin, owner (an admin manages cards and categories, unrelated to playing)
+
+### Starting and ending a game
+
+**Game code**:
+The four letters that identify a game, used to join it, until the game finishes.
+_Avoid_: PIN, room code, game ID
+
+**Lobby**:
+The stage of a game before it starts, where players join, the host adjusts the settings, and anyone can still leave. Starting the game closes it to new players.
+_Avoid_: Waiting room
+
+**Absent**:
+A player whose phone has lost contact with the game. They keep their seat and can return to it.
+_Avoid_: Away, offline, disconnected
+
+**Skip**:
+The host moving play past whatever an absent player is holding up: their turn, their steal attempt or their reading. The player keeps their seat and score.
+
+**Remove**:
+The host taking a player out of a game for good, together with their timeline. A removed player cannot win or return to their seat.
+_Avoid_: Kick
+
+**Abandoned**:
+A game that ended through inactivity rather than by being won or ended by the host. It has no winner.
+
+**Rematch**:
+A new game started from a finished one, beginning in a lobby with the same players, seating and settings, all of which can still change before it starts.
+_Avoid_: Replay, new round
 
 **Target score**:
 The number of points a player must reach to win, set when the game is created.
