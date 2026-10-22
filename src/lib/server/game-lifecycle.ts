@@ -6,7 +6,7 @@
 // Before Start a game is rows (migration `20261023006400_lobby.sql`, ADR 0002): the game and
 // one row per player.
 
-import type { Database } from '../database.types'
+import type { CardLocale } from '../cards/card'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
 import { isPlayerIcon, normalisePlayerName, type PlayerIcon } from '../game/player'
 import type { GameRefusalCode } from '../game/refusals'
@@ -30,8 +30,6 @@ const refuse = (code: GameRefusalCode): never => {
     throw new GameRefusal(code, refusals[code])
 }
 
-export type CardLanguage = Database['public']['Enums']['card_locale']
-
 /** A player as everyone in the lobby sees them. `isYou` marks the asking player's own row. */
 export type LobbyPlayer = { name: string; icon: PlayerIcon; isHost: boolean; isYou: boolean }
 
@@ -40,7 +38,7 @@ export type Lobby = {
     code: string
     targetScore: number
     exactYear: boolean
-    cardLanguage: CardLanguage
+    cardLanguage: CardLocale
     players: LobbyPlayer[]
 }
 
@@ -55,7 +53,7 @@ const maxCodeDraws = 20
  */
 export async function createGame(
     db: Db,
-    input: { userId: string; name: string; icon: string; cardLanguage: CardLanguage },
+    input: { userId: string; name: string; icon: string; cardLanguage: CardLocale },
     { newCode = randomGameCode }: { newCode?: () => string } = {},
 ): Promise<{ code: string }> {
     const name = normalisePlayerName(input.name) ?? refuse('invalid_name')

@@ -10,7 +10,12 @@
     let copied = $state(false)
 
     async function copyLink() {
-        await navigator.clipboard.writeText(data.joinUrl)
+        try {
+            await navigator.clipboard.writeText(data.joinUrl)
+        } catch {
+            // No clipboard (refused, or not a secure context): the code and QR code still work.
+            return
+        }
         copied = true
         setTimeout(() => (copied = false), 2000)
     }
@@ -23,7 +28,7 @@
 <Surface
     kind="table"
     grain
-    class="page">
+    class="lobby-page">
     <div class="lobby">
         <Text role="heading-1">{m.lobby_title()}</Text>
 
@@ -66,7 +71,7 @@
     :global(body) {
         margin: 0;
     }
-    :global(.page) {
+    :global(.lobby-page) {
         min-height: 100vh;
         padding: var(--space-7);
         box-sizing: border-box;

@@ -2,7 +2,8 @@
     import { enhance } from '$app/forms'
     import { Button, Input, PlayerIconPicker, Surface, Text } from '#lib'
     import { playerNameMaxLength, type PlayerIcon } from '#lib/game/player.js'
-    import { playerIconLabels, refusalMessage } from '#lib/game/refusals.js'
+    import { playerIconLabels } from '#lib/game/player-icon-labels.js'
+    import { refusalMessage } from '#lib/game/refusals.js'
     import { m } from '#lib/paraglide/messages.js'
     import { ensureSession } from '#lib/supabase-browser.js'
     import type { PageProps } from './$types'
@@ -29,7 +30,7 @@
 <Surface
     kind="table"
     grain
-    class="page">
+    class="new-game">
     <Surface
         kind="sheet"
         class="sheet">
@@ -90,7 +91,7 @@
     :global(body) {
         margin: 0;
     }
-    :global(.page) {
+    :global(.new-game) {
         min-height: 100vh;
         display: grid;
         align-content: center;

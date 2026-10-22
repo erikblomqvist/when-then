@@ -7,6 +7,8 @@
         variant?: 'primary' | 'ghost' | 'ink'
         size?: 'md' | 'lg'
         block?: boolean
+        /** Renders a link that looks like the button, for navigation. */
+        href?: string
         children: Snippet
     }
 
@@ -15,21 +17,32 @@
         size = 'md',
         block = false,
         type = 'button',
+        href,
         class: className,
         children,
         ...rest
     }: Props = $props()
-</script>
 
-<button
-    {type}
-    class={[
+    const classes = $derived([
         'ui-button',
         variant !== 'primary' && `ui-button--${variant}`,
         size === 'lg' && 'ui-button--lg',
         block && 'ui-button--block',
         className,
-    ]}
-    {...rest}>
-    {@render children()}
-</button>
+    ])
+</script>
+
+{#if href}
+    <a
+        {href}
+        class={classes}>
+        {@render children()}
+    </a>
+{:else}
+    <button
+        {type}
+        class={classes}
+        {...rest}>
+        {@render children()}
+    </button>
+{/if}
