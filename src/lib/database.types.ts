@@ -313,6 +313,20 @@ export type Database = {
                 }
                 Returns: undefined
             }
+            bulk_card_action: {
+                Args: {
+                    action: string
+                    actor: string
+                    card_ids: string[]
+                    category_id?: string
+                }
+                Returns: {
+                    card_id: string
+                    card_text: string
+                    done: boolean
+                    reason: string
+                }[]
+            }
             card_date_parts_valid: {
                 Args: { day: number; decade: number; month: number; year: number }
                 Returns: boolean
@@ -377,6 +391,10 @@ export type Database = {
             lock_card: {
                 Args: { card_id: string }
                 Returns: Database['public']['Enums']['card_status']
+            }
+            move_card: {
+                Args: { actor: string; card_id: string; category_id: string }
+                Returns: undefined
             }
             publish_card: {
                 Args: { actor: string; card_id: string }
