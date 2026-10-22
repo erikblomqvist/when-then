@@ -16,6 +16,7 @@ vp check                  # format, lint and type checks (Oxfmt, Oxlint)
 vpr check:svelte          # svelte-check, which vp check can't run
 vp test                   # unit (Node) and component (Chromium) tests
 vpr test:e2e              # Playwright against a production build
+vpr test:db               # pgTAP tests in supabase/tests/ against the local stack
 vp build                  # production build
 vpr build-storybook       # static Storybook in storybook-static/
 ```
@@ -56,10 +57,40 @@ vpr db:stop
 
 - **Schema** is SQL in `supabase/migrations/`, written by hand (`supabase migration new <name>`). The *Migrate database* workflow runs `supabase db push` on every push to `main` that touches a migration. Nothing migrates from a laptop or from Vercel's build.
 - **Config** for the local stack is `supabase/config.toml`, which mirrors the hosted project's auth settings (anonymous sign-in, Google provider, redirect allowlist, the access-token hook). After changing it, apply it to the hosted project with `supabase config push`.
-- **Auth:** players sign in anonymously; admins sign in with Google and get a row in `user_roles`. The Custom Access Token hook puts that role in the JWT as `user_role`.
+- **Auth:** players sign in anonymously; admins sign in with Google and get a row in `user_roles`. The Custom Access Token hook also puts that role in the JWT as `user_role`, but the app reads `user_roles` instead (ADR 0003).
 - **Clients:** `event.locals.supabase` (set in `src/hooks.server.ts`) acts as the visitor through the auth cookies; `supabaseService()` in `src/lib/server/supabase.ts` uses the secret key for server-side writes.
 - **Environment variables:** declared, with descriptions, in [`src/env.ts`](src/env.ts); that is the only list of names. Locally they live in `.env.local`. Production and preview values are set by hand in Vercel's project settings (the Supabase integration could not be connected). Google sign-in on the *local* stack needs `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in `supabase/.env`, which the Supabase CLI reads for `supabase/config.toml`; anonymous sign-in works without them. Repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` and the variable `SUPABASE_PROJECT_REF` drive the workflows. The database password is in the owner's password manager.
 - **Keep-alive:** the *Keep Supabase awake* workflow runs a query every three days so the Free project is not paused. GitHub disables schedules after 60 days without commits; re-enable it under Actions if that happens.
+
+## Admin sign-in
+
+`/admin` is for editors and admins, who sign in with Google. `src/hooks.server.ts` validates the session, reads the person's role from `user_roles` on each request, and turns away every `/admin` request (pages, form actions and endpoints) without at least `editor`: signed out goes to `/admin/sign-in`, signed in without a role to `/admin/no-access`. Admin-only work calls `requireRole(event, 'admin')` from `src/lib/server/guard.ts`, which answers editors with 403. A role granted, changed or revoked takes effect on the person's next request (the JWT's `user_role` claim lags up to an hour, so the guard does not rely on it; ADR 0003). The service worker never caches `/admin`.
+
+Admins manage roles on the People page (`/admin/people`): add an email with a role, and it attaches at that email's first Google sign-in (a trigger on `auth.users` moves the pending invite into `user_roles`; password sign-ups never pick one up). Someone who has already signed in with Google gets the role at once. Roles and invites can be changed or revoked; there is always at least one admin. The SQL functions in `supabase/migrations/20261023004500_people_and_role_invites.sql` enforce this and write every change to the general audit log (`audit_log`, read at `/admin/audit`).
+
+The admin accepts only sessions that signed in with Google (the JWT's `amr` claim says `oauth`); a password session counts as signed out unless Supabase is the local stack, where e2e signs in that way (`src/lib/server/sign-in-method.ts`). As defence in depth, disable the Email provider in the production Supabase dashboard (Authentication → Sign In / Providers → Email), and don't run `supabase config push` without checking it, since it would push the local `[auth.email]` settings, which keep email sign-up on for e2e.
+
+### Seeding the first admin
+
+Once, after the first admin has signed in with Google (they land on "no access"), run this in the Supabase dashboard's SQL editor; their next request lets them in. Later roles are managed on the People page.
+
+```sql
+insert into public.user_roles (user_id, role)
+select id, 'admin' from auth.users where email = 'first.admin@example.com'
+on conflict (user_id) do update set role = excluded.role;
+```
+
+### Google OAuth for production (once, by the project owner)
+
+1. **Google Cloud console** → APIs & Services → OAuth consent screen: user type *External*, app name "When Then? admin", support email, and the scopes `openid`, `email`, `profile`. Publish it (In production) so it is not limited to test users.
+2. **Credentials** → Create credentials → OAuth client ID → *Web application*. Authorised JavaScript origins: `https://when-then-gamma.vercel.app`. Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase's callback, not the app's). For Google sign-in on the local stack, add `http://127.0.0.1:54321/auth/v1/callback` too.
+3. **Supabase dashboard** → Authentication → Sign In / Providers → Google: enable, paste the client ID and secret, save. Locally, put the same pair in `supabase/.env` as `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` and restart the stack.
+4. **Supabase dashboard** → Authentication → URL Configuration: Site URL `https://when-then-gamma.vercel.app`; Redirect URLs include `https://when-then-gamma.vercel.app/**` and `https://when-then-*-erikblomqvists-projects.vercel.app/**` (both are in `supabase/config.toml`, so `supabase config push` sets them too).
+5. Check that the Custom Access Token hook is enabled (Authentication → Hooks → `public.custom_access_token_hook`), then seed the first admin as above.
+
+### Signing in from tests
+
+There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null, { email? })` from `src/lib/testing/e2e-auth.ts`: it creates a user on the **local** stack that looks like a first Google sign-in (so a pending invite for its email attaches) with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. Tests that call the server modules directly make a user with `newPerson(role)` from the same file. Navigate admin pages with `gotoHydrated` from `src/lib/testing/e2e-hydration.ts` before clicking. `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
 
 ## Translations
 

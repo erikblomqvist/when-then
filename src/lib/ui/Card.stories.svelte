@@ -3,15 +3,25 @@
     lang="ts">
     import { defineMeta } from '@storybook/sveltekit'
     import Card from './Card.svelte'
-    import { categories } from './types'
+    import { sampleCategories } from './types'
 
     const { Story } = defineMeta({
         title: 'Cards/Card',
         component: Card,
         tags: ['autodocs'],
-        args: { face: 'front', category: 'events', text: 'The Berlin Wall falls', size: 'lg' },
+        args: {
+            face: 'front',
+            category: sampleCategories.events,
+            text: 'The Berlin Wall falls',
+            size: 'lg',
+        },
         argTypes: {
-            category: { control: 'select', options: categories },
+            // Pick one of the sample categories by key; real ones come from the database.
+            category: {
+                control: 'select',
+                options: Object.keys(sampleCategories),
+                mapping: sampleCategories,
+            },
             face: { control: 'radio', options: ['front', 'sleeve', 'timeline'] },
             state: { control: 'radio', options: [undefined, 'locked', 'unlocked', 'anchor'] },
             finish: { control: 'radio', options: ['matte', 'glossy'] },
@@ -43,7 +53,7 @@
     name="Timeline unlocked"
     args={{
         face: 'timeline',
-        category: 'inventions',
+        category: sampleCategories.inventions,
         year: 1876,
         text: 'The telephone is patented',
         state: 'unlocked',
@@ -55,7 +65,7 @@
     name="Timeline decade"
     args={{
         face: 'timeline',
-        category: 'people',
+        category: sampleCategories.people,
         year: '1490s',
         text: 'Columbus reaches America',
         state: 'locked',
@@ -64,16 +74,16 @@
 <!-- The random starting point on every timeline. Not a card, worth no points. -->
 <Story
     name="Anchor year"
-    args={{ face: 'timeline', category: 'places', year: 1952, state: 'anchor' }} />
+    args={{ face: 'timeline', category: sampleCategories.places, year: 1952, state: 'anchor' }} />
 
 <Story
     name="All categories"
     asChild>
     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
-        {#each categories as category (category)}
+        {#each Object.values(sampleCategories) as category (category.name)}
             <Card
                 {category}
-                text={`A card in ${category}`} />
+                text={`A card in ${category.name}`} />
         {/each}
     </div>
 </Story>
@@ -84,19 +94,19 @@
     <div style="display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap;">
         <Card
             size="sm"
-            category="events"
+            category={sampleCategories.events}
             text="Small" />
         <Card
             size="md"
-            category="people"
+            category={sampleCategories.people}
             text="Medium" />
         <Card
             size="lg"
-            category="inventions"
+            category={sampleCategories.inventions}
             text="Large" />
         <Card
             size="xl"
-            category="places"
+            category={sampleCategories.places}
             text="Extra large" />
     </div>
 </Story>

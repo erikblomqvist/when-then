@@ -5,6 +5,10 @@ import type { Handle } from '@sveltejs/kit/hooks'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '#lib/database.types.js'
+import { isPublicAdminPath, requireRole, type Viewer } from '#lib/server/guard.js'
+import { currentRole } from '#lib/server/people.js'
+import { supabaseService } from '#lib/server/supabase.js'
+import { acceptsAdminSession } from '#lib/server/sign-in-method.js'
 
 // Locale comes from the cookie, then the browser's preferred language, then English
 // (strategy in vite.config.ts). There is no locale in the URL, so the request is not rewritten.
@@ -68,6 +72,23 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
         return { session, user }
     }
 
+    // Once per request: the layout, the page and an action may all ask. The role comes from
+    // `user_roles`, not the JWT claim, so a change or revoke on the People page takes effect
+    // on the person's next request rather than at their next token refresh.
+    let viewer: Promise<Viewer> | undefined
+    event.locals.getViewer = () =>
+        (viewer ??= event.locals.safeGetSession().then(async ({ session, user }) => {
+            if (!user) return nulls
+            if (user.is_anonymous) return { user, role: null }
+            // Only Google sign-ins reach the admin (password ones on the local stack, for
+            // e2e): see `#lib/server/sign-in-method`. Any other session is signed out here.
+            if (!acceptsAdminSession(session.access_token, PUBLIC_SUPABASE_URL)) {
+                await event.locals.supabase.auth.signOut({ scope: 'local' })
+                return nulls
+            }
+            return { user, role: await currentRole(supabaseService(), user.id) }
+        }))
+
     return resolve(event, {
         // Let the browser receive the auth cookie headers.
         filterSerializedResponseHeaders: (name) =>
@@ -75,4 +96,17 @@ const handleSupabase: Handle = async ({ event, resolve }) => {
     })
 }
 
-export const handle = sequence(handleParaglide, handleSupabase)
+const nulls = { user: null, role: null } as const
+
+// Every /admin request needs at least `editor`: pages, form actions and endpoints alike
+// (layout loads alone would not cover actions). Admin-only work calls `requireRole(event,
+// 'admin')` itself. Sign-in, the OAuth callback, sign-out and no-access stay reachable.
+const handleAdmin: Handle = async ({ event, resolve }) => {
+    const { pathname } = event.url
+    if (/^\/admin(?:\/|$)/.test(pathname) && !isPublicAdminPath(pathname)) {
+        await requireRole(event, 'editor')
+    }
+    return resolve(event)
+}
+
+export const handle = sequence(handleParaglide, handleSupabase, handleAdmin)

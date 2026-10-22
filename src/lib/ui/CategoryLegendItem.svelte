@@ -1,9 +1,8 @@
 <script lang="ts">
-    import { categoryLabel, type Category } from './types'
+    import type { CategoryLook } from './types'
 
-    /** Square swatch plus the category name, for legends. */
-    let { category, label }: { category: Category; label?: string } = $props()
+    /** Square swatch in the category's colour plus its name (or `label`), for legends. */
+    let { category, label }: { category: CategoryLook; label?: string } = $props()
 </script>
 
-<span class={['ui-category-legend-item', `cat-${category}`]}
-    >{label ?? categoryLabel[category]}</span>
+<span class={['ui-category-legend-item', `cat-${category.colour}`]}>{label ?? category.name}</span>

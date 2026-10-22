@@ -7,6 +7,7 @@
     import Timeline from './Timeline.svelte'
     import TimelineGap from './TimelineGap.svelte'
     import TimelineSlot from './TimelineSlot.svelte'
+    import { sampleCategories } from './types'
 
     const { Story } = defineMeta({
         title: 'Timeline/Timeline',
@@ -23,7 +24,7 @@
         <TimelineSlot
             ><Card
                 face="timeline"
-                category="events"
+                category={sampleCategories.events}
                 year={1969}
                 state="anchor" /></TimelineSlot>
     </Timeline>
@@ -37,7 +38,7 @@
         <TimelineSlot>
             <Card
                 face="timeline"
-                category="people"
+                category={sampleCategories.people}
                 year="1490s"
                 text="Columbus reaches America"
                 state="locked" />
@@ -45,14 +46,14 @@
         <TimelineSlot
             ><Card
                 face="timeline"
-                category="events"
+                category={sampleCategories.events}
                 year={1789}
                 state="anchor" /></TimelineSlot>
         <TimelineGap />
         <TimelineSlot>
             <Card
                 face="timeline"
-                category="inventions"
+                category={sampleCategories.inventions}
                 year={1876}
                 text="The telephone is patented"
                 state="unlocked"
@@ -65,7 +66,7 @@
         <TimelineSlot>
             <Card
                 face="timeline"
-                category="events"
+                category={sampleCategories.events}
                 year={1989}
                 text="The Berlin Wall falls"
                 state="locked"
@@ -84,13 +85,13 @@
             <TimelineSlot
                 ><Card
                     face="timeline"
-                    category="places"
+                    category={sampleCategories.places}
                     year={1952}
                     state="anchor" /></TimelineSlot>
             <TimelineSlot>
                 <Card
                     face="timeline"
-                    category="events"
+                    category={sampleCategories.events}
                     year={2001}
                     text="Wikipedia launches"
                     state="locked" />

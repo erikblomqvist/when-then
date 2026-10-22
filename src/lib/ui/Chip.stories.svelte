@@ -5,6 +5,7 @@
     import CategoryDot from './CategoryDot.svelte'
     import Chip from './Chip.svelte'
     import Tabs from './Tabs.svelte'
+    import { sampleCategories } from './types'
 
     const { Story } = defineMeta({
         title: 'Controls/Chip and tabs',
@@ -24,7 +25,7 @@
     name="Chips"
     asChild>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <Chip active><CategoryDot category="events" /> Events</Chip>
+        <Chip active><CategoryDot category={sampleCategories.events} /> Events</Chip>
         <Chip>Reader's choice</Chip>
         <Chip>Free choice</Chip>
     </div>

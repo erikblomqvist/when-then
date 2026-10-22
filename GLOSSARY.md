@@ -15,7 +15,7 @@ How obscure the knowledge on a card is, from 1 (most people know it) to 4.
 _Avoid_: Obscurity
 
 **Draft / Published / Archived**:
-The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but no longer dealt. Categories can be archived too, taking them out of the category draw for new games.
+The life of a card: a draft is never dealt, a published card can be dealt in new games, and an archived card is kept but no longer dealt. A card can only be published with its English text and a date of at least a decade (a year from 1500 onwards). Categories can be archived too, taking them out of the category draw for new games.
 _Avoid_: Retired, deleted, inactive
 
 **Anchor year**:

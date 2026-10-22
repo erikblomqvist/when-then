@@ -154,9 +154,9 @@
     padding: 0.34em;
     border-radius: 0.85em;
     font-size: var(--card-size);
-    background: var(--gradient-lacquer-highlight), var(--cat, var(--color-red-500));
+    background: var(--gradient-lacquer-highlight), var(--cat, var(--palette-red-500));
     box-shadow:
-        0 0.16em 0 var(--cat-dark, var(--color-red-700)),
+        0 0.16em 0 var(--cat-dark, var(--palette-red-700)),
         0 0.2em 0 oklch(from var(--color-black) l c h / 0.25),
         0 0.5em 0.9em oklch(from var(--color-black) l c h / 0.35);
 }
