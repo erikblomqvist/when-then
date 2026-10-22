@@ -188,6 +188,7 @@
     --text-on-paper-subtle: oklch(from var(--color-ink-900) l c h / 0.4);
     --text-on-category: var(--color-paper-100);
     --text-error-on-table: var(--color-coral-100);
+    --text-error-on-paper: var(--palette-red-700);
 
     /* Borders and lines */
     --border-on-table: oklch(from var(--color-paper-300) l c h / 0.24);

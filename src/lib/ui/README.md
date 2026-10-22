@@ -58,6 +58,8 @@ Names follow the glossary: a card shows **card text** (not a question), a correc
 | `Chip`, `Tabs` | Category draw, Card language | Chips show the draw result; tabs pick settings on paper. |
 | `CategoryDot`, `CategoryLegendItem`, `CategoryIcon` | Category | Render from category data: name, icon (curated Lucide set) and colour. |
 | `Notepad`, `PlayerRow`, `NumberBadge`, `RoleTag` | Host, Reader | The lobby list and seating order. |
+| `PlayerIcon`, `PlayerIconPicker` | Host, Lobby | A player's icon from the curated Lucide set in `src/lib/game/player.ts`, and the radio grid to pick one. |
+| `QrCode` | Game code | The join link as a QR code (`uqr`), one SVG path on a white tile. |
 | `Surface` | | table, tray, paper, sheet, panel, veil. |
 | `Text` | | The type roles. |
 
@@ -76,5 +78,5 @@ Categories are data, managed by admins on `/admin/categories`: a name per card l
 
 - The component CSS is one global stylesheet; moving styles into each `.svelte` file is a later refactor.
 - Deal, flip, drop, fall and lock choreography, and the timeline drag logic, are not here. They belong with the game screens.
-- The title box-lid screen, QR code, results ranking rows and all game state are not included.
+- The title box-lid screen, results ranking rows and all game state are not included.
 - All ambient animation is disabled under `prefers-reduced-motion: reduce`.

@@ -556,6 +556,8 @@
    Buttons
    -------------------------------------------------------------------------- */
 .ui-button {
+    /* Also on links that look like buttons (`Button` with `href`). */
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -763,6 +765,8 @@
 
 /* Read-only small variant (displaying a code on paper) */
 .ui-code-input--sm {
+    /* Square boxes, whatever width the container gives the grid. */
+    grid-template-columns: repeat(var(--code-length, 4), 50px);
     gap: var(--space-2);
 }
 .ui-code-input--sm .ui-code-input__box {
@@ -922,6 +926,11 @@ button.ui-chip:focus-visible {
     font-weight: var(--font-weight-bold);
     font-variant-numeric: tabular-nums;
     color: var(--text-on-paper-subtle);
+}
+.ui-player-row__icon {
+    display: grid;
+    place-items: center;
+    color: var(--text-on-paper-secondary);
 }
 .ui-player-row__name {
     flex: 1;

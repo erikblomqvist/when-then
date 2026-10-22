@@ -6,7 +6,7 @@
 <Surface
     kind="table"
     grain
-    class="page">
+    class="home">
     <Text role="heading-1">{m.app_name()}</Text>
     <Text role="body">{m.tagline()}</Text>
     <div class="cards">
@@ -21,15 +21,15 @@
             state="locked" />
     </div>
     <Button
-        variant="ghost"
-        disabled>{m.create_game()}</Button>
+        size="lg"
+        href="/new">{m.create_game()}</Button>
 </Surface>
 
 <style>
     :global(body) {
         margin: 0;
     }
-    :global(.page) {
+    :global(.home) {
         min-height: 100vh;
         display: grid;
         gap: 24px;

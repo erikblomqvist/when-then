@@ -1,6 +1,6 @@
-// Waiting for the admin to hydrate in Playwright. Until Svelte hydrates, the server-rendered
+// Waiting for a page to hydrate in Playwright. Until Svelte hydrates, the server-rendered
 // page looks ready but a click, select or drag can do nothing (or be reset by hydration), which
-// flakes under load. The admin layout sets `data-hydrated` on <html> once it has mounted.
+// flakes under load. The admin and game layouts set `data-hydrated` on <html> once mounted.
 //
 //     import { gotoHydrated, waitForHydration } from '#lib/testing/e2e-hydration.js'
 //     await gotoHydrated(page, '/admin/cards/new')
@@ -9,7 +9,7 @@
 
 import type { Page } from '@playwright/test'
 
-/** Resolves once the admin layout has hydrated (see `src/routes/(admin)/admin/+layout.svelte`). */
+/** Resolves once the page's layout has hydrated (see `src/routes/(admin)/admin/+layout.svelte`). */
 export async function waitForHydration(page: Page) {
     await page.locator('html[data-hydrated]').waitFor({ state: 'attached' })
 }

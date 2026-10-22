@@ -1,0 +1,34 @@
+// The phone's own Supabase client, for its session only (and later the nudge channel): the
+// browser never reads or writes tables (ADR 0002). Its session lives in the same auth cookies
+// the server's client reads in `hooks.server.ts`, so a server route sees who signed in here.
+
+import { createBrowserClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { PUBLIC_SUPABASE_PUBLISHABLE_KEY, PUBLIC_SUPABASE_URL } from '$app/env/public'
+import type { Database } from '#lib/database.types.js'
+
+let client: SupabaseClient<Database> | undefined
+
+function supabaseBrowser() {
+    if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+        throw new Error('PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set')
+    }
+    return (client ??= createBrowserClient<Database>(
+        PUBLIC_SUPABASE_URL,
+        PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    ))
+}
+
+/**
+ * Makes sure the phone has a session before it creates or joins a game, signing in
+ * anonymously when it has none. Seats belong to that user. It signs in from the phone, not
+ * the server, because Supabase limits anonymous sign-ins per IP address: from the server,
+ * every player would share its address. Throws when sign-in fails.
+ */
+export async function ensureSession(): Promise<void> {
+    const supabase = supabaseBrowser()
+    const { data } = await supabase.auth.getUser()
+    if (data.user) return
+    const { error } = await supabase.auth.signInAnonymously()
+    if (error) throw error
+}
