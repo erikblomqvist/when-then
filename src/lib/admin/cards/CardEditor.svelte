@@ -3,8 +3,8 @@
     Used by /admin/cards/new and /admin/cards/[id]; both post to their own `?/save` action.
 
     Extension points:
-    - Locale tabs (sv, nb): add their fields inside the <form>, next to the English section,
-      with matching names in `CardFormValues` / `parseCardForm`; they share this save and guard.
+    - Locale tabs (sv, nb): `TranslationTabs`, inside the <form>, sharing this save and guard.
+      `translationActions` renders in each tab with `{ locale, english, fill }` (see there).
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
@@ -22,6 +22,7 @@
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
         cardFormValues,
+        settledCardFormValues,
         cardTextMaxLength,
         sourceQuoteMaxLength,
         type CardFormErrors,
@@ -29,6 +30,7 @@
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
     import type { Category } from '#lib/server/categories.js'
+    import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
 
     type Props = {
         /** The values the form starts from (the saved card, or empty). */
@@ -40,9 +42,19 @@
         errors?: CardFormErrors
         saved?: boolean
         sidebar?: Snippet<[{ dirty: boolean }]>
+        /** Rendered in each locale tab, e.g. a machine translation button. */
+        translationActions?: TranslationActions
     }
 
-    let { values: initial, categories, card, errors = {}, saved = false, sidebar }: Props = $props()
+    let {
+        values: initial,
+        categories,
+        card,
+        errors = {},
+        saved = false,
+        sidebar,
+        translationActions,
+    }: Props = $props()
 
     // svelte-ignore state_referenced_locally -- the form owns its values once it is shown
     let values = $state({ ...initial })
@@ -121,9 +133,14 @@
                 formData.set('clear_verification', 'true')
             }
             saving = true
-            const submitted = JSON.stringify(values)
+            const submitted = $state.snapshot(values)
             return async ({ result, update }) => {
-                if (result.type === 'success' || result.type === 'redirect') baseline = submitted
+                if (result.type === 'success' || result.type === 'redirect') {
+                    // Unless typed since, the form now shows what was saved; ticks are spent.
+                    const settled = settledCardFormValues(submitted)
+                    if (JSON.stringify(values) === JSON.stringify(submitted)) values = settled
+                    baseline = JSON.stringify(settled)
+                }
                 await update({ reset: false })
                 saving = false
             }
@@ -147,6 +164,12 @@
                 aria-describedby={describedBy('text_en')} />
             {@render error('text_en')}
         </section>
+
+        <TranslationTabs
+            bind:values
+            {card}
+            {errors}
+            actions={translationActions} />
 
         <fieldset class="flex flex-col gap-3">
             <legend class="mb-2 text-sm font-medium">Date</legend>

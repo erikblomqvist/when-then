@@ -6,6 +6,7 @@
     import { Label } from '#lib/components/ui/label/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
+    import TranslationBadge from '#lib/admin/cards/TranslationBadge.svelte'
     import { cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
     import {
         cardEraLabel,
@@ -14,8 +15,12 @@
         cardSorts,
         isFiltered,
         parseCardListView,
+        reviewQueueHref,
+        translationFilterLabel,
+        translationFilters,
         type CardEra,
     } from '#lib/cards/card-list.js'
+    import { localeName, translationLocales } from '#lib/cards/translation.js'
     import { formatCardDate } from '#lib/cards/date-parts.js'
     import { filterParams } from '#lib/cards/card-list.js'
     import BulkActionBar from '#lib/admin/cards/BulkActionBar.svelte'
@@ -79,6 +84,19 @@
     </div>
     <Button href="/admin/cards/new">New card</Button>
 </div>
+
+<nav
+    aria-label="Review queues"
+    class="mt-4 flex flex-wrap gap-4 text-sm">
+    {#each translationLocales as locale (locale)}
+        <a
+            class="underline-offset-4 hover:underline"
+            href={reviewQueueHref(locale)}>
+            {localeName[locale]} review queue
+        </a>
+        <span class="-ml-3 text-muted-foreground">({data.reviewQueues[locale]})</span>
+    {/each}
+</nav>
 
 <form
     bind:this={form}
@@ -162,6 +180,23 @@
             {/each}
         </NativeSelect.Root>
     </div>
+    {#each translationLocales as locale (locale)}
+        <div class="flex flex-col gap-2">
+            <Label for="translation-{locale}">{localeName[locale]}</Label>
+            <NativeSelect.Root
+                id="translation-{locale}"
+                name={locale}
+                value={filter.translations?.[locale] ?? ''}
+                onchange={submit}>
+                <NativeSelect.Option value="">Any</NativeSelect.Option>
+                {#each translationFilters as state (state)}
+                    <NativeSelect.Option value={state}>
+                        {translationFilterLabel[state]}
+                    </NativeSelect.Option>
+                {/each}
+            </NativeSelect.Root>
+        </div>
+    {/each}
     <div class="flex flex-col gap-2">
         <Label for="sort">Sort by</Label>
         <NativeSelect.Root
@@ -209,6 +244,7 @@
             <Table.Head>Date</Table.Head>
             <Table.Head>Category</Table.Head>
             <Table.Head>Status</Table.Head>
+            <Table.Head>Translations</Table.Head>
             <Table.Head>Verified</Table.Head>
             <Table.Head>Updated</Table.Head>
         </Table.Row>
@@ -239,6 +275,22 @@
                     </Badge>
                 </Table.Cell>
                 <Table.Cell>
+                    <div class="flex flex-col items-start gap-1">
+                        {#each translationLocales as locale (locale)}
+                            <span
+                                class="flex items-center gap-1"
+                                data-testid="translation-{locale}">
+                                <abbr
+                                    class="w-5 text-xs text-muted-foreground uppercase no-underline"
+                                    title={localeName[locale]}>
+                                    {locale}
+                                </abbr>
+                                <TranslationBadge state={card.translations[locale] ?? 'missing'} />
+                            </span>
+                        {/each}
+                    </div>
+                </Table.Cell>
+                <Table.Cell>
                     {#if card.verified}
                         Verified
                     {:else}
@@ -252,7 +304,7 @@
         {:else}
             <Table.Row>
                 <Table.Cell
-                    colspan={7}
+                    colspan={8}
                     class="py-8 text-center text-muted-foreground">
                     {#if data.total > 0}
                         No cards on this page.

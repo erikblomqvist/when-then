@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { cardListHref, isFiltered, parseCardListView } from './card-list'
+import { cardListHref, isFiltered, parseCardListView, reviewQueueHref } from './card-list'
 
 const categoryId = '6f1c1d5e-8f0a-4c43-9d1e-2b7a0f6c1a01'
 
@@ -79,5 +79,27 @@ describe('isFiltered', () => {
     it('tells a narrowed list from the whole list', () => {
         expect(isFiltered({})).toBe(false)
         expect(isFiltered({ verified: false })).toBe(true)
+    })
+})
+
+describe('translation filters', () => {
+    it('reads a translation state per locale, dropping unknown states and locales', () => {
+        expect(parseCardListView(params('sv=machine&nb=needs-review')).filter).toEqual({
+            translations: { sv: 'machine', nb: 'needs-review' },
+        })
+        expect(parseCardListView(params('sv=done&en=missing')).filter).toEqual({})
+    })
+
+    it('writes them back after the other filters', () => {
+        expect(
+            cardListHref({
+                filter: { status: 'published', translations: { nb: 'missing', sv: 'stale' } },
+            }),
+        ).toBe('/admin/cards?status=published&sv=stale&nb=missing')
+        expect(isFiltered({ translations: {} })).toBe(false)
+    })
+
+    it('links the review queue for a locale: machine or stale there', () => {
+        expect(reviewQueueHref('sv')).toBe('/admin/cards?sv=needs-review')
     })
 })

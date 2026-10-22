@@ -1,11 +1,14 @@
 // The card editor's form: field names, parsing (server side, in the form action) and the
 // values the editor starts from. The browser posts plain fields; dates come in as an era
 // (AD/BC) plus unsigned numbers, the way people write them, and leave here as signed parts.
+// The locale tabs post `text_<locale>`, `note_<locale>`, `reviewed_<locale>` (ticked) and
+// `machine_text_<locale>` (the text a machine translation filled in); see
+// `#lib/cards/translation.js` for how they become a status.
 //
-// Later tickets add fields (per-locale `text_sv`, `note_sv`, difficulty, tags) by extending
-// `CardFormValues`, `parseCardForm` and `cardFormValues` together.
+// Later tickets add fields (difficulty, tags) by extending `CardFormValues`, `parseCardForm`
+// and `cardFormValues` together.
 
-import type { CardFields, CardInput, CardLocale } from './card'
+import type { CardFields, CardInput, CardLocale, TranslationInput } from './card'
 import {
     decadeFromLabel,
     decadeLabel,
@@ -13,6 +16,21 @@ import {
     validateDateParts,
     type DateParts,
 } from './date-parts'
+import {
+    draftFromTranslation,
+    fillMachineTranslation,
+    localeName,
+    postedStatus,
+    translationLocales,
+    type TranslationDraft,
+    type TranslationLocale,
+} from './translation'
+
+/** One locale tab's fields, all strings like the rest of the form ('true' when ticked). */
+type TranslationFields<L extends TranslationLocale> = Record<
+    `text_${L}` | `note_${L}` | `reviewed_${L}` | `machine_text_${L}`,
+    string
+>
 
 export type CardFormValues = {
     text_en: string
@@ -24,7 +42,8 @@ export type CardFormValues = {
     day: string
     source_url: string
     source_quote: string
-}
+} & TranslationFields<'sv'> &
+    TranslationFields<'nb'>
 
 export type CardFormErrors = Partial<Record<keyof CardFormValues, string>>
 
@@ -32,6 +51,72 @@ export type ParsedCardForm = { ok: true; card: CardInput } | { ok: false; errors
 
 export const cardTextMaxLength = 500
 export const sourceQuoteMaxLength = 500
+
+function translationFields<L extends TranslationLocale>(
+    locale: L,
+    draft: TranslationDraft,
+): TranslationFields<L> {
+    return {
+        [`text_${locale}`]: draft.text,
+        [`note_${locale}`]: draft.note,
+        [`reviewed_${locale}`]: draft.reviewed ? 'true' : '',
+        [`machine_text_${locale}`]: draft.machineText ?? '',
+    } as TranslationFields<L>
+}
+
+/** A locale tab's draft, from the form's values. */
+export function translationDraft(
+    values: CardFormValues,
+    locale: TranslationLocale,
+): TranslationDraft {
+    const fields = values as unknown as TranslationFields<typeof locale>
+    const machineText = fields[`machine_text_${locale}`]
+    return {
+        text: fields[`text_${locale}`],
+        note: fields[`note_${locale}`],
+        reviewed: fields[`reviewed_${locale}`] === 'true',
+        machineText: machineText === '' ? null : machineText,
+    }
+}
+
+/** The form's values with a locale tab's draft replaced. */
+export const withTranslationDraft = (
+    values: CardFormValues,
+    locale: TranslationLocale,
+    draft: TranslationDraft,
+): CardFormValues => ({ ...values, ...translationFields(locale, draft) })
+
+/**
+ * The form's values after a machine translation filled a locale tab: the text is replaced and
+ * saving it as it is marks it machine. Nothing is saved until the person saves the card.
+ */
+export const fillMachineTranslationField = (
+    values: CardFormValues,
+    locale: TranslationLocale,
+    text: string,
+): CardFormValues =>
+    withTranslationDraft(
+        values,
+        locale,
+        fillMachineTranslation(translationDraft(values, locale), text),
+    )
+
+/**
+ * The form's values once saved: the "reviewed" ticks and machine-translation marks are spent,
+ * since the saved status now carries them (an untouched machine translation stays machine).
+ */
+export const settledCardFormValues = (values: CardFormValues): CardFormValues => {
+    let settled = values
+    for (const locale of translationLocales) {
+        const draft = translationDraft(settled, locale)
+        settled = withTranslationDraft(settled, locale, {
+            ...draft,
+            reviewed: false,
+            machineText: null,
+        })
+    }
+    return settled
+}
 
 export const emptyCardFormValues: CardFormValues = {
     text_en: '',
@@ -43,6 +128,8 @@ export const emptyCardFormValues: CardFormValues = {
     day: '',
     source_url: '',
     source_quote: '',
+    ...translationFields('sv', draftFromTranslation(undefined)),
+    ...translationFields('nb', draftFromTranslation(undefined)),
 }
 
 const field = (form: FormData, name: keyof CardFormValues) => {
@@ -132,6 +219,26 @@ export function parseCardForm(form: FormData): ParsedCardForm {
         errors.source_quote = `Keep the quote under ${sourceQuoteMaxLength} characters.`
     }
 
+    const translations: Partial<Record<TranslationLocale, TranslationInput | null>> = {}
+    for (const locale of translationLocales) {
+        // A form without the tab (an older page) leaves the translation alone.
+        if (!form.has(`text_${locale}`)) continue
+        const draft = translationDraft(readCardFormValues(form), locale)
+        const text = draft.text.trim()
+        const note = draft.note.trim()
+        if (!text) {
+            if (note)
+                errors[`text_${locale}`] =
+                    `Write the ${localeName[locale]} text, or clear the note.`
+            translations[locale] = null
+        } else if (text.length > cardTextMaxLength) {
+            errors[`text_${locale}`] = `Keep the card under ${cardTextMaxLength} characters.`
+        } else {
+            const status = postedStatus(draft)
+            translations[locale] = { text, note: note || null, ...(status && { status }) }
+        }
+    }
+
     if (Object.keys(errors).length > 0) return { ok: false, errors }
     return {
         ok: true,
@@ -140,7 +247,7 @@ export function parseCardForm(form: FormData): ParsedCardForm {
             date,
             sourceUrl: sourceUrl || null,
             sourceQuote: sourceQuote || null,
-            translations: { en: { text } },
+            translations: { en: { text }, ...translations },
             // Set by the editor when a verified date changed and the editor chose to clear it.
             ...(form.get('clear_verification') === 'true' && { clearVerification: true }),
         },
@@ -151,7 +258,9 @@ const numberField = (value: number | null) => (value === null ? '' : String(valu
 
 /** The fields the editor shows for a saved card: the inverse of `parseCardForm`. */
 export function cardFormValues(
-    card: CardFields & { translations: Partial<Record<CardLocale, { text: string }>> },
+    card: CardFields & {
+        translations: Partial<Record<CardLocale, { text: string; note?: string | null }>>
+    },
 ): CardFormValues {
     const { decade, year, month, day } = card.date
     const bc = (year ?? decade ?? 0) < 0
@@ -165,5 +274,7 @@ export function cardFormValues(
         day: numberField(day),
         source_url: card.sourceUrl ?? '',
         source_quote: card.sourceQuote ?? '',
+        ...translationFields('sv', draftFromTranslation(card.translations.sv)),
+        ...translationFields('nb', draftFromTranslation(card.translations.nb)),
     }
 }
