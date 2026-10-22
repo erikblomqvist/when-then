@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
+    cardFormErrors,
     cardFormValues,
     emptyCardFormValues,
     fillMachineTranslationField,
@@ -230,6 +231,36 @@ describe('locale tabs', () => {
         expect(result).toEqual({
             ok: false,
             errors: { text_sv: 'Keep the card under 500 characters.' },
+        })
+    })
+})
+
+describe('cardFormErrors', () => {
+    it('finds what a save would refuse, from the values the editor holds', () => {
+        expect(cardFormErrors(emptyCardFormValues)).toEqual({
+            text_en: 'Write the card in English.',
+            category_id: 'Pick a category.',
+        })
+    })
+
+    it('finds nothing in a card that can be saved, with or without a translation', () => {
+        const values = {
+            ...emptyCardFormValues,
+            text_en: 'A made-up event',
+            category_id: categoryId,
+        }
+        expect(cardFormErrors(values)).toEqual({})
+        expect(cardFormErrors({ ...values, text_sv: 'En påhittad händelse' })).toEqual({})
+    })
+
+    it('asks for a translation’s text when only its note is filled in', () => {
+        const values = {
+            ...emptyCardFormValues,
+            text_en: 'A made-up event',
+            category_id: categoryId,
+        }
+        expect(cardFormErrors({ ...values, note_nb: 'Ikke bro' })).toEqual({
+            text_nb: 'Write the Norwegian text, or clear the note.',
         })
     })
 })

@@ -282,6 +282,14 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     }
 }
 
+/** What `parseCardForm` would find wrong with these values, for live validation in the editor. */
+export function cardFormErrors(values: CardFormValues): CardFormErrors {
+    const form = new FormData()
+    for (const [name, value] of Object.entries(values)) form.set(name, value)
+    const parsed = parseCardForm(form)
+    return parsed.ok ? {} : parsed.errors
+}
+
 const numberField = (value: number | null) => (value === null ? '' : String(value))
 
 /** The fields the editor shows for a saved card: the inverse of `parseCardForm`. */

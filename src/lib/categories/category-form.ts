@@ -30,6 +30,14 @@ export type CategoryFormValues = {
 
 export type CategoryFormErrors = Partial<Record<keyof CategoryFormValues, string>>
 
+export const emptyCategoryFormValues: CategoryFormValues = {
+    icon: '',
+    colour: '',
+    name_en: '',
+    name_sv: '',
+    name_nb: '',
+}
+
 const text = (form: FormData, name: string) => {
     const value = form.get(name)
     return typeof value === 'string' ? value : ''
@@ -61,6 +69,14 @@ export function parseCategoryForm(
         if (locale !== 'en') names[locale] = values[`name_${locale}`].trim() || null
     }
     return { input: { icon, colour, names } }
+}
+
+/** What `parseCategoryForm` would find wrong with these values, for live validation. */
+export function categoryFormErrors(values: CategoryFormValues): CategoryFormErrors {
+    const form = new FormData()
+    for (const [name, value] of Object.entries(values)) form.set(name, value)
+    const parsed = parseCategoryForm(form)
+    return 'errors' in parsed ? parsed.errors : {}
 }
 
 /** `list` with the item at `from` moved to index `to` (a drag and drop); unchanged if either is out of range. */

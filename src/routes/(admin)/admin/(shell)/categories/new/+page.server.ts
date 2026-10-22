@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit'
 import { requireRole } from '#lib/server/guard.js'
-import { emptyCategoryFormValues, saveCategoryAction } from '#lib/server/category-editor.js'
+import { emptyCategoryFormValues } from '#lib/categories/category-form.js'
+import { saveCategoryAction } from '#lib/server/category-editor.js'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async (event) => {

@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit'
 import { emptyCardFormValues } from '#lib/cards/card-form.js'
 import { editorCategories, saveCardAction } from '#lib/server/card-editor.js'
+import { createCategoryAction } from '#lib/server/category-editor.js'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async () => ({
@@ -9,6 +10,7 @@ export const load: PageServerLoad = async () => ({
 })
 
 export const actions: Actions = {
+    createCategory: createCategoryAction,
     save: async (event) => {
         const saved = await saveCardAction(event)
         if (typeof saved !== 'string') return saved

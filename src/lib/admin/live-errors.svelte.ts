@@ -1,0 +1,106 @@
+// Live validation for the admin forms (#52): the errors a form shows follow what is typed,
+// instead of waiting for a save. A field's error shows once the person has edited the field
+// and left it, or has tried to save; from then on it follows the field and goes away when
+// fixed. The server stays the judge: an error only it can find (a published card's date
+// rule, a duplicate name) shows until the field it is on changes.
+//
+//     const live = new LiveErrors(() => values, cardFormErrors, () => errors)
+//     <form onfocusout={live.onfocusout} use:enhance={() => { if (!live.attempt()) cancel() … }}>
+//     {live.shown.text_en}
+
+import { SvelteSet } from 'svelte/reactivity'
+
+type Errors<Values> = Partial<Record<keyof Values, string>>
+
+export class LiveErrors<Values extends Record<keyof Values, string>> {
+    #values: () => Values
+    #validate: (values: Values) => Errors<Values>
+    #server: () => Errors<Values>
+    #initial: Values
+    #left = new SvelteSet<keyof Values>()
+    #tried = $state(false)
+    /** The values last sent to the server, to tell its errors from ones typed since. */
+    #posted: Values | null = $state(null)
+
+    /**
+     * `values` reads the form's current values, `validate` finds what the browser can tell is
+     * wrong with them, and `server` reads the errors from the last save's result. A form shown
+     * with server errors already (a save without JavaScript) starts as tried.
+     */
+    constructor(
+        values: () => Values,
+        validate: (values: Values) => Errors<Values>,
+        server: () => Errors<Values>,
+    ) {
+        this.#values = values
+        this.#validate = validate
+        this.#server = server
+        this.#initial = { ...values() }
+        if (Object.keys(server()).length > 0) {
+            this.#tried = true
+            this.#posted = { ...values() }
+        }
+    }
+
+    /** The server's errors the browser can't find for itself in what was posted. */
+    #serverOnly = $derived.by((): Errors<Values> => {
+        const server = this.#server()
+        if (!this.#posted) return {}
+        const posted = this.#validate(this.#posted)
+        const only: Errors<Values> = {}
+        for (const name of Object.keys(server) as (keyof Values)[]) {
+            if (server[name] !== posted[name]) only[name] = server[name]
+        }
+        return only
+    })
+
+    /** The errors to show now, by field. */
+    readonly shown = $derived.by(() => {
+        const values = this.#values()
+        const live = this.#validate(values)
+        const shown: Errors<Values> = {}
+        const names = new Set([...Object.keys(live), ...Object.keys(this.#serverOnly)])
+        for (const name of names as Set<keyof Values>) {
+            const unchanged = this.#posted?.[name] === values[name]
+            const error = live[name] ?? (unchanged ? this.#serverOnly[name] : undefined)
+            if (error && (this.#tried || this.#left.has(name))) shown[name] = error
+        }
+        return shown
+    })
+
+    /** Nothing has changed since the last save was sent, or since the form was shown (so a
+     * refusal of that save still applies). */
+    get unchangedSincePosted() {
+        const posted = this.#posted ?? this.#initial
+        const values = this.#values()
+        return (Object.keys(posted) as (keyof Values)[]).every(
+            (name) => posted[name] === values[name],
+        )
+    }
+
+    /** On the <form>: a field the person edited and then left shows its errors from now on. */
+    onfocusout = (event: FocusEvent) => {
+        const name = (event.target as { name?: unknown } | null)?.name
+        if (typeof name !== 'string' || !(name in this.#initial)) return
+        const field = name as keyof Values
+        if (this.#values()[field] !== this.#initial[field]) this.#left.add(field)
+    }
+
+    /**
+     * A save is being sent: every error shows from now on. Returns false when the browser
+     * can already tell the save would fail, so the form can skip the round trip.
+     */
+    attempt() {
+        this.#tried = true
+        this.#posted = { ...this.#values() }
+        return Object.keys(this.#validate(this.#posted)).length === 0
+    }
+
+    /** The save went through: the form starts over from what it now shows. */
+    settle() {
+        this.#tried = false
+        this.#posted = null
+        this.#left.clear()
+        this.#initial = { ...this.#values() }
+    }
+}

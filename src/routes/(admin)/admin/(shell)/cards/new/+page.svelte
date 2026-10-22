@@ -14,4 +14,5 @@
 <CardEditor
     values={form?.values ?? data.values}
     categories={data.categories}
-    errors={form?.errors} />
+    errors={form?.errors}
+    canCreateCategory={data.role === 'admin'} />

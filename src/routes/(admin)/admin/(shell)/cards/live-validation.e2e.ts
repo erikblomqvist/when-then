@@ -1,0 +1,121 @@
+// Live validation (#52): the editor's tab badges and errors follow what is typed, and an admin
+// can add a missing category from the card editor without losing the card.
+
+import { randomUUID } from 'node:crypto'
+import { expect, test, type Page } from '@playwright/test'
+import { signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
+
+const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
+
+const tab = (page: Page, name: 'Swedish' | 'Norwegian') =>
+    page.getByRole('tab', { name: new RegExp(name) })
+
+test('a tab’s badge shows what typing in it will save, before saving', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+
+    await expect(tab(page, 'Swedish')).toContainText('Missing')
+    await page.getByLabel('Swedish text').fill('E')
+    await expect(tab(page, 'Swedish')).toContainText('Reviewed')
+    await expect(tab(page, 'Swedish')).toContainText('(unsaved)')
+    await expect(tab(page, 'Norwegian')).toContainText('Missing')
+
+    await page.getByLabel('Swedish text').fill('')
+    await expect(tab(page, 'Swedish')).toContainText('Missing')
+    await expect(tab(page, 'Swedish')).not.toContainText('(unsaved)')
+})
+
+test('errors show after leaving a field or saving, and go away once fixed', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+
+    // Passing through an empty field is not an error.
+    await page.getByLabel('English text').focus()
+    await page.getByLabel('Year').focus()
+    await expect(page.getByText('Write the card in English.')).toHaveCount(0)
+
+    await page.getByLabel('Source URL').fill('example')
+    await page.getByLabel('Source quote').focus()
+    await expect(page.getByText('Use a full web address')).toBeVisible()
+    await page.getByLabel('Source URL').fill('https://example.com/made-up')
+    await expect(page.getByText('Use a full web address')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText('Write the card in English.')).toBeVisible()
+    await expect(page.getByText('Pick a category.')).toBeVisible()
+    await page.getByLabel('English text').fill('A made-up harbour opens')
+    await expect(page.getByText('Write the card in English.')).toHaveCount(0)
+    await expect(page.getByText('Pick a category.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'New card' })).toBeVisible()
+})
+
+test('an admin adds a category from the card editor and keeps the card', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/new')
+    const text = unique('A made-up lighthouse is lit')
+    await page.getByLabel('English text').fill(text)
+    await page.getByLabel('Year').fill('1888')
+
+    await page.getByRole('button', { name: 'New category' }).click()
+    const dialog = page.getByRole('dialog', { name: 'New category' })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog.getByText('Enter an English name.')).toBeVisible()
+
+    const name = unique('Lighthouses')
+    await dialog.getByLabel('English name').fill(name)
+    await expect(dialog.getByText('Enter an English name.')).toHaveCount(0)
+    await dialog.getByRole('radio', { name: 'ship' }).check()
+    await dialog.getByRole('radio', { name: 'teal' }).check()
+    await dialog.getByRole('button', { name: 'Save' }).click()
+
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByLabel('Category').locator('option:checked')).toHaveText(name)
+    await expect(page.getByLabel('English text')).toHaveValue(text)
+    await expect(page.getByLabel('Year')).toHaveValue('1888')
+
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
+    await expect(page.getByLabel('Category').locator('option:checked')).toHaveText(name)
+})
+
+test('cancelling the new category leaves the card as it was', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/new')
+    await page.getByLabel('English text').fill('A made-up canal is dug')
+
+    await page.getByRole('button', { name: 'New category' }).click()
+    const dialog = page.getByRole('dialog', { name: 'New category' })
+    await dialog.getByLabel('English name').fill('Never saved')
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByLabel('English text')).toHaveValue('A made-up canal is dug')
+    await expect(page.getByLabel('Category').locator('option:checked')).not.toHaveText(
+        'Never saved',
+    )
+})
+
+test('an editor is pointed to an admin instead of offered a new category', async ({ page }) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+
+    await expect(page.getByRole('button', { name: 'New category' })).toHaveCount(0)
+    await expect(page.getByText('Ask an admin to add one.')).toBeVisible()
+})
+
+test('the category form’s errors follow what is typed', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/categories/new')
+
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText('Enter an English name.')).toBeVisible()
+    await expect(page.getByText('Pick an icon.')).toBeVisible()
+
+    await page.getByLabel('English name').fill(unique('Harbours'))
+    await expect(page.getByText('Enter an English name.')).toHaveCount(0)
+    await page.getByRole('radio', { name: 'ship' }).check()
+    await expect(page.getByText('Pick an icon.')).toHaveCount(0)
+    await expect(page.getByText('Pick a colour.')).toBeVisible()
+})
