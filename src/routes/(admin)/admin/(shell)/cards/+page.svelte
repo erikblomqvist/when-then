@@ -87,6 +87,11 @@
         <ExportCards
             {filter}
             total={data.total} />
+        {#if data.role === 'admin'}
+            <Button
+                href="/admin/cards/import"
+                variant="outline">Import</Button>
+        {/if}
         <Button href="/admin/cards/new">New card</Button>
     </div>
 </div>

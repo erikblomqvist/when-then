@@ -5,7 +5,7 @@
 
 import type { PostgrestError } from '@supabase/supabase-js'
 import type { CardLocale } from '../cards/card'
-import type { CategoryInput } from '../categories/category-form'
+import { englishNameKey, type CategoryInput } from '../categories/category-form'
 import {
     isCategoryColour,
     isCategoryIcon,
@@ -95,8 +95,7 @@ export async function listCategories(
     })
 }
 
-/** How CSV import (#48) matches a category name: by English name, ignoring case and spaces. */
-export const englishNameKey = (name: string) => name.trim().toLocaleLowerCase('en')
+export { englishNameKey }
 
 /**
  * Categories keyed by `englishNameKey` of their English name, for matching imported rows

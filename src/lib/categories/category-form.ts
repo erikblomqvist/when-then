@@ -9,6 +9,9 @@ import {
 } from './look'
 
 /** What the categories page saves: the look, and names per locale (English required). */
+/** How CSV import (#48) matches a category name: by English name, ignoring case and spaces. */
+export const englishNameKey = (name: string) => name.trim().toLocaleLowerCase('en')
+
 export type CategoryInput = {
     icon: CategoryIconName
     colour: CategoryColour
