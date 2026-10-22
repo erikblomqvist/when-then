@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const db = localServiceClient()
 
@@ -30,7 +31,7 @@ test('an admin reads the global log and filters it by person, entity and action'
     await signInAs(page, 'admin')
     const { email, cardId } = await cardByAnotherEditor()
 
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await page
         .getByRole('navigation', { name: 'Admin' })
         .getByRole('link', { name: 'Audit log' })
@@ -66,7 +67,7 @@ test('an admin reads the global log and filters it by person, entity and action'
 
 test('editors cannot reach the global log', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await expect(
         page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Audit log' }),
     ).toHaveCount(0)

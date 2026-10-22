@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -15,11 +16,7 @@ const panel = (page: Page, name: 'Swedish' | 'Norwegian') =>
     page.getByRole('tabpanel', { name: new RegExp(name) })
 
 async function createCard(page: Page, text: string) {
-    await page.goto('/admin/cards/new')
-    // The tabs switch only once the page is hydrated, which would reset a select chosen earlier.
-    await tab(page, 'Norwegian').click()
-    await expect(tab(page, 'Norwegian')).toHaveAttribute('aria-selected', 'true')
-    await tab(page, 'Swedish').click()
+    await gotoHydrated(page, '/admin/cards/new')
     await page.getByLabel('English text').fill(text)
     await page.getByLabel('Year').fill('1895')
     await page.getByLabel('Category').selectOption({ label: 'Events' })
@@ -34,7 +31,7 @@ async function save(page: Page) {
 }
 
 const listRow = async (page: Page, text: string) => {
-    await page.goto(`/admin/cards?q=${encodeURIComponent(text)}`)
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}`)
     return page.getByRole('row').filter({ hasText: text })
 }
 
@@ -54,7 +51,7 @@ test('an editor translates a card into Swedish, with a note, and it is reviewed'
 
     await expect(tab(page, 'Swedish')).toContainText('Reviewed')
     await expect(tab(page, 'Norwegian')).toContainText('Missing')
-    await page.reload()
+    await reloadHydrated(page)
     await tab(page, 'Swedish').click()
     await expect(panel(page, 'Swedish').getByLabel('Swedish text')).toHaveValue(
         'En påhittad bro öppnas',
@@ -84,7 +81,7 @@ test('editing the English text makes a reviewed translation stale; ticking revie
     await expect(tab(page, 'Norwegian')).toContainText('Stale')
     await expect(await listRow(page, text)).toContainText('Stale')
 
-    await page.goto(`/admin/cards/${id}`)
+    await gotoHydrated(page, `/admin/cards/${id}`)
     await tab(page, 'Norwegian').click()
     await panel(page, 'Norwegian').getByLabel('Reviewed').check()
     await save(page)
@@ -105,7 +102,7 @@ test('the review queue lists machine translations until someone reviews them', a
         translations: { en: { text }, sv: { text: 'En påhittad drake flyger', status: 'machine' } },
     })
 
-    await page.goto('/admin/cards')
+    await gotoHydrated(page, '/admin/cards')
     await page.getByRole('link', { name: 'Swedish review queue' }).click()
     await expect(page).toHaveURL(/\/admin\/cards\?sv=needs-review$/)
     await expect(page.getByLabel('Swedish', { exact: true })).toHaveValue('needs-review')
@@ -119,7 +116,7 @@ test('the review queue lists machine translations until someone reviews them', a
     await panel(page, 'Swedish').getByLabel('Reviewed').check()
     await save(page)
 
-    await page.goto(`/admin/cards?q=${encodeURIComponent(text)}&sv=needs-review`)
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}&sv=needs-review`)
     await expect(page.getByRole('row').filter({ hasText: text })).toHaveCount(0)
     await page.getByLabel('Swedish', { exact: true }).selectOption({ label: 'Reviewed' })
     await expect(page).toHaveURL(/sv=reviewed/)
