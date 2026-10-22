@@ -60,7 +60,7 @@
     <dialog
         bind:this={dialog}
         aria-labelledby="new-category-heading"
-        class="w-full max-w-3xl rounded-lg border bg-background p-6 text-foreground shadow-lg backdrop:bg-black/50"
+        class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg border bg-background p-6 text-foreground shadow-lg backdrop:bg-black/50"
         onclose={close}>
         <h2
             id="new-category-heading"
