@@ -359,6 +359,10 @@ export type Database = {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
             }
+            import_cards: {
+                Args: { actor: string; cards: Json; file_name?: string }
+                Returns: string[]
+            }
             invite_person: {
                 Args: {
                     actor_id: string

@@ -154,7 +154,8 @@ const wholeNumber = (value: string) => {
     return /^\d+$/.test(value) ? Number(value) : Number.NaN
 }
 
-const isWebAddress = (value: string) => {
+/** Whether a source URL is a full http(s) address (the editor and the CSV import). */
+export const isWebAddress = (value: string) => {
     try {
         const url = new URL(value)
         return url.protocol === 'https:' || url.protocol === 'http:'
