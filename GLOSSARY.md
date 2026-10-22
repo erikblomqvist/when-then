@@ -86,3 +86,17 @@ _Avoid_: Difficulty level
 
 **Card language**:
 The language a game's cards are read aloud in, chosen when the game is created and independent of each player's own app language. A card without text in that language is read in English.
+
+### Authoring
+
+**Editor**:
+A person who writes, translates, publishes and archives cards.
+_Avoid_: Author, contributor, moderator
+
+**Admin**:
+An editor who also manages categories, who has access, card imports and the full history of changes. Unrelated to the host of a game.
+_Avoid_: Host, superuser
+
+**Machine / Reviewed / Stale translation**:
+The state of a card's or category's text in a language other than English. A machine translation was produced by AI and not yet checked; a reviewed translation has been read by an editor; a stale translation was reviewed before the English text changed. All three can be played.
+_Avoid_: Draft translation, unverified (verification is about a card's date, not its wording)
