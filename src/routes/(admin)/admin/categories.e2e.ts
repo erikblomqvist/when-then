@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { localServiceClient, signInAs } from '../../../lib/testing/e2e-auth'
+import { gotoHydrated, reloadHydrated } from '../../../lib/testing/e2e-hydration'
 import { saveCard } from '../../../lib/server/cards'
 import { saveCategory } from '../../../lib/server/categories'
 
@@ -28,7 +29,7 @@ const newCategory = (actor: string, name: string) =>
 
 test('editors have no categories page', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await expect(page.getByRole('navigation', { name: 'Admin' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Categories' })).toHaveCount(0)
 
@@ -40,7 +41,7 @@ test('an admin creates a category with names, icon and colour, then renames it',
     page,
 }) => {
     await signInAs(page, 'admin')
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await page
         .getByRole('navigation', { name: 'Admin' })
         .getByRole('link', { name: 'Categories' })
@@ -82,7 +83,7 @@ test('an admin reorders categories by drag and drop', async ({ page }) => {
     await newCategory(userId, first)
     await newCategory(userId, second)
 
-    await page.goto('/admin/categories')
+    await gotoHydrated(page, '/admin/categories')
     expect(await shownOrder(page, [first, second])).toEqual([first, second])
 
     await categoryRow(page, second)
@@ -90,14 +91,14 @@ test('an admin reorders categories by drag and drop', async ({ page }) => {
         .dragTo(categoryRow(page, first))
 
     await expect(page.getByRole('status')).toHaveText('Saved the new order.')
-    await page.reload()
+    await reloadHydrated(page)
     expect(await shownOrder(page, [first, second])).toEqual([second, first])
 
     await categoryRow(page, second)
         .getByRole('button', { name: `Move ${second} down` })
         .click()
     await expect(page.getByRole('status')).toHaveText('Saved the new order.')
-    await page.reload()
+    await reloadHydrated(page)
     expect(await shownOrder(page, [first, second])).toEqual([first, second])
 })
 
@@ -105,7 +106,7 @@ test('an admin archives and unarchives a category', async ({ page }) => {
     const { userId } = await signInAs(page, 'admin')
     const name = unique('Glaciers')
     await newCategory(userId, name)
-    await page.goto('/admin/categories')
+    await gotoHydrated(page, '/admin/categories')
 
     await categoryRow(page, name).getByRole('button', { name: 'Archive' }).click()
     await expect(page.getByRole('status')).toHaveText(`Archived ${name}.`)
@@ -131,7 +132,7 @@ test('only an empty category can be deleted', async ({ page }) => {
         sourceQuote: null,
         translations: { en: { text: 'A made-up volcano wakes up' } },
     })
-    await page.goto('/admin/categories')
+    await gotoHydrated(page, '/admin/categories')
 
     await expect(categoryRow(page, full).getByTestId('card-count')).toHaveText('1')
     await expect(categoryRow(page, full).getByRole('button', { name: 'Delete' })).toBeDisabled()

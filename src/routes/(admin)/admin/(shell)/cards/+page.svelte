@@ -6,6 +6,7 @@
     import { Label } from '#lib/components/ui/label/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
+    import ExportCards from '#lib/admin/cards/ExportCards.svelte'
     import TranslationBadge from '#lib/admin/cards/TranslationBadge.svelte'
     import { cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
     import {
@@ -72,7 +73,7 @@
     <title>Cards · When Then? admin</title>
 </svelte:head>
 
-<div class="flex items-center justify-between gap-4">
+<div class="flex flex-wrap items-end justify-between gap-4">
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">Cards</h1>
         <p
@@ -82,7 +83,12 @@
             {data.total === 1 ? 'card' : 'cards'}{filtered ? ' match' : ''}
         </p>
     </div>
-    <Button href="/admin/cards/new">New card</Button>
+    <div class="flex flex-wrap items-end gap-4">
+        <ExportCards
+            {filter}
+            total={data.total} />
+        <Button href="/admin/cards/new">New card</Button>
+    </div>
 </div>
 
 <nav

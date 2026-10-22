@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
 const cardRow = (page: Page, text: string) => page.getByRole('row').filter({ hasText: text })
 
 async function createCard(page: Page, text: string) {
-    await page.goto('/admin/cards')
+    await gotoHydrated(page, '/admin/cards')
     await page.getByRole('link', { name: 'New card' }).click()
     await expect(page.getByRole('heading', { name: 'New card' })).toBeVisible()
 
@@ -24,7 +25,7 @@ async function createCard(page: Page, text: string) {
 
 test('an editor creates a draft card and sees it in the list', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin')
+    await gotoHydrated(page, '/admin')
     await page
         .getByRole('navigation', { name: 'Admin' })
         .getByRole('link', { name: 'Cards' })
@@ -47,7 +48,7 @@ test('an editor creates a draft card and sees it in the list', async ({ page }) 
 
 test('entering a year fills the decade; a decade can be entered alone', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards/new')
+    await gotoHydrated(page, '/admin/cards/new')
 
     await page.getByLabel('Year').fill('1492')
     await expect(page.getByLabel('Decade')).toHaveValue('1490')
@@ -63,13 +64,13 @@ test('entering a year fills the decade; a decade can be entered alone', async ({
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
 
-    await page.goto('/admin/cards')
+    await gotoHydrated(page, '/admin/cards')
     await expect(cardRow(page, text)).toContainText('490s BC')
 })
 
 test('the editor shows what is wrong and keeps what was typed', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards/new')
+    await gotoHydrated(page, '/admin/cards/new')
 
     await page.getByLabel('English text').fill('A made-up moon landing')
     await page.getByLabel('Year').fill('1969')
@@ -93,11 +94,11 @@ test('an editor edits a card, and the change is audited with who did it', async 
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('status')).toHaveText('Saved.')
 
-    await page.reload()
+    await reloadHydrated(page)
     await expect(page.getByLabel('English text')).toHaveValue(edited)
     await expect(page.getByLabel('Month')).toHaveValue('3')
 
-    await page.goto('/admin/cards')
+    await gotoHydrated(page, '/admin/cards')
     await expect(cardRow(page, edited)).toContainText('March 1492')
 
     const { data } = await localServiceClient()
@@ -118,7 +119,7 @@ test('an editor edits a card, and the change is audited with who did it', async 
 
 test('leaving with unsaved changes asks first', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards/new')
+    await gotoHydrated(page, '/admin/cards/new')
     const cards = page
         .getByRole('navigation', { name: 'Admin' })
         .getByRole('link', { name: 'Cards' })
@@ -127,7 +128,7 @@ test('leaving with unsaved changes asks first', async ({ page }) => {
     await cards.click()
     await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
 
-    await page.goto('/admin/cards/new')
+    await gotoHydrated(page, '/admin/cards/new')
     await page.getByLabel('English text').fill('A made-up unsaved thought')
 
     const dialogs: string[] = []

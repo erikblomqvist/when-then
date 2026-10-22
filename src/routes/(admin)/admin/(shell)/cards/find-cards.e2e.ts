@@ -3,6 +3,7 @@
 
 import { expect, test, type Page } from '@playwright/test'
 import { signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const sampleby = 'The made-up port of Sampleby lights its first lighthouse'
 const balloonist = 'A fictional balloonist crosses the Sample Sea'
@@ -17,7 +18,7 @@ test('search finds a card by its text in another language and survives reload', 
     page,
 }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards')
+    await gotoHydrated(page, '/admin/cards')
 
     const search = page.getByRole('searchbox', { name: 'Search' })
     await search.fill('fyrtorn')
@@ -31,14 +32,14 @@ test('search finds a card by its text in another language and survives reload', 
     await expect(row).toContainText('Published')
     await expect(row).toContainText('Verified')
 
-    await page.reload()
+    await reloadHydrated(page)
     await expect(search).toHaveValue('fyrtorn')
     await expect.poll(() => listed(page)).toEqual([sampleby])
 })
 
 test('a filter and a sort narrow and order the list, and the URL keeps them', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards?q=Sample')
+    await gotoHydrated(page, '/admin/cards?q=Sample')
 
     await page.getByLabel('Sort by').selectOption({ label: 'Date, oldest first' })
     await expect(page).toHaveURL(/\?q=Sample&sort=date$/)
@@ -52,7 +53,7 @@ test('a filter and a sort narrow and order the list, and the URL keeps them', as
     await expect.poll(() => listed(page)).toEqual([samplebridge, sampleby])
     await expect(page.getByTestId('card-count')).toHaveText('2 cards match')
 
-    await page.reload()
+    await reloadHydrated(page)
     await expect(page.getByLabel('Status')).toHaveValue('published')
     await expect(page.getByLabel('Sort by')).toHaveValue('-date')
     await expect.poll(() => listed(page)).toEqual([samplebridge, sampleby])
@@ -64,7 +65,7 @@ test('a filter and a sort narrow and order the list, and the URL keeps them', as
 
 test('no matches says so', async ({ page }) => {
     await signInAs(page, 'editor')
-    await page.goto('/admin/cards?q=no-such-made-up-card&verified=yes')
+    await gotoHydrated(page, '/admin/cards?q=no-such-made-up-card&verified=yes')
     await expect(page.getByText('No cards match these filters.')).toBeVisible()
     await expect(page.getByLabel('Verified')).toHaveValue('yes')
 })

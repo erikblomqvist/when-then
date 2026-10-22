@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const db = localServiceClient()
 
@@ -18,7 +19,7 @@ test("a card's history shows who changed what, field by field", async ({ page })
         translations: { en: { text } },
     })
 
-    await page.goto(`/admin/cards/${id}`)
+    await gotoHydrated(page, `/admin/cards/${id}`)
     const history = page.getByRole('region', { name: 'History' })
     await expect(history.getByRole('article')).toHaveCount(2)
 
