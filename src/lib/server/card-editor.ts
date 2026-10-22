@@ -1,7 +1,7 @@
 // The card editor's server side, shared by /admin/cards/new and /admin/cards/[id]: what the
 // editor loads next to a card, the save action, and the sidebar's lifecycle actions
-// (publish, archive, unarchive, delete draft, verification). Translation saves add their own
-// actions next to `saveCardAction`.
+// (publish, archive, unarchive, delete draft, verification). The locale tabs (sv, nb) post
+// with the card, so `saveCardAction` saves translations too.
 
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit'
 import type { Card } from '../cards/card'
