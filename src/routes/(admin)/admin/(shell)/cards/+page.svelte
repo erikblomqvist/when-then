@@ -1,6 +1,5 @@
 <script lang="ts">
     import { goto } from '$app/navigation'
-    import { Badge } from '#lib/components/ui/badge/index.js'
     import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
@@ -31,6 +30,7 @@
     import ArrowDownIcon from '@lucide/svelte/icons/arrow-down'
     import ArrowUpDownIcon from '@lucide/svelte/icons/arrow-up-down'
     import ArrowUpIcon from '@lucide/svelte/icons/arrow-up'
+    import CheckIcon from '@lucide/svelte/icons/check'
     import PlusIcon from '@lucide/svelte/icons/plus'
     import XIcon from '@lucide/svelte/icons/x'
     import type { PageProps } from './$types'
@@ -242,19 +242,11 @@
             name="q"
             type="search"
             placeholder="Search text in any language"
-            class="min-w-64 flex-1"
+            class="w-80 max-w-full"
             value={filter.search ?? ''} />
         <Button
             type="submit"
             variant="outline">Search</Button>
-        {#if filtered || added.length > 0}
-            <Button
-                variant="ghost"
-                href={cardListHref({ sort: data.view.sort })}
-                onclick={() => (added = [])}>
-                Clear filters
-            </Button>
-        {/if}
     </div>
     <div class="flex flex-wrap items-center gap-2">
         {#each shownFilters as option (option.name)}
@@ -338,6 +330,15 @@
                 {/each}
             </DropdownMenu.Content>
         </DropdownMenu.Root>
+        <!-- At the far end, as a quiet link, so it doesn't read as a sibling of "Add filter". -->
+        {#if filtered || added.length > 0}
+            <a
+                class="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                href={cardListHref({ sort: data.view.sort })}
+                onclick={() => (added = [])}>
+                Clear filters
+            </a>
+        {/if}
     </div>
     <input
         type="hidden"
@@ -424,9 +425,19 @@
                 <Table.Cell>{formatCardDate(card.date)}</Table.Cell>
                 <Table.Cell>{card.category.name}</Table.Cell>
                 <Table.Cell>
-                    <Badge variant={card.status === 'published' ? 'default' : 'secondary'}>
-                        {cardStatusLabel[card.status]}
-                    </Badge>
+                    <span class="inline-flex items-center gap-1.5 text-sm">
+                        <span
+                            class={[
+                                'size-1.5 rounded-full',
+                                card.status === 'published'
+                                    ? 'bg-emerald-500'
+                                    : 'bg-muted-foreground/50',
+                            ]}
+                            aria-hidden="true"></span>
+                        <span class={card.status === 'published' ? '' : 'text-muted-foreground'}>
+                            {cardStatusLabel[card.status]}
+                        </span>
+                    </span>
                 </Table.Cell>
                 <Table.Cell>
                     <div class="flex flex-col items-start gap-1">
@@ -439,7 +450,16 @@
                                     title={localeName[locale]}>
                                     {locale}
                                 </abbr>
-                                <TranslationBadge state={card.translations[locale] ?? 'missing'} />
+                                <!-- Only what still needs work gets a badge. -->
+                                {#if card.translations[locale] === 'reviewed'}
+                                    <CheckIcon
+                                        class="size-3.5 text-muted-foreground"
+                                        aria-hidden="true" />
+                                    <span class="sr-only">Reviewed</span>
+                                {:else}
+                                    <TranslationBadge
+                                        state={card.translations[locale] ?? 'missing'} />
+                                {/if}
                             </span>
                         {/each}
                     </div>
