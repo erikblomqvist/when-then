@@ -311,17 +311,6 @@ export type Database = {
                     entity: string
                 }[]
             }
-            audit_role_change: {
-                Args: {
-                    action: string
-                    actor: string
-                    after: Json
-                    before: Json
-                    entity: string
-                    entity_id: string
-                }
-                Returns: undefined
-            }
             bulk_card_action: {
                 Args: {
                     action: string
@@ -417,6 +406,19 @@ export type Database = {
             publish_card: {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
+            }
+            record_audit: {
+                Args: {
+                    action: string
+                    actor: string
+                    after?: Json
+                    before?: Json
+                    details?: Json
+                    entity: string
+                    entity_id: string
+                    locale?: Database['public']['Enums']['card_locale']
+                }
+                Returns: number
             }
             reorder_categories: {
                 Args: { actor: string; ids: string[] }

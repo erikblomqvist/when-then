@@ -42,8 +42,8 @@ export async function logDateSuggestionDecision(
         throw new DateSuggestionNotFoundError('That date suggestion was not found.')
     }
 
-    const { error: insertError } = await db.from('audit_log').insert({
-        actor_id: actorId,
+    const { error: insertError } = await db.rpc('record_audit', {
+        actor: actorId,
         entity: 'card',
         entity_id: cardId,
         action: decisionActions[decision],

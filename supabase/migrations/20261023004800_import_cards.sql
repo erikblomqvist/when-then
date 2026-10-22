@@ -60,13 +60,12 @@ begin
             values (saved_id, translation.key::public.card_locale, translation.value, 'reviewed');
         end loop;
 
-        insert into public.audit_log (actor_id, entity, entity_id, action, details)
-        values (
+        perform public.record_audit(
             actor,
             'card',
             saved_id::text,
             'import',
-            jsonb_build_object('file', file_name, 'row', (card ->> 'row')::integer)
+            details => jsonb_build_object('file', file_name, 'row', (card ->> 'row')::integer)
         );
 
         created := created || saved_id;

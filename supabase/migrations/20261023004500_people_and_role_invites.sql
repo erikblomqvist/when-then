@@ -25,46 +25,9 @@ grant select, insert, update, delete on table public.role_invites to service_rol
 
 -- Audit ----------------------------------------------------------------------------------
 --
--- Role changes only. Its columns match the general audit log (#37) — actor, entity, entity
--- id, action, before, after, at — and every write goes through `audit_role_change`, so
--- folding it into that log means repointing this one function and copying the rows over.
-
-create table public.role_audit (
-    id bigint generated always as identity primary key,
-    actor_id uuid references auth.users (id) on delete set null,
-    entity text not null check (entity in ('user_role', 'role_invite')),
-    entity_id text not null,
-    action text not null,
-    before jsonb,
-    after jsonb,
-    at timestamptz not null default now()
-);
-
-comment on table public.role_audit is 'Append-only log of role and invite changes.';
-
-alter table public.role_audit enable row level security;
-revoke all on table public.role_audit from anon, authenticated, public;
-grant select on table public.role_audit to service_role;
-
-create function public.audit_role_change(
-    actor uuid,
-    entity text,
-    entity_id text,
-    action text,
-    before jsonb,
-    after jsonb
-)
-returns void
-language sql
-security definer
-set search_path = ''
-as $$
-    insert into public.role_audit (actor_id, entity, entity_id, action, before, after)
-    values (actor, entity, entity_id, action, before, after);
-$$;
-
-revoke execute on function public.audit_role_change(uuid, text, text, text, jsonb, jsonb)
-    from public, anon, authenticated;
+-- Every role change goes to the general audit log through `public.record_audit`, under its
+-- own entities (`user_role` with the user's id, `role_invite` with the email) and actions
+-- (invite, change_invite, withdraw_invite, grant, change, revoke, accept_invite).
 
 -- Helpers --------------------------------------------------------------------------------
 
@@ -120,7 +83,7 @@ begin
         on conflict (user_id) do update set role = excluded.role;
     end if;
 
-    perform public.audit_role_change(
+    perform public.record_audit(
         actor,
         'user_role',
         person_id::text,
@@ -194,7 +157,7 @@ begin
         on conflict (email) do update set role = excluded.role;
     end if;
 
-    perform public.audit_role_change(
+    perform public.record_audit(
         actor,
         'role_invite',
         normalised,
@@ -250,7 +213,7 @@ begin
     insert into public.user_roles (user_id, role) values (new.id, invite.role)
     on conflict (user_id) do nothing;
 
-    perform public.audit_role_change(
+    perform public.record_audit(
         new.id,
         'user_role',
         new.id::text,
