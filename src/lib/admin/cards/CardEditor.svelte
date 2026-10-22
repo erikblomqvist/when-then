@@ -8,8 +8,8 @@
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
-    - Category: with `canCreateCategory`, "New category" opens `NewCategoryDialog` and picks
-      the category it creates, keeping everything typed (#52).
+    - Category: with `canCreateCategory`, the select's "New category…" opens
+      `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -72,6 +72,18 @@
     }: Props = $props()
 
     let creatingCategory = $state(false)
+
+    // "New category…" is an option of the category select: picking it opens the dialog and
+    // leaves the card's category as it was until one is created.
+    const newCategory = 'new-category'
+    function pickCategory(event: Event & { currentTarget: HTMLSelectElement }) {
+        if (event.currentTarget.value !== newCategory) {
+            values.category_id = event.currentTarget.value
+            return
+        }
+        event.currentTarget.value = values.category_id
+        creatingCategory = true
+    }
 
     // svelte-ignore state_referenced_locally -- the form owns its values once it is shown
     let values = $state({ ...initial })
@@ -281,32 +293,28 @@
 
         <div class="flex flex-col gap-2">
             <Label for="category_id">Category</Label>
-            <div class="flex flex-wrap items-center gap-2">
-                <NativeSelect.Root
-                    id="category_id"
-                    name="category_id"
-                    bind:value={values.category_id}
-                    aria-invalid={shown.category_id ? 'true' : undefined}
-                    aria-describedby={describedBy('category_id')}>
-                    <NativeSelect.Option
-                        value=""
-                        disabled>
-                        {categories.length > 0 ? 'Choose a category' : 'No categories yet'}
+            <NativeSelect.Root
+                id="category_id"
+                name="category_id"
+                value={values.category_id}
+                onchange={pickCategory}
+                aria-invalid={shown.category_id ? 'true' : undefined}
+                aria-describedby={describedBy('category_id')}>
+                <NativeSelect.Option
+                    value=""
+                    disabled>
+                    {categories.length > 0 ? 'Choose a category' : 'No categories yet'}
+                </NativeSelect.Option>
+                {#each categories as category (category.id)}
+                    <NativeSelect.Option value={category.id}>
+                        {category.name}{category.archived ? ' (archived)' : ''}
                     </NativeSelect.Option>
-                    {#each categories as category (category.id)}
-                        <NativeSelect.Option value={category.id}>
-                            {category.name}{category.archived ? ' (archived)' : ''}
-                        </NativeSelect.Option>
-                    {/each}
-                </NativeSelect.Root>
+                {/each}
                 {#if canCreateCategory}
-                    <Button
-                        variant="outline"
-                        onclick={() => (creatingCategory = true)}>
-                        New category
-                    </Button>
+                    <hr />
+                    <NativeSelect.Option value={newCategory}>New category…</NativeSelect.Option>
                 {/if}
-            </div>
+            </NativeSelect.Root>
             {#if !canCreateCategory}
                 <p class="text-sm text-muted-foreground">
                     No fitting category? Ask an admin to add one.

@@ -134,3 +134,78 @@
         @apply font-sans;
     }
 }
+
+/*
+ * Selects (`NativeSelect`): a customizable select where the browser has one
+ * (`appearance: base-select`), so the open list matches the admin's popovers; elsewhere the
+ * browser's own select.
+ */
+@layer components {
+    [data-slot="native-select"] {
+        appearance: none;
+    }
+    [data-slot="native-select-option"],
+    [data-slot="native-select-optgroup"] {
+        background-color: Canvas;
+        color: CanvasText;
+    }
+
+    @supports (appearance: base-select) {
+        [data-slot="native-select"],
+        [data-slot="native-select"]::picker(select) {
+            appearance: base-select;
+        }
+        /* The base-select's box lays its content out from the top: centre the value as the
+           browser's own select does. */
+        [data-slot="native-select"] {
+            display: flex;
+            align-items: center;
+        }
+        /* The wrapper draws the chevron. */
+        [data-slot="native-select"]::picker-icon {
+            display: none;
+        }
+        [data-slot="native-select"]::picker(select) {
+            margin-block: 0.25rem;
+            min-width: anchor-size(width);
+            padding: 0.25rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background-color: var(--popover);
+            color: var(--popover-foreground);
+            box-shadow:
+                0 4px 6px -1px rgb(0 0 0 / 0.1),
+                0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        [data-slot="native-select-option"] {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            border-radius: var(--radius-sm);
+            background-color: transparent;
+            color: inherit;
+            font-size: 0.875rem;
+        }
+        [data-slot="native-select-option"]:is(:hover, :focus-visible) {
+            outline: none;
+            background-color: var(--accent);
+            color: var(--accent-foreground);
+        }
+        [data-slot="native-select-option"]:disabled {
+            color: var(--muted-foreground);
+        }
+        [data-slot="native-select-option"]::checkmark {
+            order: 1;
+            margin-inline-start: auto;
+        }
+        [data-slot="native-select-optgroup"] {
+            background-color: transparent;
+            color: inherit;
+        }
+        [data-slot="native-select"] hr {
+            margin: 0.25rem -0.25rem;
+            border-color: var(--border);
+        }
+    }
+}

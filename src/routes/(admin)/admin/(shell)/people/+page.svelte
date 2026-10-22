@@ -2,15 +2,13 @@
     import { enhance } from '$app/forms'
     import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
+    import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
     import type { PageProps } from './$types'
 
     let { data, form }: PageProps = $props()
 
     const roles = ['editor', 'admin'] as const
-
-    const selectClass =
-        'h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
 </script>
 
 <svelte:head>
@@ -63,14 +61,13 @@
             class="text-sm font-medium">
             Role
         </label>
-        <select
+        <NativeSelect.Root
             id="add-role"
-            name="role"
-            class={selectClass}>
+            name="role">
             {#each roles as role (role)}
-                <option value={role}>{role}</option>
+                <NativeSelect.Option value={role}>{role}</NativeSelect.Option>
             {/each}
-        </select>
+        </NativeSelect.Root>
     </div>
     <Button type="submit">Add person</Button>
 </form>
@@ -115,16 +112,15 @@
                                 type="hidden"
                                 name="email"
                                 value={person.email} />
-                            <select
+                            <NativeSelect.Root
                                 name="role"
                                 aria-label="Role for {person.email}"
                                 value={person.role}
-                                disabled={locked}
-                                class={selectClass}>
+                                disabled={locked}>
                                 {#each roles as role (role)}
-                                    <option value={role}>{role}</option>
+                                    <NativeSelect.Option value={role}>{role}</NativeSelect.Option>
                                 {/each}
-                            </select>
+                            </NativeSelect.Root>
                             <Button
                                 type="submit"
                                 variant="outline"
@@ -198,15 +194,15 @@
                                     type="hidden"
                                     name="email"
                                     value={invite.email} />
-                                <select
+                                <NativeSelect.Root
                                     name="role"
                                     aria-label="Role for {invite.email}"
-                                    value={invite.role}
-                                    class={selectClass}>
+                                    value={invite.role}>
                                     {#each roles as role (role)}
-                                        <option value={role}>{role}</option>
+                                        <NativeSelect.Option value={role}
+                                            >{role}</NativeSelect.Option>
                                     {/each}
-                                </select>
+                                </NativeSelect.Root>
                                 <Button
                                     type="submit"
                                     variant="outline"

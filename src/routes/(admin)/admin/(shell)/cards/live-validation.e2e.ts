@@ -57,7 +57,7 @@ test('an admin adds a category from the card editor and keeps the card', async (
     await page.getByLabel('English text').fill(text)
     await page.getByLabel('Year').fill('1888')
 
-    await page.getByRole('button', { name: 'New category' }).click()
+    await page.getByLabel('Category').selectOption({ label: 'New category…' })
     const dialog = page.getByRole('dialog', { name: 'New category' })
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: 'Save' }).click()
@@ -85,23 +85,21 @@ test('cancelling the new category leaves the card as it was', async ({ page }) =
     await gotoHydrated(page, '/admin/cards/new')
     await page.getByLabel('English text').fill('A made-up canal is dug')
 
-    await page.getByRole('button', { name: 'New category' }).click()
+    await page.getByLabel('Category').selectOption({ label: 'New category…' })
     const dialog = page.getByRole('dialog', { name: 'New category' })
     await dialog.getByLabel('English name').fill('Never saved')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
 
     await expect(dialog).toHaveCount(0)
     await expect(page.getByLabel('English text')).toHaveValue('A made-up canal is dug')
-    await expect(page.getByLabel('Category').locator('option:checked')).not.toHaveText(
-        'Never saved',
-    )
+    await expect(page.getByLabel('Category')).toHaveValue('')
 })
 
 test('an editor is pointed to an admin instead of offered a new category', async ({ page }) => {
     await signInAs(page, 'editor')
     await gotoHydrated(page, '/admin/cards/new')
 
-    await expect(page.getByRole('button', { name: 'New category' })).toHaveCount(0)
+    await expect(page.getByRole('option', { name: 'New category…' })).toHaveCount(0)
     await expect(page.getByText('Ask an admin to add one.')).toBeVisible()
 })
 
