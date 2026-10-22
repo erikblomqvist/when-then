@@ -64,6 +64,12 @@
                 {#if data.role === 'admin'}
                     <li>
                         <a
+                            href="/admin/categories"
+                            class={navLink('/admin/categories', true)}
+                            aria-current={current('/admin/categories', true)}>Categories</a>
+                    </li>
+                    <li>
+                        <a
                             href="/admin/people"
                             class={navLink('/admin/people')}
                             aria-current={current('/admin/people')}>People</a>
