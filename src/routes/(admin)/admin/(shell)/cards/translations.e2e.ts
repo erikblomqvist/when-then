@@ -16,6 +16,10 @@ const panel = (page: Page, name: 'Swedish' | 'Norwegian') =>
 
 async function createCard(page: Page, text: string) {
     await page.goto('/admin/cards/new')
+    // The tabs switch only once the page is hydrated, which would reset a select chosen earlier.
+    await tab(page, 'Norwegian').click()
+    await expect(tab(page, 'Norwegian')).toHaveAttribute('aria-selected', 'true')
+    await tab(page, 'Swedish').click()
     await page.getByLabel('English text').fill(text)
     await page.getByLabel('Year').fill('1895')
     await page.getByLabel('Category').selectOption({ label: 'Events' })
