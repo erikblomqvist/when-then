@@ -556,6 +556,8 @@
    Buttons
    -------------------------------------------------------------------------- */
 .ui-button {
+    /* Also on links that look like buttons (`Button` with `href`). */
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
