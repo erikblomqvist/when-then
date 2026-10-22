@@ -284,6 +284,15 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
+            add_machine_translations: {
+                Args: {
+                    actor: string
+                    card_id: string
+                    english: string
+                    translations: Json
+                }
+                Returns: Json
+            }
             archive_card: {
                 Args: { actor: string; card_id: string }
                 Returns: undefined

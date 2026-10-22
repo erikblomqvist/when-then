@@ -1,4 +1,5 @@
 <script lang="ts">
+    import AiTranslateButton from '#lib/admin/cards/AiTranslateButton.svelte'
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
     import CardHistory from '#lib/admin/cards/CardHistory.svelte'
     import CardLifecycle from '#lib/admin/cards/CardLifecycle.svelte'
@@ -21,6 +22,13 @@
         card={data.card}
         errors={form?.errors}
         saved={form?.saved ?? false}>
+        {#snippet translationActions({ locale, english, fill })}
+            <AiTranslateButton
+                cardId={data.card.id}
+                {locale}
+                {english}
+                {fill} />
+        {/snippet}
         {#snippet sidebar({ dirty })}
             <CardLifecycle
                 card={data.card}

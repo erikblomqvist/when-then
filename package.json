@@ -29,6 +29,7 @@
         "build-storybook": "storybook build"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.137.0",
         "@lucide/svelte": "^1.61.0",
         "@supabase/ssr": "^0.12.7",
         "@supabase/supabase-js": "^2.118.0"
