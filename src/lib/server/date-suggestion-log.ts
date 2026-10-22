@@ -4,12 +4,13 @@
 // card history reads "requested … accepted 1908 … $0.01" without trusting numbers from the
 // browser. Not `ai_*` actions: they don't count towards the AI rate limit.
 
+import type { AuditAction } from '../audit/actions'
 import type { Json } from '../database.types'
 import type { Db } from './supabase'
 
 export type DateSuggestionDecision = 'accepted' | 'rejected'
 
-export const decisionActions: Record<DateSuggestionDecision, string> = {
+export const decisionActions: Record<DateSuggestionDecision, AuditAction> = {
     accepted: 'accept_date_suggestion',
     rejected: 'reject_date_suggestion',
 }

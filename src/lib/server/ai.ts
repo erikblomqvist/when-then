@@ -15,6 +15,7 @@ import type {
     BetaMessage,
     MessageCreateParamsNonStreaming,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages'
+import type { AiAuditAction } from '../audit/actions'
 import type { CardLocale } from '../cards/card'
 
 /**
@@ -36,7 +37,7 @@ export type AiAuditRecord = {
     entity: string
     entityId: string
     locale: CardLocale | null
-    action: string
+    action: AiAuditAction
     details: Record<string, unknown>
 }
 
@@ -63,7 +64,7 @@ export type AiDeps = {
 export type AiRequest = {
     actorId: string
     /** Audit action, `ai_<what>` (e.g. 'ai_translate', 'ai_suggest_date'). */
-    action: `ai_${string}`
+    action: AiAuditAction
     entity: string
     entityId: string
     locale?: CardLocale | null

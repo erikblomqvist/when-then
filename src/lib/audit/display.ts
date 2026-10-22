@@ -1,12 +1,15 @@
 // How an audit entry reads in the admin: labels for actions and entities, and a field-by-field
 // diff of what changed. Shared by the card history panel and the global audit log.
 //
-// Later tickets add actions (AI calls with cost, imports, bulk actions) and maybe entities;
-// anything not named here still renders, with a label made from its name and its payload
-// shown field by field, so a new kind of entry never needs this module to change first.
+// Every action in `auditActions` has a label here (the type makes sure). Anything else still
+// renders, with a label made from its name and its payload shown field by field, so an entry
+// from an older or newer writer never breaks the page.
 
+import type { CardLocale } from '../cards/card'
 import { formatCardDate, monthNames } from '../cards/date-parts'
+import { localeName } from '../cards/translation'
 import type { Json } from '../database.types'
+import type { AuditAction } from './actions'
 
 /** The parts of an audit entry this module reads (see `AuditEntry` in `#lib/server/audit`). */
 export type AuditRecord = {
@@ -38,14 +41,12 @@ export const humanize = (name: string) => {
     return words ? words[0].toUpperCase() + words.slice(1) : name
 }
 
-const actionLabels: Record<string, string> = {
+const actionLabels: Record<AuditAction, string> = {
     create: 'Created',
     update: 'Edited',
     delete: 'Deleted',
     publish: 'Published',
-    unpublish: 'Unpublished',
     archive: 'Archived',
-    restore: 'Restored',
     unarchive: 'Unarchived',
     verify: 'Verified the date',
     unverify: 'Cleared the date verification',
@@ -56,6 +57,7 @@ const actionLabels: Record<string, string> = {
     change: 'Changed role',
     revoke: 'Revoked role',
     accept_invite: 'Accepted invite',
+    import: 'Imported from CSV',
     ai_translate: 'Machine translated with AI',
     ai_suggest_date: 'Suggested a date with AI',
     accept_date_suggestion: 'Accepted the AI date suggestion',
@@ -63,7 +65,8 @@ const actionLabels: Record<string, string> = {
 }
 
 /** What happened, as a past-tense phrase: 'update' → 'Edited'. Unknown actions humanized. */
-export const actionLabel = (action: string) => actionLabels[action] ?? humanize(action)
+export const actionLabel = (action: string) =>
+    Object.hasOwn(actionLabels, action) ? actionLabels[action as AuditAction] : humanize(action)
 
 const entityLabels: Record<string, string> = {
     card: 'Card',
@@ -74,16 +77,14 @@ const entityLabels: Record<string, string> = {
     role_invite: 'Invite',
 }
 
-export const localeNames: Record<string, string> = {
-    en: 'English',
-    sv: 'Swedish',
-    nb: 'Norwegian',
-}
+/** 'sv' → 'Swedish'; a locale we don't know stays as it is. */
+const localeLabel = (locale: string) =>
+    Object.hasOwn(localeName, locale) ? localeName[locale as CardLocale] : locale
 
 /** What the entry is about: 'Card', 'Card text (Swedish)'. Unknown entities humanized. */
 export function entityLabel(entity: string, locale: string | null = null) {
     const label = entityLabels[entity] ?? humanize(entity)
-    return locale ? `${label} (${localeNames[locale] ?? locale})` : label
+    return locale ? `${label} (${localeLabel(locale)})` : label
 }
 
 /** Where the admin can see the thing an entry is about, if it has a page. */
@@ -174,7 +175,7 @@ export function formatValue(
         if (isPersonField(field)) return names?.people[value] ?? value
         if (field.endsWith('_at')) return formatTime(value)
         if (field === 'status' || field === 'role' || field === 'outcome') return humanize(value)
-        if (field === 'locales') return localeNames[value] ?? value
+        if (field === 'locales') return localeLabel(value)
         return value
     }
     if (Array.isArray(value)) {
