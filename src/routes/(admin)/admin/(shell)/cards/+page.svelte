@@ -234,7 +234,17 @@
     {selected}
     categories={activeCategories}
     report={result?.bulk}
-    error={result?.bulkError} />
+    error={result?.bulkError}>
+    {#snippet actions({ busy })}
+        <Button
+            type="submit"
+            variant="outline"
+            formaction="?/translate"
+            disabled={busy}>
+            Machine-translate missing
+        </Button>
+    {/snippet}
+</BulkActionBar>
 
 <Table.Root class="mt-6">
     <Table.Header>

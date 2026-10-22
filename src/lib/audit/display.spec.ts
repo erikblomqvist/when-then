@@ -128,10 +128,31 @@ describe('detailItems', () => {
             detailItems({ model: 'claude-sonnet-5-5', cost_usd: 0.0042, cached: false }),
         ).toEqual([
             { label: 'Model', value: 'claude-sonnet-5-5' },
-            { label: 'Cost usd', value: '0.0042' },
+            { label: 'Cost', value: '$0.0042' },
             { label: 'Cached', value: 'No' },
         ])
         expect(detailItems(['a', 'b'])).toEqual([{ label: 'Details', value: 'a, b' }])
         expect(detailItems(null)).toEqual([])
+    })
+
+    it('reads an AI call: the action, its outcome, languages and cost in dollars', () => {
+        expect(actionLabel('ai_translate')).toBe('Machine translated with AI')
+        expect(
+            detailItems({
+                outcome: 'ok',
+                model: 'claude-opus-5-5',
+                input_tokens: 500,
+                output_tokens: 100,
+                cost_usd: 0.004,
+                locales: ['sv', 'nb'],
+            }),
+        ).toEqual([
+            { label: 'Outcome', value: 'Ok' },
+            { label: 'Model', value: 'claude-opus-5-5' },
+            { label: 'Input tokens', value: '500' },
+            { label: 'Output tokens', value: '100' },
+            { label: 'Cost', value: '$0.004' },
+            { label: 'Languages', value: 'Swedish, Norwegian' },
+        ])
     })
 })

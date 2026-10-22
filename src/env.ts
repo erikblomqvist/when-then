@@ -17,6 +17,16 @@ export const variables = defineEnvVars({
         schema: optional,
         description: 'Supabase secret key (sb_secret_…). Bypasses RLS; server only.',
     },
+    ANTHROPIC_API_KEY: {
+        schema: optional,
+        description:
+            'Anthropic API key (sk-ant-…) for the admin AI help (translation, date suggestions). Server only; without it the AI buttons answer with a clear error.',
+    },
+    ANTHROPIC_BASE_URL: {
+        schema: optional,
+        description:
+            'Override for the Anthropic API URL. Leave unset in production; e2e points it at a local stub.',
+    },
     PUBLIC_SUPABASE_URL: {
         public: true,
         schema: optional,
