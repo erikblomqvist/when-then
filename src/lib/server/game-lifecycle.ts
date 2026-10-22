@@ -20,7 +20,7 @@ const refusals = {
     invalid_icon: 'That icon is not in the set.',
     not_found: 'No running game has that code.',
     no_seat: 'You have no seat in that game.',
-    game_full: 'The game already has 10 players.',
+    game_full: `The game already has ${maxPlayers} players.`,
     game_started: 'The game has already started.',
     name_taken: 'Another player has that name.',
     icon_taken: 'Another player has that icon.',

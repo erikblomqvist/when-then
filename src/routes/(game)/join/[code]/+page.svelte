@@ -33,13 +33,16 @@
                   refusalMessage(form.refusal),
     )
 
-    // Players joining meanwhile take names and icons: refetch on every newer nudge.
+    // Players joining meanwhile take names and icons: refetch on every newer nudge. The effect
+    // tracks the id alone, so a refetch (a new `step` object) doesn't resubscribe.
+    const gameId = $derived(step?.gameId)
     $effect(() => {
-        if (!step) return
-        const { gameId } = step
-        return watchGame(gameId, (nudge) => {
-            if (!nudge || !data.step || nudge.version > data.step.version) void invalidateAll()
-        })
+        if (!gameId) return
+        return watchGame(
+            gameId,
+            () => data.step?.version ?? 0,
+            () => void invalidateAll(),
+        )
     })
 </script>
 
@@ -58,7 +61,7 @@
             <Text role="heading-2">{m.join_title({ code: step.code })}</Text>
             <Text
                 role="caption"
-                as="p">{m.new_game_intro()}</Text>
+                as="p">{m.player_form_intro()}</Text>
             <form
                 method="post"
                 use:enhance={async ({ cancel }) => {

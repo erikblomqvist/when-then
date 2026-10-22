@@ -12,10 +12,14 @@
     let copied = $state(false)
 
     // The player list updates live: refetch the lobby on every nudge newer than what's shown.
+    // The effect tracks the id alone, so a refetch (a new `lobby` object) doesn't resubscribe.
+    const gameId = $derived(data.lobby.gameId)
     $effect(() =>
-        watchGame(lobby.gameId, (nudge) => {
-            if (!nudge || nudge.version > data.lobby.version) void invalidateAll()
-        }),
+        watchGame(
+            gameId,
+            () => data.lobby.version,
+            () => void invalidateAll(),
+        ),
     )
 
     async function copyLink() {

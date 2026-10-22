@@ -35,15 +35,22 @@ export async function ensureSession(): Promise<void> {
 }
 
 /**
- * Listens on a game's channel and calls `refetch` with each nudge, and with none each time the
- * channel connects or reconnects, since nudges sent while it was down are lost. Returns the
- * function that stops listening, for an `$effect` to return.
+ * Listens on a game's channel and calls `refetch` for each nudge newer than `shownVersion()`
+ * (the version the page shows), and each time the channel connects or reconnects, since
+ * nudges sent while it was down are lost. Returns the function that stops listening, for an
+ * `$effect` to return.
  */
-export function watchGame(gameId: string, refetch: (nudge?: Nudge) => void): () => void {
+export function watchGame(
+    gameId: string,
+    shownVersion: () => number,
+    refetch: () => void,
+): () => void {
     const supabase = supabaseBrowser()
     const channel = supabase
         .channel(nudgeTopic(gameId))
-        .on('broadcast', { event: nudgeEvent }, ({ payload }) => refetch(payload as Nudge))
+        .on('broadcast', { event: nudgeEvent }, ({ payload }) => {
+            if ((payload as Nudge).version > shownVersion()) refetch()
+        })
         .subscribe((status) => {
             if (status === 'SUBSCRIBED') refetch()
         })

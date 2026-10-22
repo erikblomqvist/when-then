@@ -102,6 +102,14 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await expect(boPlayers).toHaveCount(3)
     await expect(boPlayers.nth(2)).toContainText('Caro')
 
+    // With nothing changing, the lobby stays quiet: refetches follow nudges, not each other.
+    const refetches: string[] = []
+    host.on('request', (request) => {
+        if (request.url().includes('__data.json')) refetches.push(request.url())
+    })
+    await host.waitForTimeout(1500)
+    expect(refetches).toEqual([])
+
     // Someone without a seat can't open it.
     const strangerContext = await browser.newContext()
     const stranger = await strangerContext.newPage()

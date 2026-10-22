@@ -37,7 +37,7 @@
         <Text role="heading-2">{m.new_game_title()}</Text>
         <Text
             role="caption"
-            as="p">{m.new_game_intro()}</Text>
+            as="p">{m.player_form_intro()}</Text>
         <form
             method="post"
             use:enhance={async ({ cancel }) => {
