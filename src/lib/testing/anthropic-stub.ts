@@ -13,6 +13,10 @@
 // - "[web]": stub Wikidata finds nothing, so the web search step submits 1923 from
 //   https://example.com/made-up-history (one search);
 // - "[unsourced]": submits a source that was never retrieved.
+// Reading a photo (`#lib/server/ai-read-photo`), whatever the image: three cards. The first
+// goes in the first category listed, dated 1628 from the photo; the second fits no category,
+// so it suggests a new one named "Photo finds <n>" (unique per stub run and call), dated 1609
+// by the AI; the third has no date. The duplicate check finds no repeats.
 // A translation call uses 500 input and 100 output tokens ($0.002 on Sonnet 5.5), every
 // suggestion call 1,000 and 200 ($0.004).
 
@@ -21,9 +25,10 @@ import { createServer, type ServerResponse } from 'node:http'
 const port = Number(process.argv[2])
 
 type Asked = { english: string; locales: Record<string, string> }
-type Content = string | { type: string; content?: string }[]
+type Content = string | { type: string; content?: string; text?: string }[]
 type Body = {
     model: string
+    system?: string
     tools?: { name: string; type?: string }[]
     messages: { role: string; content: Content }[]
 }
@@ -148,6 +153,51 @@ function suggestDate(body: Body) {
     )
 }
 
+let photoReads = 0
+
+function readPhoto(body: Body) {
+    const content = body.messages[0].content as { type: string; text?: string }[]
+    const { categories } = JSON.parse(
+        content.find(({ type }) => type === 'text')?.text ?? '{}',
+    ) as {
+        categories: string[]
+    }
+    photoReads += 1
+    const card = (en: string, date: Record<string, number | null>, fromPhoto: boolean) => ({
+        source_language: 'sv',
+        texts: { en, sv: `SV: ${en}`, nb: `NB: ${en}` },
+        source_quote: `The photo says: ${en}`,
+        date: { decade: null, year: null, month: null, day: null, ...date },
+        date_from_photo: fromPhoto,
+        difficulty: 2,
+        category: '',
+        new_category: null,
+    })
+    const cards = [
+        { ...card('A made-up warship sinks', { year: 1628 }, true), category: categories[0] },
+        {
+            ...card('A made-up telescope is built', { year: 1609 }, false),
+            new_category: {
+                names: {
+                    en: `Photo finds ${Date.now()}-${photoReads}`,
+                    sv: 'Fotofynd',
+                    nb: 'Fotofunn',
+                },
+                icon: 'atom',
+                colour: 'teal',
+            },
+        },
+        { ...card('A made-up kingdom is founded', {}, false), category: categories[0] },
+    ]
+    return message(
+        body.model,
+        [{ type: 'text', text: JSON.stringify({ message: '', cards }), citations: null }],
+        'end_turn',
+        0,
+        [3000, 800],
+    )
+}
+
 function wikidata(url: URL) {
     if (url.searchParams.get('action') === 'wbsearchentities') {
         const search = url.searchParams.get('search') ?? ''
@@ -216,6 +266,19 @@ createServer((request, response) => {
         const body = JSON.parse(raw) as Body
         if (body.tools?.some(({ name }) => name === 'submit_year_suggestion')) {
             return send(response, 200, suggestDate(body))
+        }
+        const first = body.messages[0].content
+        if (Array.isArray(first) && first.some(({ type }) => type === 'image')) {
+            return send(response, 200, readPhoto(body))
+        }
+        if (body.system?.startsWith('You check new cards')) {
+            return send(
+                response,
+                200,
+                message(body.model, [
+                    { type: 'text', text: JSON.stringify({ duplicates: [] }), citations: null },
+                ]),
+            )
         }
         translate(body, response)
     })
