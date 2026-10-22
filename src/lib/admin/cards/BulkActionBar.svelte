@@ -3,8 +3,12 @@
     something is selected, with "select all matching", Publish, Archive and Move to category.
     It is one form that posts the selection as hidden fields (`selectionFields`); each button
     posts to its own action with `formaction`. More bulk actions go in the `actions` snippet:
-    buttons with `formaction` pointing at an action or endpoint that reads the selection with
+    buttons with `formaction` pointing at a form action that reads the selection with
     `readCardSelection` / `selectedCardIds` (#lib/server/card-bulk-actions.js).
+
+    Export selected is a second, plain form (a file download must not go through `enhance`):
+    it posts the selected ids, or the filter for "all matching", to the export endpoint (#47)
+    with `data-sveltekit-reload`, and keeps the selection.
 
     After an action the selection clears and `report` (the action's `bulk` result) is shown.
 -->
@@ -15,6 +19,12 @@
     import { Label } from '#lib/components/ui/label/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import { selectionFields } from '#lib/cards/card-selection.js'
+    import {
+        exportFormatLabel,
+        exportFormats,
+        exportParams,
+        exportPath,
+    } from '#lib/cards/card-export.js'
     import type { BulkReport } from '#lib/server/card-bulk-actions.js'
     import type { CardListSelection } from './card-list-selection.svelte.js'
 
@@ -34,6 +44,18 @@
 
     let busy = $state(false)
     const fields = $derived(selected.selection ? selectionFields(selected.selection) : [])
+    // The export endpoint's own fields (`id` per card, or the filter keys); format comes from
+    // the form's select.
+    const exportFields = $derived.by(() => {
+        const selection = selected.selection
+        if (!selection) return []
+        const params = exportParams({
+            format: 'csv',
+            selection: selection.kind === 'cards' ? { ids: selection.ids } : selection,
+        })
+        params.delete('format')
+        return [...params]
+    })
     const plural = (n: number) => (n === 1 ? '1 card' : `${n} cards`)
 
     const submit = () => {
@@ -78,74 +100,105 @@
     <section
         aria-label="Bulk actions"
         class="mt-6 rounded-md border p-3">
-        <form
-            method="POST"
-            class="flex flex-wrap items-end gap-3"
-            use:enhance={submit}>
-            {#each fields as [name, value], index (index)}
-                <input
-                    type="hidden"
-                    {name}
-                    {value} />
-            {/each}
-            <div class="flex flex-col gap-1 text-sm">
-                <span class="font-medium">
-                    {selected.allMatching
-                        ? `All ${selected.count} matching cards selected`
-                        : `${selected.count} selected`}
-                </span>
-                <span class="flex gap-2">
-                    {#if selected.canSelectAllMatching}
+        <div class="flex flex-wrap items-end gap-3">
+            <form
+                method="POST"
+                class="flex flex-wrap items-end gap-3"
+                use:enhance={submit}>
+                {#each fields as [name, value], index (index)}
+                    <input
+                        type="hidden"
+                        {name}
+                        {value} />
+                {/each}
+                <div class="flex flex-col gap-1 text-sm">
+                    <span class="font-medium">
+                        {selected.allMatching
+                            ? `All ${selected.count} matching cards selected`
+                            : `${selected.count} selected`}
+                    </span>
+                    <span class="flex gap-2">
+                        {#if selected.canSelectAllMatching}
+                            <button
+                                type="button"
+                                class="underline"
+                                onclick={() => selected.selectAllMatching()}>
+                                Select all {selected.totalMatching} matching cards
+                            </button>
+                        {/if}
                         <button
                             type="button"
-                            class="underline"
-                            onclick={() => selected.selectAllMatching()}>
-                            Select all {selected.totalMatching} matching cards
+                            class="text-muted-foreground underline"
+                            onclick={() => selected.clear()}>
+                            Clear selection
                         </button>
-                    {/if}
-                    <button
-                        type="button"
-                        class="text-muted-foreground underline"
-                        onclick={() => selected.clear()}>
-                        Clear selection
-                    </button>
-                </span>
-            </div>
-            <Button
-                type="submit"
-                formaction="?/publish"
-                disabled={busy}>
-                Publish
-            </Button>
-            <Button
-                type="submit"
-                variant="outline"
-                formaction="?/archive"
-                disabled={busy}>
-                Archive
-            </Button>
-            <div class="flex items-end gap-2">
+                    </span>
+                </div>
+                <Button
+                    type="submit"
+                    formaction="?/publish"
+                    disabled={busy}>
+                    Publish
+                </Button>
+                <Button
+                    type="submit"
+                    variant="outline"
+                    formaction="?/archive"
+                    disabled={busy}>
+                    Archive
+                </Button>
+                <div class="flex items-end gap-2">
+                    <div class="flex flex-col gap-2">
+                        <Label for="move-to">Move to</Label>
+                        <NativeSelect.Root
+                            id="move-to"
+                            name="move_to">
+                            {#each categories as category (category.id)}
+                                <NativeSelect.Option value={category.id}>
+                                    {category.name}
+                                </NativeSelect.Option>
+                            {/each}
+                        </NativeSelect.Root>
+                    </div>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        formaction="?/move"
+                        disabled={busy}>
+                        Move
+                    </Button>
+                </div>
+                {@render actions?.({ busy })}
+            </form>
+            <form
+                method="POST"
+                action={exportPath}
+                data-sveltekit-reload
+                class="flex items-end gap-2">
+                {#each exportFields as [name, value], index (index)}
+                    <input
+                        type="hidden"
+                        {name}
+                        {value} />
+                {/each}
                 <div class="flex flex-col gap-2">
-                    <Label for="move-to">Move to</Label>
+                    <Label for="export-selected-format">Export as</Label>
                     <NativeSelect.Root
-                        id="move-to"
-                        name="move_to">
-                        {#each categories as category (category.id)}
-                            <NativeSelect.Option value={category.id}>
-                                {category.name}
+                        id="export-selected-format"
+                        name="format">
+                        {#each exportFormats as format (format)}
+                            <NativeSelect.Option value={format}>
+                                {exportFormatLabel[format]}
                             </NativeSelect.Option>
                         {/each}
                     </NativeSelect.Root>
                 </div>
                 <Button
                     type="submit"
-                    variant="outline"
-                    formaction="?/move"
-                    disabled={busy}>
-                    Move
+                    variant="outline">
+                    Export selected
                 </Button>
-            </div>
-            {@render actions?.({ busy })}
-        </form>
+            </form>
+        </div>
     </section>
 {/if}

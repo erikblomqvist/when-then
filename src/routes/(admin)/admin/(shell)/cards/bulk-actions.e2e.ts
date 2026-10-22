@@ -3,12 +3,16 @@
 // word, so parallel tests don't see each other's cards.
 
 import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
+import { parseCsvRecords } from '../../../../../lib/cards/card-csv'
+import type { ExportedCard } from '../../../../../lib/cards/card-export'
 import type { DateParts } from '../../../../../lib/cards/date-parts'
 import { publishCards } from '../../../../../lib/server/card-bulk'
 import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
+import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const db = localServiceClient()
 const year1969: DateParts = { decade: 1960, year: 1969, month: null, day: null }
@@ -54,7 +58,7 @@ test('an editor publishes picked cards; one the rule blocks is skipped with the 
     const blocked = await draft(userId, canoe, decade1960)
     await draft(userId, `A made-up ${unique} glider`)
 
-    await page.goto(`/admin/cards?q=${unique}`)
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
     await expect(bulkBar(page)).toBeHidden()
     await pick(page, kite)
     await pick(page, raft)
@@ -91,11 +95,17 @@ test('select all matching reaches cards on other pages, and archives every one',
     for (let n = 1; n <= 52; n++) ids.push(await draft(userId, `A made-up ${unique} kite ${n}`))
     await publishCards(db, userId, ids)
 
-    await page.goto(`/admin/cards?q=${unique}`)
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
     await page.getByRole('checkbox', { name: 'Select all cards on this page' }).check()
     await expect(bulkBar(page)).toContainText('50 selected')
     await bulkBar(page).getByRole('button', { name: 'Select all 52 matching cards' }).click()
     await expect(bulkBar(page)).toContainText('All 52 matching cards selected')
+
+    // Export selected sends the filter, so it reaches the second page too.
+    const exported = await exportSelected(page)
+    expect(new Set(parseCsvRecords(exported.text).records.map((record) => record.id))).toEqual(
+        new Set(ids),
+    )
 
     await bulkBar(page).getByRole('button', { name: 'Archive' }).click()
     await expect(page.getByRole('status')).toContainText('Archived 52 cards.')
@@ -116,7 +126,7 @@ test('an editor moves picked cards to another category', async ({ page }) => {
     const raft = `A made-up ${unique} raft`
     const ids = [await draft(userId, kite), await draft(userId, raft)]
 
-    await page.goto(`/admin/cards?q=${unique}`)
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
     await pick(page, kite)
     await pick(page, raft)
     await bulkBar(page).getByLabel('Move to').selectOption({ label: target.name })
@@ -126,4 +136,46 @@ test('an editor moves picked cards to another category', async ({ page }) => {
     await expect(page.getByRole('row').filter({ hasText: kite })).toContainText(target.name)
     for (const id of ids) expect((await getCard(db, id))?.categoryId).toBe(target.id)
     expect(await auditedActions(ids)).toEqual(ids.map((id) => [id, 'update', userId]))
+})
+
+async function exportSelected(page: Page) {
+    const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        bulkBar(page).getByRole('button', { name: 'Export selected' }).click(),
+    ])
+    return {
+        name: download.suggestedFilename(),
+        text: await readFile(await download.path(), 'utf8'),
+    }
+}
+
+test('an editor exports the picked cards, or every matching card, from the selection bar', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'editor')
+    const unique = word()
+    const kite = `A made-up ${unique} kite`
+    const raft = `A made-up ${unique} raft`
+    const ids = [await draft(userId, kite), await draft(userId, raft)]
+    const glider = await draft(userId, `A made-up ${unique} glider`)
+
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
+    await pick(page, kite)
+    await pick(page, raft)
+    await bulkBar(page).getByLabel('Export as').selectOption({ label: 'JSON' })
+    const picked = await exportSelected(page)
+    expect(picked.name).toMatch(/\.json$/)
+    const cards = JSON.parse(picked.text) as ExportedCard[]
+    expect(cards.map((card) => card.id).sort()).toEqual([...ids].sort())
+
+    // Still on the list, selection intact: select the whole (one-page) list via the header.
+    await expect(bulkBar(page)).toContainText('2 selected')
+    await page.getByRole('checkbox', { name: 'Select all cards on this page' }).check()
+    await bulkBar(page).getByLabel('Export as').selectOption({ label: 'CSV' })
+    const all = await exportSelected(page)
+    expect(
+        parseCsvRecords(all.text)
+            .records.map((record) => record.id)
+            .sort(),
+    ).toEqual([...ids, glider].sort())
 })
