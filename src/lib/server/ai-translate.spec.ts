@@ -10,7 +10,7 @@ const reply = (text: string): Message =>
         id: 'msg_test',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5-5',
+        model: 'claude-sonnet-5-5',
         content: [{ type: 'text', text, citations: null }],
         stop_reason: 'end_turn',
         stop_sequence: null,

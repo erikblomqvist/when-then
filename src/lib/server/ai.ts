@@ -19,10 +19,10 @@ import type { CardLocale } from '../cards/card'
 
 /**
  * The model for every AI call. Pinned, so a change is a deliberate edit here together with
- * its row in `prices`. Claude Opus 5.5 at low effort: the API's current default model; the
- * research doc's cheaper `claude-sonnet-5-5` is a one-line switch here if an eval holds.
+ * its row in `prices`. Claude Sonnet 5.5, as docs/research/ai-card-authoring.md recommends;
+ * `claude-opus-5-5` (2x the token price) is the escalation if an eval shows Sonnet falling short.
  */
-export const aiModel = 'claude-opus-5-5'
+export const aiModel = 'claude-sonnet-5-5'
 
 /** Sent with every call so a safety-classifier refusal is retried on another model server-side. */
 const fallbackBeta = 'server-side-fallback-2026-07-01'

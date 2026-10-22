@@ -18,7 +18,7 @@ const message = (overrides: Partial<Message> = {}): Message =>
         id: 'msg_test',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5-5',
+        model: 'claude-sonnet-5-5',
         content: [{ type: 'text', text: '{"sv":"Hej"}', citations: null }],
         stop_reason: 'end_turn',
         stop_sequence: null,
@@ -59,8 +59,8 @@ const request: AiRequest = {
 
 describe('costOf', () => {
     it('prices input and output tokens at the model rate, in USD', () => {
-        // Opus 5.5: $4 / $20 per million tokens.
-        expect(costOf(message())).toBeCloseTo(0.004 + 0.01, 10)
+        // Sonnet 5.5: $2 / $10 per million tokens.
+        expect(costOf(message())).toBeCloseTo(0.002 + 0.005, 10)
     })
 
     it('prices cache reads and writes and web searches', () => {
@@ -89,7 +89,7 @@ describe('costOf', () => {
                     iterations: [
                         {
                             type: 'message',
-                            model: 'claude-opus-5-5',
+                            model: 'claude-sonnet-5-5',
                             input_tokens: 1_000_000,
                             output_tokens: 0,
                             cache_creation_input_tokens: 0,
@@ -109,7 +109,7 @@ describe('costOf', () => {
                 } as Message['usage'],
             }),
         )
-        expect(priced).toBeCloseTo(4 + 5, 10)
+        expect(priced).toBeCloseTo(2 + 5, 10)
     })
 
     it('is null for a model without a price, rather than a wrong number', () => {
@@ -134,7 +134,7 @@ describe('callModel', () => {
         expect(reply.content).toEqual(message().content)
         expect(sent).toEqual([
             expect.objectContaining({
-                model: 'claude-opus-5-5',
+                model: 'claude-sonnet-5-5',
                 fallbacks: 'default',
                 betas: ['server-side-fallback-2026-07-01'],
                 max_tokens: 1000,
@@ -154,10 +154,10 @@ describe('callModel', () => {
                 action: 'ai_translate',
                 details: {
                     outcome: 'ok',
-                    model: 'claude-opus-5-5',
+                    model: 'claude-sonnet-5-5',
                     input_tokens: 1000,
                     output_tokens: 500,
-                    cost_usd: 0.014,
+                    cost_usd: 0.007,
                     locales: ['sv'],
                 },
             },
@@ -222,7 +222,7 @@ describe('callModel', () => {
         await expect(call).rejects.toBeInstanceOf(AiRefusedError)
         expect(records).toEqual([
             expect.objectContaining({
-                details: expect.objectContaining({ outcome: 'refused', cost_usd: 0.014 }),
+                details: expect.objectContaining({ outcome: 'refused', cost_usd: 0.007 }),
             }),
         ])
     })

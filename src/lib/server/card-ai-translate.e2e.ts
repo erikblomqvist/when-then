@@ -56,7 +56,7 @@ const fakeModel: CreateMessage = async (params) => {
         id: 'msg_fake',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5-5',
+        model: 'claude-sonnet-5-5',
         content: [{ type: 'text', text: JSON.stringify(answer), citations: null }],
         stop_reason: 'end_turn',
         stop_sequence: null,
@@ -117,10 +117,10 @@ test('each call is in the card history as an AI translation with its cost', asyn
         entity: 'card',
         details: {
             outcome: 'ok',
-            model: 'claude-opus-5-5',
+            model: 'claude-sonnet-5-5',
             input_tokens: 500,
             output_tokens: 100,
-            cost_usd: 0.004,
+            cost_usd: 0.002,
             locales: ['sv', 'nb'],
         },
     })

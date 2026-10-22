@@ -57,7 +57,7 @@ test('an editor translates a tab from English: filled, unsaved, saved as machine
 
     const history = page.getByRole('region', { name: 'History' })
     await expect(history).toContainText('Machine translated with AI')
-    await expect(history).toContainText('$0.004')
+    await expect(history).toContainText('$0.002')
 })
 
 test('a failed translation says so and leaves the tab as it was', async ({ page }) => {
