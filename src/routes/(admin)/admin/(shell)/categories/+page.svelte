@@ -3,6 +3,7 @@
     import { enhance } from '$app/forms'
     import { ArrowDown, ArrowUp, GripVertical } from '@lucide/svelte'
     import CategoryBadge from '#lib/admin/categories/CategoryBadge.svelte'
+    import { cardListHref } from '#lib/cards/card-list.js'
     import { moveItem } from '#lib/categories/category-form.js'
     import { Button } from '#lib/components/ui/button/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
@@ -175,7 +176,16 @@
                     <Table.Cell>{category.names.nb ?? ''}</Table.Cell>
                     <Table.Cell
                         data-testid="card-count"
-                        class="text-right tabular-nums">{category.cardCount}</Table.Cell>
+                        class="text-right tabular-nums">
+                        <!-- To the card list, filtered to this category. -->
+                        <a
+                            href={cardListHref({ filter: { categoryId: category.id } })}
+                            aria-label="Show {category.cardCount === 1
+                                ? '1 card'
+                                : `${category.cardCount} cards`}"
+                            class="underline decoration-border underline-offset-4 hover:decoration-current"
+                            >{category.cardCount}</a
+                        ></Table.Cell>
                     <Table.Cell>{category.archived ? 'Archived' : 'Active'}</Table.Cell>
                     <Table.Cell>
                         <div class="flex justify-end gap-2">
