@@ -286,7 +286,9 @@ export type Database = {
                     ended_at: string | null
                     exact_year: boolean
                     id: string
+                    started_at: string | null
                     target_score: number
+                    version: number
                 }
                 Insert: {
                     card_language: Database['public']['Enums']['card_locale']
@@ -295,7 +297,9 @@ export type Database = {
                     ended_at?: string | null
                     exact_year?: boolean
                     id?: string
+                    started_at?: string | null
                     target_score?: number
+                    version?: number
                 }
                 Update: {
                     card_language?: Database['public']['Enums']['card_locale']
@@ -304,7 +308,9 @@ export type Database = {
                     ended_at?: string | null
                     exact_year?: boolean
                     id?: string
+                    started_at?: string | null
                     target_score?: number
+                    version?: number
                 }
                 Relationships: []
             }
@@ -466,6 +472,18 @@ export type Database = {
                 Returns: string
             }
             is_google_user: { Args: { app_metadata: Json }; Returns: boolean }
+            join_game: {
+                Args: {
+                    code: string
+                    player: string
+                    player_icon: string
+                    player_name: string
+                }
+                Returns: {
+                    game_version: number
+                    joined_game: string
+                }[]
+            }
             like_literal: { Args: { text: string }; Returns: string }
             list_people: {
                 Args: never

@@ -39,6 +39,14 @@ export function localServiceClient() {
     })
 }
 
+/** A client with the publishable key, as a phone has, for listening on realtime channels. */
+export function localPublicClient() {
+    const { url, publishableKey } = localSupabase()
+    return createClient<Database>(url, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    })
+}
+
 /**
  * Creates a fresh confirmed user (`<role>-<uuid>@example.com`) with `role` (editor unless
  * given; `null` for none), for tests that call the server modules directly instead of

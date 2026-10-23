@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { isPlayerIcon, normalisePlayerName, playerIcons } from './player'
+import { isNameTaken, isPlayerIcon, normalisePlayerName, playerIcons } from './player'
 
 describe('normalisePlayerName', () => {
     it('trims the name', () => {
@@ -22,6 +22,18 @@ describe('normalisePlayerName', () => {
 
     it('refuses more than 16 characters', () => {
         expect(normalisePlayerName('Seventeen chars!!')).toBeUndefined()
+    })
+})
+
+describe('isNameTaken', () => {
+    it('matches a taken name ignoring case and surrounding spaces', () => {
+        expect(isNameTaken(' astrid ', ['Astrid', 'Bo'])).toBe(true)
+        expect(isNameTaken('BO', ['Astrid', 'Bo'])).toBe(true)
+    })
+
+    it('lets a free name through', () => {
+        expect(isNameTaken('Astri', ['Astrid', 'Bo'])).toBe(false)
+        expect(isNameTaken('', ['Astrid'])).toBe(false)
     })
 })
 
