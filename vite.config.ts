@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, lazyPlugins } from 'vite-plus'
 import { playwright } from 'vite-plus/test/browser-playwright'
 
+import { devBannerPrototype } from './dev-banner.prototype'
+
 export default defineConfig({
     staged: {
         '*': 'vp check --fix',
@@ -44,6 +46,8 @@ export default defineConfig({
         options: { typeAware: true, typeCheck: true },
     },
     plugins: lazyPlugins(() => [
+        // PROTOTYPE: `WT_BANNER=A..E vp dev`, see dev-banner.prototype.ts.
+        devBannerPrototype(),
         // Only transforms CSS that uses Tailwind, i.e. src/routes/(admin)/admin/admin.css. Game CSS
         // passes through untouched (findings in issue #33).
         tailwindcss(),

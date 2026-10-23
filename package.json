@@ -26,7 +26,8 @@
         "test:db": "supabase test db",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "storybook": "storybook dev -p 6006",
-        "build-storybook": "storybook build"
+        "build-storybook": "storybook build",
+        "prototype:banner": "node dev-banner.prototype.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.137.0",
