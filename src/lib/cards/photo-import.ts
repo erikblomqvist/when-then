@@ -83,6 +83,19 @@ export function dateNeeded({ decade, year }: DateParts): boolean {
     return year === null && decade >= yearRequiredFrom
 }
 
+/**
+ * From this year on, "Find date" looks up the exact day. Earlier dates are too often known only
+ * to the year to be worth a lookup. Later than the game's own rule (a year from 1500).
+ */
+export const exactDateFrom = 1800
+
+/** Whether "Find date" is worth offering: no date at all, or no day from `exactDateFrom` on. */
+export function exactDateWanted({ decade, year, day }: DateParts): boolean {
+    const when = year ?? decade
+    if (when === null) return true
+    return when >= exactDateFrom && day === null
+}
+
 export const isDifficulty = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 4
 

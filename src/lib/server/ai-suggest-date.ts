@@ -21,6 +21,7 @@ import type {
     BetaToolUseBlock,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { sourceQuoteMaxLength } from '../cards/card-form'
+import { decadeOf, validateDateParts } from '../cards/date-parts'
 import { AiAnswerRejectedError, replyText, runModel, type AiDeps, type AiRequest } from './ai'
 import type { WikidataLookup } from './wikidata'
 
@@ -41,6 +42,9 @@ export type DateAlternative = {
 export type DateSuggestion = {
     /** Signed: BCE negative, no year 0. */
     year: number
+    /** When the source states them; a day only with a month. */
+    month: number | null
+    day: number | null
     sourceUrl: string
     sourceQuote: string
     interpretation: string
@@ -113,6 +117,14 @@ const submitTool: BetaToolUnion = {
                 type: 'integer',
                 description: 'The year. BCE years are negative (44 BC is -44); there is no year 0.',
             },
+            month: {
+                anyOf: [{ type: 'integer' }, { type: 'null' }],
+                description: 'The month (1 to 12) when the source states it, otherwise null.',
+            },
+            day: {
+                anyOf: [{ type: 'integer' }, { type: 'null' }],
+                description: 'The day of the month when the source states it, otherwise null.',
+            },
             source_url: {
                 type: 'string',
                 description: 'A URL you retrieved in this conversation that states the year.',
@@ -149,6 +161,8 @@ const submitTool: BetaToolUnion = {
         },
         required: [
             'year',
+            'month',
+            'day',
             'source_url',
             'source_quote',
             'interpretation',
@@ -189,9 +203,10 @@ const system = `You find the year for cards in "When Then?", a party game where 
 - Take the statement literally: "for the first time" means the first occurrence, not the best-known one. Decide which milestone it names (born, founded, invented, patented, announced, released, opened…).
 - If a reasonable reader could mean another year, give the most literal reading as the year and the others as alternatives with a short reason. If the answer depends on the country, say so in the interpretation.
 - Only suggest a year that a source you retrieved in this conversation states, at year precision or better. Never answer from memory alone.
+- Give the exact date when that source states it: the month, and the day too when it is known. Leave month and day null when the source gives only the year.
 - Submit with submit_year_suggestion: source_url must be a URL you got from a tool in this conversation, and source_quote the passage (at most 150 characters) that gives the year. Leave an alternative's source_url and source_quote empty unless a retrieved source supports it.`
 
-const wikidataSteps = `First look the subject up on Wikidata with lookup_wikidata (you may try a few names). If a statement dates the card at year precision, submit it, citing that item's Wikipedia URL (or its Wikidata URL when it has none) and the statement as the quote. If Wikidata has nothing that dates this statement at year precision, don't submit: answer with one sentence saying what Wikidata had. A web search follows in that case.`
+const wikidataSteps = `First look the subject up on Wikidata with lookup_wikidata (you may try a few names). If a statement dates the card at year precision or better, submit it (with its month and day when the statement has them), citing that item's Wikipedia URL (or its Wikidata URL when it has none) and the statement as the quote. If Wikidata has nothing that dates this statement at year precision, don't submit: answer with one sentence saying what Wikidata had. A web search follows in that case.`
 
 const webSteps = `Wikidata had nothing usable (see "wikidata" in the card). Search the web with web_search, prefer encyclopedias and official sources, then submit. If no source you retrieved gives the year, don't submit: answer with one sentence saying why.`
 
@@ -226,6 +241,8 @@ const asParams = (reply: BetaMessage) => reply.content as unknown as BetaContent
 
 type Submitted = {
     year?: unknown
+    month?: unknown
+    day?: unknown
     source_url?: unknown
     source_quote?: unknown
     interpretation?: unknown
@@ -242,6 +259,22 @@ type SubmittedAlternative = {
 const isYear = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value !== 0
 const str = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+const whole = (value: unknown) =>
+    typeof value === 'number' && Number.isInteger(value) ? value : null
+
+/** The month and day that hold together with the year: a bad day is dropped, a bad month both. */
+export function monthAndDay(
+    year: number,
+    month: unknown,
+    day: unknown,
+): { month: number | null; day: number | null } {
+    const date = { decade: decadeOf(year), year, month: whole(month), day: whole(day) }
+    if (date.month === null) return { month: null, day: null }
+    const errors = validateDateParts(date)
+    if (errors.month) return { month: null, day: null }
+    return { month: date.month, day: errors.day ? null : date.day }
+}
+
 const quote = (value: unknown) => str(value).slice(0, sourceQuoteMaxLength)
 
 function checkSubmission(
@@ -282,6 +315,7 @@ function checkSubmission(
         : 'low'
     return {
         year: input.year,
+        ...monthAndDay(input.year, input.month, input.day),
         sourceUrl,
         sourceQuote: quote(input.source_quote),
         interpretation: str(input.interpretation),
@@ -327,6 +361,8 @@ export async function suggestCardDate(
                     details: {
                         via: phase,
                         year: suggestion.year,
+                        month: suggestion.month,
+                        day: suggestion.day,
                         confidence: suggestion.confidence,
                         source_url: suggestion.sourceUrl,
                         sources,

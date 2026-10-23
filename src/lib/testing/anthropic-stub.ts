@@ -10,7 +10,7 @@
 // Date suggestion (`#lib/server/ai-suggest-date`), by the card text:
 // - default: looks the card text up on (stub) Wikidata, which has a made-up item from 1908, and
 //   submits 1908 citing its Wikipedia URL, with 2012 as an alternative;
-// - "[web]": stub Wikidata finds nothing, so the web search step submits 1923 from
+// - "[web]": stub Wikidata finds nothing, so the web search step submits 14 June 1923 from
 //   https://example.com/made-up-history (one search);
 // - "[unsourced]": submits a source that was never retrieved.
 // Reading a photo (`#lib/server/ai-read-photo`), whatever the image: three cards. The first
@@ -64,6 +64,8 @@ const submit = (input: Record<string, unknown>) => ({
     id: 'toolu_submit',
     name: 'submit_year_suggestion',
     input: {
+        month: null,
+        day: null,
         interpretation: 'The first made-up games.',
         confidence: 'high',
         alternatives: [],
@@ -97,7 +99,13 @@ function suggestDate(body: Body) {
                         },
                     ],
                 },
-                submit({ year: 1923, source_url: url, source_quote: 'It first happened in 1923.' }),
+                submit({
+                    year: 1923,
+                    month: 6,
+                    day: 14,
+                    source_url: url,
+                    source_quote: 'It first happened on 14 June 1923.',
+                }),
             ],
             'tool_use',
             1,

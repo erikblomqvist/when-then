@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
     dateNeeded,
+    exactDateWanted,
     normaliseDate,
     photoDraftLimit,
     photoTextStatus,
@@ -41,6 +42,34 @@ describe('dateNeeded', () => {
         expect(dateNeeded({ decade: 1490, year: null, month: null, day: null })).toBe(false)
         expect(dateNeeded({ decade: 1620, year: null, month: null, day: null })).toBe(true)
         expect(dateNeeded({ decade: 1620, year: 1628, month: null, day: null })).toBe(false)
+    })
+})
+
+describe('exactDateWanted', () => {
+    const date = (parts: Partial<Record<'decade' | 'year' | 'month' | 'day', number>>) => ({
+        decade: null,
+        year: null,
+        month: null,
+        day: null,
+        ...parts,
+    })
+
+    it('wants a date for a card without one, whatever its era', () => {
+        expect(exactDateWanted(date({}))).toBe(true)
+    })
+
+    it('wants the day from 1800 on, until it has one', () => {
+        expect(exactDateWanted(date({ decade: 1960, year: 1969 }))).toBe(true)
+        expect(exactDateWanted(date({ decade: 1960, year: 1969, month: 7 }))).toBe(true)
+        expect(exactDateWanted(date({ decade: 1960, year: 1969, month: 7, day: 20 }))).toBe(false)
+        expect(exactDateWanted(date({ decade: 1950 }))).toBe(true)
+    })
+
+    it('leaves earlier dates as they are', () => {
+        expect(exactDateWanted(date({ decade: 1620, year: 1628 }))).toBe(false)
+        expect(exactDateWanted(date({ decade: 1790, year: 1799 }))).toBe(false)
+        expect(exactDateWanted(date({ decade: 1490 }))).toBe(false)
+        expect(exactDateWanted(date({ decade: -50, year: -44 }))).toBe(false)
     })
 })
 

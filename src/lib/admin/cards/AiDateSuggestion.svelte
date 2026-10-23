@@ -1,6 +1,7 @@
 <!--
     "Suggest date" under the card's date fields (#42). Asks the card's suggest-date endpoint for
-    a sourced year for the English text as it is in the form, and shows the year, how the AI
+    a sourced date (the year, and the month and day when the source states them) for the
+    English text as it is in the form, and shows the date, how the AI
     read the statement, its confidence, the source quote and link, and alternatives. Accept (or
     an alternative) fills the form through `apply`, unsaved; Dismiss changes nothing. Either
     way the decision is logged against the request. Rendered by CardEditor's `dateActions`.
@@ -24,8 +25,8 @@
     let problem = $state<string | null>(null)
     let shown = $state<{ suggestion: DateSuggestion; requestId: number } | null>(null)
 
-    const yearText = (year: number) =>
-        formatCardDate({ decade: null, year, month: null, day: null })
+    const yearText = (year: number, month: number | null = null, day: number | null = null) =>
+        formatCardDate({ decade: null, year, month, day })
     const confidenceText = { high: 'High', medium: 'Medium', low: 'Low' }
     const viaText = { wikidata: 'Found on Wikidata', web_search: 'Found by web search' }
 
@@ -112,7 +113,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-3">
                 <span class="text-2xl font-semibold tabular-nums">
-                    {yearText(suggestion.year)}
+                    {yearText(suggestion.year, suggestion.month, suggestion.day)}
                 </span>
                 <Badge variant="secondary">
                     {confidenceText[suggestion.confidence]} confidence
@@ -170,10 +171,12 @@
                     onclick={() =>
                         decide('accepted', {
                             year: suggestion.year,
+                            month: suggestion.month,
+                            day: suggestion.day,
                             sourceUrl: suggestion.sourceUrl,
                             sourceQuote: suggestion.sourceQuote,
                         })}>
-                    Accept {yearText(suggestion.year)}
+                    Accept {yearText(suggestion.year, suggestion.month, suggestion.day)}
                 </Button>
                 <Button
                     type="button"

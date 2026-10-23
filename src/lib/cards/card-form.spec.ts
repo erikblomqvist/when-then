@@ -382,6 +382,16 @@ describe('withSuggestedDate', () => {
         expect(after).toMatchObject({ month: '5', day: '1' })
     })
 
+    it("fills a suggested month and day, replacing the form's", () => {
+        const date = { sourceUrl: null, sourceQuote: null }
+        expect(withSuggestedDate(before, { ...date, year: 1908, month: 6, day: 30 })).toMatchObject(
+            { year: '1908', month: '6', day: '30' },
+        )
+        expect(
+            withSuggestedDate(before, { ...date, year: 1900, month: 7, day: null }),
+        ).toMatchObject({ year: '1900', month: '7', day: '' })
+    })
+
     it('writes a BCE year as BC with a positive number', () => {
         expect(
             withSuggestedDate(before, { year: -44, sourceUrl: null, sourceQuote: null }),

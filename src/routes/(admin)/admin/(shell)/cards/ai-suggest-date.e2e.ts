@@ -1,6 +1,6 @@
 // "Suggest date" (#42) in the browser, with the model and Wikidata stubbed
 // (src/lib/testing/anthropic-stub.ts): by default stub Wikidata dates the card 1908 with 2012
-// as an alternative; "[web]" makes Wikidata find nothing so web search answers 1923;
+// as an alternative; "[web]" makes Wikidata find nothing so web search answers 14 June 1923;
 // "[unsourced]" cites a page that was never retrieved. Each model call costs $0.004.
 
 import { randomUUID } from 'node:crypto'
@@ -127,7 +127,7 @@ test('when Wikidata has nothing, the suggestion comes from web search', async ({
     await gotoHydrated(page, `/admin/cards/${id}`)
     await page.getByRole('button', { name: 'Suggest date' }).click()
 
-    await expect(panel(page)).toContainText('1923')
+    await expect(panel(page)).toContainText('14 June 1923')
     await expect(panel(page)).toContainText('web search')
     await expect(panel(page).getByRole('link', { name: /example\.com/ })).toHaveAttribute(
         'href',
@@ -136,7 +136,13 @@ test('when Wikidata has nothing, the suggestion comes from web search', async ({
     // Two Wikidata-step calls and one web search call with one search: 3 × $0.004 + $0.01.
     await expect
         .poll(async () => (await auditDetails(id))[0]?.details)
-        .toMatchObject({ via: 'web_search', calls: 3, cost_usd: 0.022 })
+        .toMatchObject({ via: 'web_search', calls: 3, cost_usd: 0.022, month: 6, day: 14 })
+
+    // Accepting fills the whole date, not just the year.
+    await panel(page).getByRole('button', { name: 'Accept 14 June 1923' }).click()
+    await expect(page.getByLabel('Year')).toHaveValue('1923')
+    await expect(page.getByLabel('Month')).toHaveValue('6')
+    await expect(page.getByLabel('Day')).toHaveValue('14')
 })
 
 test('a suggestion citing a page it never retrieved is rejected and fills nothing', async ({

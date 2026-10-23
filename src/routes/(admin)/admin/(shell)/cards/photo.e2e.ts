@@ -54,8 +54,10 @@ test('an admin photographs a page on their phone, finds a missing date, creates 
     await expect(kingdom).toContainText('Date needed')
     await expect(page.getByRole('img', { name: 'Photo 1' })).toHaveCount(0)
 
-    // The card without a date gets one looked up, with its source; Undo would put it back.
+    // A card without a date gets one looked up, with its source; Undo would put it back. A date
+    // before 1800 isn't looked up.
     await expect(warship.getByRole('button', { name: 'Find date' })).toHaveCount(0)
+    await expect(telescope.getByRole('button', { name: 'Find date' })).toHaveCount(0)
     await kingdom.getByRole('button', { name: 'Find date' }).click()
     await expect(kingdom).toContainText('Date found online')
     await expect(kingdom).toContainText('1908 from en.wikipedia.org')
@@ -63,7 +65,9 @@ test('an admin photographs a page on their phone, finds a missing date, creates 
         'href',
         'https://en.wikipedia.org/wiki/Made-up_games',
     )
-    await expect(page.getByRole('button', { name: /missing date/ })).toHaveCount(0)
+    // Its source gave the year only; that is as far as it goes.
+    await expect(kingdom.getByRole('button', { name: 'Find date' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /exact date/ })).toHaveCount(0)
 
     // Nothing wider than the phone.
     expect(
@@ -160,8 +164,8 @@ test('an unticked card is left out', async ({ page }) => {
     const candidates = page.getByTestId('candidate')
     await expect(candidates).toHaveCount(3)
 
-    // Every ticked card without a year is looked up at once.
-    await page.getByRole('button', { name: 'Find 1 missing date' }).click()
+    // Every ticked card worth it is looked up at once.
+    await page.getByRole('button', { name: 'Find 1 exact date' }).click()
     await expect(candidates.nth(2)).toContainText('Date found online')
     await candidates.nth(1).getByRole('checkbox').uncheck()
 
@@ -176,6 +180,48 @@ test('an unticked card is left out', async ({ page }) => {
     await expect(saving).toHaveAttribute('aria-busy', 'true')
     await expect(page.getByText('Added 2 drafts from your photo')).toBeVisible()
     expect(new URL(page.url()).searchParams.getAll('new')).toHaveLength(2)
+})
+
+test('Find date fills in the month and day when its source states them', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/photo')
+    await page.getByLabel('Take photo').setInputFiles(photo())
+    await page.getByRole('button', { name: 'Read 1 photo' }).click()
+    const candidates = page.getByTestId('candidate')
+    await expect(candidates).toHaveCount(3)
+    const kingdom = candidates.nth(2)
+
+    // The stub's sources give years only, so this one answers with a full date.
+    await page.route('**/admin/cards/photo/suggest-date', (route) =>
+        route.fulfill({
+            json: {
+                suggestion: {
+                    year: 1912,
+                    month: 4,
+                    day: 15,
+                    sourceUrl: 'https://example.com/made-up-kingdom',
+                    sourceQuote: 'It was founded on 15 April 1912.',
+                    interpretation: 'The founding.',
+                    confidence: 'high',
+                    alternatives: [],
+                    via: 'web_search',
+                },
+            },
+        }),
+    )
+    await kingdom.getByRole('button', { name: 'Find date' }).click()
+    await expect(kingdom).toContainText('15 April 1912 from example.com')
+    await expect(kingdom.getByRole('button', { name: 'Find date' })).toHaveCount(0)
+
+    for (const index of [0, 1]) await candidates.nth(index).getByRole('checkbox').uncheck()
+    await page.getByRole('button', { name: 'Save 1 card as drafts' }).click()
+    await expect(page.getByText('Added 1 draft from your photo')).toBeVisible()
+    const [id] = new URL(page.url()).searchParams.getAll('new')
+    expect(await getCard(db, id)).toMatchObject({
+        date: { decade: 1910, year: 1912, month: 4, day: 15 },
+        sourceUrl: 'https://example.com/made-up-kingdom',
+        sourceQuote: 'It was founded on 15 April 1912.',
+    })
 })
 
 test('an editor has no way in', async ({ page }) => {

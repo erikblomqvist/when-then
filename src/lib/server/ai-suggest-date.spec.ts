@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { AiAnswerRejectedError, type AiAuditRecord, type CreateMessage } from './ai'
-import { isRetrieved, sourcesIn, suggestCardDate, type SuggestDateDeps } from './ai-suggest-date'
+import {
+    isRetrieved,
+    monthAndDay,
+    sourcesIn,
+    suggestCardDate,
+    type SuggestDateDeps,
+} from './ai-suggest-date'
 import type { WikidataLookup } from './wikidata'
 
 type Params = Parameters<CreateMessage>[0]
@@ -51,6 +57,8 @@ const searchResult = (...urls: string[]) => ({
 
 const submission = (overrides: Record<string, unknown> = {}) => ({
     year: 1908,
+    month: null,
+    day: null,
     source_url: 'https://en.wikipedia.org/wiki/1908_Summer_Olympics',
     source_quote: 'point in time: 1908',
     interpretation: 'The first Olympic Games held in London.',
@@ -168,7 +176,37 @@ describe('source validation', () => {
     })
 })
 
+describe('monthAndDay', () => {
+    it('keeps a month and day that hold together with the year', () => {
+        expect(monthAndDay(1908, 7, 13)).toEqual({ month: 7, day: 13 })
+        expect(monthAndDay(-44, 3, 15)).toEqual({ month: 3, day: 15 })
+        expect(monthAndDay(1908, 7, null)).toEqual({ month: 7, day: null })
+    })
+
+    it('drops a day that does not exist, and a day without a month', () => {
+        expect(monthAndDay(1900, 2, 29)).toEqual({ month: 2, day: null })
+        expect(monthAndDay(1908, null, 13)).toEqual({ month: null, day: null })
+    })
+
+    it('drops a month that is not one, with its day', () => {
+        expect(monthAndDay(1908, 13, 1)).toEqual({ month: null, day: null })
+        expect(monthAndDay(1908, '7', 13)).toEqual({ month: null, day: null })
+    })
+})
+
 describe('suggestCardDate', () => {
+    it('gives the month and day when the source states them', async () => {
+        const { deps } = fakeDeps([
+            reply([toolUse('lookup_wikidata', { subject: 'Tunguska event' })], 'tool_use'),
+            reply(
+                [toolUse('submit_year_suggestion', submission({ month: 6, day: 30 }))],
+                'tool_use',
+            ),
+        ])
+        const { suggestion } = await suggestCardDate(deps, card)
+        expect(suggestion).toMatchObject({ year: 1908, month: 6, day: 30 })
+    })
+
     it('tries Wikidata first and returns a suggestion sourced from it, logged once with its cost', async () => {
         const { deps, sent, looked, records } = fakeDeps([
             reply([toolUse('lookup_wikidata', { subject: '1908 Summer Olympics' })], 'tool_use'),
@@ -179,6 +217,8 @@ describe('suggestCardDate', () => {
 
         expect(suggestion).toEqual({
             year: 1908,
+            month: null,
+            day: null,
             sourceUrl: 'https://en.wikipedia.org/wiki/1908_Summer_Olympics',
             sourceQuote: 'point in time: 1908',
             interpretation: 'The first Olympic Games held in London.',

@@ -1,8 +1,9 @@
 <!--
     "Add from photo" (#60), made for a phone. Take photos (or choose them) of anything with
     historical facts in it; they wait as thumbnails until "Read", then the AI reads each into
-    candidate cards. Tick the ones to keep, edit them in place, look up a missing date ("Find
-    date": Wikidata, then the web), create a suggested category where none fits, and save the
+    candidate cards. Tick the ones to keep, edit them in place, look up the exact date of a card
+    from `exactDateFrom` (1800) on, or any date of an undated one ("Find date": Wikidata, then the
+    web), create a suggested category where none fits, and save the
     ticked ones as drafts. More photos can be added under the list; their cards join it. What
     the AI inferred rather than read (a date not in the photo, the difficulty, the translations)
     is marked, and likely repeats of existing cards start unticked.
@@ -32,6 +33,7 @@
     import { decadeLabel, decadeOf, formatCardDate, monthNames } from '#lib/cards/date-parts.js'
     import {
         dateNeeded,
+        exactDateWanted,
         isAiTranslation,
         photoDraftErrors,
         photoLimit,
@@ -218,8 +220,9 @@
         }
     }
 
-    // "Find date": the editor's sourced lookup, for a card without a year. The year it finds
-    // goes straight in, with its source; Undo puts the AI's own date back.
+    // "Find date": the editor's sourced lookup, for a card without an exact date. The date it
+    // finds (the year, and the month and day when its source states them) goes straight in, with
+    // its source; Undo puts the AI's own date back.
     async function findDate(row: Row) {
         row.finding = true
         row.findProblem = null
@@ -238,8 +241,11 @@
                 message?: string
             }
             if (response.ok && answer.suggestion) {
-                const { year } = answer.suggestion
-                if (whole(row.year) !== year) {
+                const { year, month, day } = answer.suggestion
+                if (month !== null) {
+                    row.month = String(month)
+                    row.day = day === null ? '' : String(day)
+                } else if (whole(row.year) !== year) {
                     row.month = ''
                     row.day = ''
                 }
@@ -263,10 +269,12 @@
         row.decade = date.year === null ? date.decade : null
     }
 
-    const yearMissing = (row: Row) => whole(row.year) === null && !!row.texts.en.trim()
-    const missing = $derived(ticked.filter((row) => yearMissing(row) && !row.finding))
+    /** Worth looking up (unless found already: its source gave no more). */
+    const exactDateMissing = (row: Row) =>
+        !foundDate(row) && !!row.texts.en.trim() && exactDateWanted(draftOf(row).date)
+    const missing = $derived(ticked.filter((row) => exactDateMissing(row) && !row.finding))
 
-    /** Looks up every ticked card's missing year, three at a time. */
+    /** Looks up the exact date of every ticked card without one, three at a time. */
     async function findMissingDates() {
         const queue = [...missing]
         const next = async (): Promise<void> => {
@@ -471,7 +479,7 @@
                 class="min-h-11"
                 onclick={findMissingDates}>
                 <SearchIcon aria-hidden="true" />
-                Find {plural(missing.length, 'missing date')}
+                Find {plural(missing.length, 'exact date')}
             </Button>
         {/if}
     </div>
@@ -524,7 +532,12 @@
 
                 {#if found}
                     <p class="mt-2 text-sm text-muted-foreground">
-                        {found.year < 0 ? `${-found.year} BC` : found.year} from
+                        {formatCardDate({
+                            decade: null,
+                            year: found.year,
+                            month: found.month,
+                            day: found.day,
+                        })} from
                         <a
                             href={found.sourceUrl}
                             target="_blank"
@@ -536,7 +549,7 @@
                             class="cursor-pointer underline underline-offset-4"
                             onclick={() => undoFound(row)}>Undo</button>
                     </p>
-                {:else if yearMissing(row) || row.finding}
+                {:else if exactDateMissing(row) || row.finding}
                     <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                         <Button
                             type="button"
