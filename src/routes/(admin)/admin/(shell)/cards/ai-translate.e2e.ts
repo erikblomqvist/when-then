@@ -8,7 +8,7 @@ import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
-import { saveAndReopen } from '../../../../../lib/testing/e2e-cards'
+import { historyPanel, openFullHistory, saveAndReopen } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 const word = () => `Ai${randomUUID().slice(0, 8)}`
@@ -55,7 +55,8 @@ test('an editor translates a tab from English: filled, unsaved, saved as machine
         status: 'machine',
     })
 
-    const history = page.getByRole('region', { name: 'History' })
+    await expect(historyPanel(page)).toContainText('Machine translated with AI')
+    const history = await openFullHistory(page)
     await expect(history).toContainText('Machine translated with AI')
     await expect(history).toContainText('$0.002')
 })

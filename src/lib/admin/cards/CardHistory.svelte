@@ -1,15 +1,45 @@
 <!--
-    A card's history panel: every change to the card and its translations, newest first, with
-    who made it and a field-by-field diff. Read-only. The card page mounts it in the editor's
-    sidebar, below the status actions (#14), so it lays each change out stacked to fit there,
-    and passes `cardHistory()` and `auditNames()` from its load.
+    A card's history panel, read-only, in the editor's sidebar below the status actions (#14):
+    the last three saves at a glance, one line each (what changed, who, how long ago). Entries
+    written by one save (a card and its English text) count as one. "Show all" opens a dialog
+    with every entry in full, field-by-field diffs and AI details included, as the audit log
+    shows them; picking a save in the sidebar opens the dialog at that save. The card page
+    passes `cardHistory()` and `auditNames()` from its load.
 -->
 <script lang="ts">
+    import { tick } from 'svelte'
     import AuditEntry from '#lib/admin/audit/AuditEntry.svelte'
-    import type { AuditNames } from '#lib/audit/display.js'
+    import { Button } from '#lib/components/ui/button/index.js'
+    import { formatTime, type AuditNames } from '#lib/audit/display.js'
+    import { groupChanges, relativeTime, summarizeChange } from '#lib/audit/history-summary.js'
     import type { AuditEntry as Entry } from '#lib/server/audit.js'
 
     let { entries, names }: { entries: Entry[]; names: AuditNames } = $props()
+
+    const shownChanges = 3
+
+    const changes = $derived(groupChanges(entries))
+    const recent = $derived(changes.slice(0, shownChanges))
+    const actor = (actorId: string | null) =>
+        actorId ? (names.people[actorId] ?? 'Someone no longer here') : 'System'
+
+    let dialog: HTMLDialogElement | undefined = $state()
+    const entryId = (id: number) => `history-entry-${id}`
+
+    /** The entries of the save the dialog was opened at, briefly highlighted there. */
+    let flashed: number[] = $state([])
+
+    /** Opens the full history, at a save's entries (else at the top), and flashes them. */
+    async function showAll(at: number[] = []) {
+        // Cleared first, so opening at the same save again replays the flash.
+        flashed = []
+        dialog?.showModal()
+        await tick()
+        flashed = at
+        const target = at.length > 0 ? document.getElementById(entryId(at[0])) : null
+        target?.scrollIntoView({ block: 'start' })
+        target?.focus({ preventScroll: true })
+    }
 </script>
 
 <section
@@ -20,18 +50,99 @@
         class="font-medium">
         History
     </h2>
-    {#if entries.length === 0}
+    {#if changes.length === 0}
         <p class="text-sm text-muted-foreground">No changes yet.</p>
     {:else}
-        <ol class="flex flex-col gap-3">
-            {#each entries as entry (entry.id)}
+        <ol
+            aria-label="Recent changes"
+            class="flex flex-col gap-2">
+            {#each recent as change (change.entries[0].id)}
+                {@const summary = summarizeChange(change, names)}
                 <li>
-                    <AuditEntry
-                        {entry}
-                        {names}
-                        layout="stacked" />
+                    <button
+                        type="button"
+                        class="flex w-full flex-col gap-0.5 rounded-lg border p-3 text-left outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        aria-haspopup="dialog"
+                        onclick={() => showAll(change.entries.map((entry) => entry.id))}>
+                        <span class="break-words">
+                            <span class="font-medium">{summary.action}</span>
+                            {#if summary.fields.length > 0}
+                                <span class="text-muted-foreground"
+                                    >{summary.fields.join(', ')}</span>
+                            {/if}
+                        </span>
+                        <!-- A long name is cut short; the time always shows. -->
+                        <span class="flex min-w-0 gap-1 text-xs text-muted-foreground">
+                            <span class="truncate">{actor(change.actorId)}</span>
+                            <span aria-hidden="true">·</span>
+                            <time
+                                class="shrink-0"
+                                datetime={change.at}
+                                title={formatTime(change.at)}>{relativeTime(change.at)}</time>
+                        </span>
+                    </button>
                 </li>
             {/each}
         </ol>
+        {#if changes.length > shownChanges}
+            <Button
+                variant="link"
+                class="h-auto self-start px-0"
+                aria-haspopup="dialog"
+                onclick={() => showAll()}>
+                Show all {changes.length} changes
+            </Button>
+        {/if}
     {/if}
 </section>
+
+<dialog
+    bind:this={dialog}
+    aria-labelledby="full-history-heading"
+    class="m-auto h-dvh max-h-dvh w-full max-w-full overflow-y-auto bg-background p-4 text-foreground backdrop:bg-black/50 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%-2rem)] sm:max-w-3xl sm:rounded-lg sm:border sm:p-6 sm:shadow-lg"
+    closedby="any">
+    <header
+        class="sticky -top-4 z-10 -mx-4 -mt-4 mb-4 flex items-center justify-between gap-4 border-b bg-background px-4 py-3 sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6">
+        <h2
+            id="full-history-heading"
+            class="text-lg font-semibold tracking-tight">
+            History
+        </h2>
+        <Button
+            variant="outline"
+            onclick={() => dialog?.close()}>
+            Close
+        </Button>
+    </header>
+    <ol class="flex flex-col gap-3">
+        {#each entries as entry (entry.id)}
+            <li
+                id={entryId(entry.id)}
+                tabindex="-1"
+                class="scroll-mt-20 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class:flash={flashed.includes(entry.id)}
+                onanimationend={() => (flashed = flashed.filter((id) => id !== entry.id))}>
+                <AuditEntry
+                    {entry}
+                    {names} />
+            </li>
+        {/each}
+    </ol>
+</dialog>
+
+<style>
+    /* The save the dialog was opened at: tinted, then fading back to nothing. */
+    .flash {
+        animation: flash 2.4s ease-out;
+    }
+
+    @keyframes flash {
+        0%,
+        25% {
+            background-color: color-mix(in oklch, var(--ring) 22%, transparent);
+        }
+        100% {
+            background-color: transparent;
+        }
+    }
+</style>
