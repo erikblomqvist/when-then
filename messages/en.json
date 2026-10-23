@@ -79,6 +79,7 @@
     "refusal_game_over": "The game is over.",
     "refusal_nothing_to_skip": "That player isn't holding up the game right now.",
     "refusal_no_other_reader": "There's nobody else to read the card.",
+    "refusal_not_system": "A game only ends this way after 24 hours with nobody playing.",
     "player_icon_cat": "Cat",
     "player_icon_dog": "Dog",
     "player_icon_bird": "Bird",

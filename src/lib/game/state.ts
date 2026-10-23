@@ -89,6 +89,7 @@ export type LogEntry =
     | { kind: 'play'; playerId: string; cardId: string; correct: boolean }
     | { kind: 'steal'; playerId: string; cardId: string; correct: boolean }
     | { kind: 'skip'; playerId: string; what: Skipped }
+    | { kind: 'remove'; playerId: string }
     | { kind: 'discard'; cardId: string }
 
 /** Where the game is; `ended` is ended early and `abandoned` timed out, both with no winner. */

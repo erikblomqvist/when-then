@@ -36,6 +36,7 @@ export type GameRefusalCode =
     | 'game_over'
     | 'nothing_to_skip'
     | 'no_other_reader'
+    | 'not_system'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -68,6 +69,7 @@ const words: Record<GameRefusalCode, () => string> = {
     game_over: m.refusal_game_over,
     nothing_to_skip: m.refusal_nothing_to_skip,
     no_other_reader: m.refusal_no_other_reader,
+    not_system: m.refusal_not_system,
 }
 
 /** The message for a refusal, in the current locale. */

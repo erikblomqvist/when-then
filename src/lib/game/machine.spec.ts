@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
-import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
+import { invariantProblems } from './invariants'
+import { apply, create, load, type ApplyResult, type Command, type CreateInput } from './machine'
 import { scenario } from './scenario'
 import { leftOf, rightOf, startingFrom } from './seating'
 import { fits, score, type DeckCard, type DrawOutcome, type GameState } from './state'
@@ -1260,5 +1261,304 @@ describe('skipping', () => {
         const won = ok(skip(state, playOf(state).activeId))
         expect(won.phase.name).toBe('finished')
         expect(skip(won, 'astrid')).toEqual({ ok: false, refusal: 'game_over' })
+    })
+})
+
+describe('removing a player', () => {
+    /** The active player's turn played out: the card placed in the first gap, stolen likewise. */
+    const turnOver = (state: GameState) => {
+        let next = dealt(state)
+        next = ok(apply(next, { type: 'place', by: playOf(next).activeId, slot: 0 }))
+        for (;;) {
+            const play = playOf(next)
+            if (play.step === 'deciding')
+                return ok(apply(next, { type: 'lockIn', by: play.activeId }))
+            if (play.step !== 'stealing') return next
+            next = ok(apply(next, { type: 'steal', by: play.stealerId, slot: 0 }))
+            if (next.phase.name !== 'playing') return next
+        }
+    }
+
+    // Scenario players are astrid, björn, cecilia… in seating order, astrid the host.
+    const remove = (state: GameState, playerId: string, by = 'astrid') => {
+        const result = apply(state, { type: 'remove', by, playerId })
+        if (result.ok) expect(invariantProblems(result.state)).toEqual([])
+        return result
+    }
+
+    it('takes them out of the seating with their timeline, listed as removed, and play goes on', () => {
+        const state = scenario().players(4).activePlayer(2).build().state
+        const { activeId, readerId } = dealtPlay(state)
+        const bystander = state.seating.find((id) => id !== activeId && id !== readerId)!
+        const next = ok(remove(state, bystander))
+        expect(next.seating).toEqual(state.seating.filter((id) => id !== bystander))
+        expect(next.timelines[bystander]).toBeUndefined()
+        expect(next.players.find((player) => player.id === bystander)?.removed).toBe(true)
+        expect(next.players).toHaveLength(4)
+        expect(next.phase).toEqual(state.phase)
+        expect(next.log).toEqual([...state.log, { kind: 'remove', playerId: bystander }])
+        // Everyone still sees them, as removed, with no score.
+        const view = redact(next, activeId)
+        expect(view.players.find((player) => player.id === bystander)?.removed).toBe(true)
+        expect(view.scores[bystander]).toBeUndefined()
+    })
+
+    it('refuses the removed player’s commands as removed', () => {
+        const state = scenario().players(4).activePlayer(2).build().state
+        const next = ok(remove(state, 'dag'))
+        expect(apply(next, { type: 'place', by: 'dag', slot: 0 })).toEqual({
+            ok: false,
+            refusal: 'removed',
+        })
+        expect(apply(next, { type: 'lockIn', by: 'dag' })).toEqual({
+            ok: false,
+            refusal: 'removed',
+        })
+    })
+
+    it('of the active player while a card is in play discards it, and the next player is up', () => {
+        const state = scenario().players(4).activePlayer(2).unlocked(1).build().state
+        const { activeId, cardId } = dealtPlay(state)
+        const next = ok(remove(state, activeId))
+        expect(next.discards).toEqual([...state.discards, cardId])
+        expect(playOf(next).activeId).toBe(leftOf(state.seating, activeId))
+        expect(next.timelines[activeId]).toBeUndefined()
+        expect(next.lastTurn).toEqual([
+            ...state.log,
+            { kind: 'remove', playerId: activeId },
+            { kind: 'discard', cardId },
+        ])
+    })
+
+    it('of the active player at the lock-in choice ends the turn, nothing discarded', () => {
+        const state = scenario().players(3).activePlayer(2).step('deciding').build().state
+        const { activeId } = playOf(state)
+        const next = ok(remove(state, activeId))
+        expect(next.discards).toEqual(state.discards)
+        expect(playOf(next).activeId).toBe(leftOf(state.seating, activeId))
+    })
+
+    it('of the active player during the steals discards the card, and the next player is up', () => {
+        const state = scenario().players(4).activePlayer(2).step('stealing').build().state
+        const { activeId, cardId } = dealtPlay(state)
+        const next = ok(remove(state, activeId))
+        expect(next.discards).toEqual([...state.discards, cardId])
+        expect(playOf(next).activeId).toBe(leftOf(state.seating, activeId))
+    })
+
+    it('of the current stealer passes the card to the next one', () => {
+        const state = scenario().players(4).activePlayer(2).step('stealing').build().state
+        const play = dealtPlay(state)
+        if (play.step !== 'stealing') throw new Error('Not stealing.')
+        const next = ok(remove(state, play.stealerId))
+        expect(dealtPlay(next)).toMatchObject({
+            step: 'stealing',
+            stealerId: leftOf(state.seating, play.stealerId),
+        })
+        // The second stealer passes it on to the third, not back to the first.
+        const second = scenario()
+            .players(5)
+            .activePlayer(2)
+            .step('stealing')
+            .missedSteal()
+            .build().state
+        const secondPlay = dealtPlay(second)
+        if (secondPlay.step !== 'stealing') throw new Error('Not stealing.')
+        expect(dealtPlay(ok(remove(second, secondPlay.stealerId)))).toMatchObject({
+            stealerId: leftOf(second.seating, secondPlay.stealerId),
+        })
+    })
+
+    it('of the last stealer discards the card, and the next player is up', () => {
+        const state = scenario()
+            .players(3)
+            .activePlayer(3)
+            .step('stealing')
+            .missedSteal()
+            .build().state
+        const { activeId, cardId, readerId } = dealtPlay(state)
+        const next = ok(remove(state, readerId))
+        expect(next.discards).toEqual([...state.discards, cardId])
+        expect(playOf(next).activeId).toBe(leftOf(state.seating, activeId))
+    })
+
+    it('of the reader moves the reading and the card text to the next player before the active one', () => {
+        const state = scenario().players(4).activePlayer(3).build().state
+        const { activeId, readerId } = dealtPlay(state)
+        const next = ok(remove(state, readerId))
+        const reader = rightOf(state.seating, readerId)
+        expect(dealtPlay(next)).toMatchObject({ activeId, step: 'placing', readerId: reader })
+        const view = redact(next, reader)
+        if (view.phase.name !== 'playing' || view.phase.play.step === 'picking') {
+            throw new Error('No card is in play.')
+        }
+        expect(view.phase.play.card.text).not.toBeNull()
+    })
+
+    it("of the reader passes a waiting Reader's choice to the new reader", () => {
+        const state = scenario().players(4).step('readersChoice').build().state
+        const { readerId } = playOf(state)
+        const next = ok(remove(state, readerId))
+        const reader = playOf(next).readerId
+        expect(reader).toBe(rightOf(state.seating, readerId))
+        const category = Object.keys(next.queues)[0]
+        expect(
+            dealtPlay(ok(apply(next, { type: 'pickCategory', by: reader, category }))),
+        ).toMatchObject({ step: 'placing', readerId: reader })
+    })
+
+    it('of the reader during the steals moves the reading, and the steals go on', () => {
+        const state = scenario().players(4).step('stealing').build().state
+        const play = dealtPlay(state)
+        if (play.step !== 'stealing') throw new Error('Not stealing.')
+        const next = ok(remove(state, play.readerId))
+        expect(dealtPlay(next)).toMatchObject({
+            step: 'stealing',
+            stealerId: play.stealerId,
+            readerId: rightOf(state.seating, play.readerId),
+        })
+    })
+
+    it('of the reader during the steals never gives a stealer a second go', () => {
+        // Astrid's reading was skipped, so Dag reads and steals last: Cecilia, Astrid, Dag.
+        const state = scenario()
+            .players(4)
+            .activePlayer(2)
+            .absent([1])
+            .skip()
+            .misplace()
+            .missedSteal()
+            .build().state
+        const { cardId } = dealtPlay(state)
+        expect(dealtPlay(state)).toMatchObject({ readerId: 'dag', stealerId: 'astrid' })
+        const next = ok(remove(state, 'dag'))
+        expect(dealtPlay(next)).toMatchObject({ readerId: 'astrid', stealerId: 'astrid' })
+        // Astrid misses, and Cecilia, who already missed, doesn't get it back.
+        const missed = ok(apply(next, { type: 'steal', by: 'astrid', slot: 0 }))
+        if (missed.phase.name === 'playing' && missed.phase.play.step === 'stealing') {
+            throw new Error('Still stealing.')
+        }
+        expect(missed.discards.includes(cardId) || score(missed, 'astrid') > 0).toBe(true)
+    })
+
+    it('of the starting player opens the next round with the next player clockwise from their seat', () => {
+        // Two seats on from the starting player, so the round has turns left.
+        const starter = scenario().players(4).build().state.startingPlayerId!
+        const seating = scenario().players(4).build().state.seating
+        const active = leftOf(seating, leftOf(seating, starter))
+        const state = ok(
+            apply(
+                scenario()
+                    .players(4)
+                    .activePlayer(seating.indexOf(active) + 1)
+                    .build().state,
+                {
+                    type: 'setReseat',
+                    by: 'astrid',
+                    reseat: true,
+                },
+            ),
+        )
+        const after = leftOf(seating, starter)
+        const next = ok(remove(state, starter))
+        expect(next.startingPlayerId).toBe(after)
+        // The round ends as the turn reaches `after`: the flagged reseat shows it.
+        const once = turnOver(next)
+        expect(playOf(once).activeId).toBe(leftOf(seating, active))
+        const twice = turnOver(once)
+        expect(twice.phase.name).toBe('seating')
+        const resumed = ok(
+            apply(twice, { type: 'confirmSeating', by: 'astrid', currentYear: 2026 }),
+        )
+        expect(playOf(resumed).activeId).toBe(after)
+    })
+
+    it('of the starting player in their own turn opens the round again with the next player', () => {
+        const state = scenario().players(3).build().state
+        const starter = playOf(state).activeId
+        expect(starter).toBe(state.startingPlayerId)
+        const next = ok(remove(state, starter))
+        const after = leftOf(state.seating, starter)
+        expect(next.startingPlayerId).toBe(after)
+        expect(playOf(next).activeId).toBe(after)
+    })
+
+    it('ends the game with no winner when fewer than two players are left', () => {
+        const state = scenario().players(2).build().state
+        const next = ok(remove(state, 'björn'))
+        expect(next.phase).toEqual({ name: 'ended' })
+        expect(next.seating).toEqual(['astrid'])
+        expect(redact(next, 'astrid').phase).toEqual({ name: 'ended' })
+
+        const three = ok(remove(scenario().players(3).build().state, 'cecilia'))
+        expect(three.phase.name).toBe('playing')
+        expect(ok(remove(three, 'björn')).phase).toEqual({ name: 'ended' })
+    })
+
+    it('during seating takes them off the table, and confirming plays without them', () => {
+        const seating = create(fourPlayers())
+        const next = ok(remove(seating, 'cecilia'))
+        expect(next.seating).toEqual(['astrid', 'bjorn', 'dag'])
+        const playing = ok(apply(next, { type: 'confirmSeating', by: 'astrid', currentYear: 2026 }))
+        expect(Object.keys(playing.timelines).sort()).toEqual(['astrid', 'bjorn', 'dag'])
+    })
+
+    it('is refused for anyone but the host, for the host, and for someone not in the game', () => {
+        const state = scenario().players(4).build().state
+        expect(remove(state, 'dag', 'björn')).toEqual({ ok: false, refusal: 'not_host' })
+        expect(remove(state, 'astrid')).toEqual({ ok: false, refusal: 'host_cannot_leave' })
+        expect(remove(state, 'stranger')).toEqual({ ok: false, refusal: 'no_player' })
+        const once = ok(remove(state, 'dag'))
+        expect(remove(once, 'dag')).toEqual({ ok: false, refusal: 'no_player' })
+    })
+
+    it('is refused once the game is over', () => {
+        const ended = ok(
+            apply(scenario().players(3).build().state, { type: 'endEarly', by: 'astrid' }),
+        )
+        expect(remove(ended, 'björn')).toEqual({ ok: false, refusal: 'game_over' })
+    })
+})
+
+describe('ending early and abandoning', () => {
+    const endEarly = (state: GameState, by = 'astrid') => apply(state, { type: 'endEarly', by })
+    // A player's abandon can't be typed; it comes in from outside as any other command would.
+    const abandon = (state: GameState, by = 'system') =>
+        apply(state, { type: 'abandon', by } as Command)
+
+    it('lets the host end the game early, in play or in seating, with no winner', () => {
+        const playing = scenario().players(4).activePlayer(2).build().state
+        expect(ok(endEarly(playing)).phase).toEqual({ name: 'ended' })
+        expect(redact(ok(endEarly(playing)), 'björn').phase).toEqual({ name: 'ended' })
+        expect(ok(endEarly(create(fourPlayers()))).phase).toEqual({ name: 'ended' })
+    })
+
+    it('lets only the host end early', () => {
+        const state = scenario().players(4).activePlayer(2).build().state
+        for (const by of ['björn', 'cecilia', 'dag']) {
+            expect(endEarly(state, by)).toEqual({ ok: false, refusal: 'not_host' })
+        }
+    })
+
+    it('abandons the game with no winner on the system’s command', () => {
+        const playing = scenario().players(3).step('stealing').build().state
+        expect(ok(abandon(playing)).phase).toEqual({ name: 'abandoned' })
+        expect(ok(abandon(create(fourPlayers()))).phase).toEqual({ name: 'abandoned' })
+    })
+
+    it('lets only the system abandon, and the system nothing else', () => {
+        const state = scenario().players(3).build().state
+        expect(abandon(state, 'astrid')).toEqual({ ok: false, refusal: 'not_system' })
+        expect(abandon(state, 'björn')).toEqual({ ok: false, refusal: 'not_system' })
+        expect(endEarly(state, 'system')).toEqual({ ok: false, refusal: 'no_seat' })
+    })
+
+    it('is refused once the game is over', () => {
+        const ended = ok(endEarly(scenario().players(3).build().state))
+        expect(endEarly(ended)).toEqual({ ok: false, refusal: 'game_over' })
+        expect(abandon(ended)).toEqual({ ok: false, refusal: 'game_over' })
+        const abandoned = ok(abandon(scenario().players(3).build().state))
+        expect(endEarly(abandoned)).toEqual({ ok: false, refusal: 'game_over' })
+        expect(abandon(abandoned)).toEqual({ ok: false, refusal: 'game_over' })
     })
 })

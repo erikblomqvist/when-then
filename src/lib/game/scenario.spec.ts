@@ -64,6 +64,7 @@ describe('building a two-player scenario', () => {
             helpers: [],
             viewer: 1,
             absent: [],
+            removed: [],
         })
         expect(buildScenario(copy).state).toEqual(buildScenario(recipe).state)
     })
@@ -540,6 +541,92 @@ describe('an impossible recipe', () => {
 
     it('says what is wrong in the message', () => {
         expect(() => scenario().viewer(3).build()).toThrow('viewer: there is no player 3')
+    })
+})
+
+describe('removed players', () => {
+    const fieldOf = (build: () => unknown) => {
+        try {
+            build()
+        } catch (error) {
+            if (error instanceof ScenarioError) return error.field
+            throw error
+        }
+        throw new Error('It built.')
+    }
+
+    it('are out of the seating with no timeline, listed as removed, before play begins', () => {
+        const { state, view } = scenario().players(5).removed([3, 5]).activePlayer(4).build()
+        expect(state.seating).toEqual(['astrid', 'björn', 'dag'])
+        expect(Object.keys(state.timelines).sort()).toEqual(['astrid', 'björn', 'dag'])
+        expect(state.players.filter((player) => player.removed).map((player) => player.id)).toEqual(
+            ['cecilia', 'eira'],
+        )
+        expect(playOf(state).activeId).toBe('dag')
+        expect(view.players).toHaveLength(5)
+    })
+
+    it('can be the viewer, but not the active player, absent or scoring', () => {
+        expect(scenario().players(4).removed([2]).viewer(2).build().view.seat).toBe('björn')
+        expect(fieldOf(() => scenario().players(4).removed([2]).activePlayer(2).build())).toBe(
+            'activePlayer',
+        )
+        expect(fieldOf(() => scenario().players(4).removed([2]).absent([2]).build())).toBe('absent')
+        expect(
+            fieldOf(() => scenario().players(3).removed([2]).target(3).scores([1, 1, 0]).build()),
+        ).toBe('scores')
+    })
+
+    it('throw for the host, a player twice, someone not there, or fewer than two left', () => {
+        expect(fieldOf(() => scenario().players(4).removed([1]).build())).toBe('removed')
+        expect(fieldOf(() => scenario().players(4).removed([2, 2]).build())).toBe('removed')
+        expect(fieldOf(() => scenario().players(4).removed([5]).build())).toBe('removed')
+        expect(fieldOf(() => scenario().players(3).removed([2, 3]).build())).toBe('removed')
+    })
+
+    it('leave the rest scoring and stealing as recipes ask', () => {
+        const { state } = scenario()
+            .players(4)
+            .removed([3])
+            .target(3)
+            .scores([2, 1, 0, 2])
+            .activePlayer(2)
+            .step('stealing')
+            .build()
+        expect(state.seating.map((id) => score(state, id))).toEqual([2, 1, 2])
+        expect(playOf(state).step).toBe('stealing')
+    })
+})
+
+describe('ending early', () => {
+    it('ends the game with no winner, seen from the player who was active', () => {
+        const { state, view } = scenario().players(4).activePlayer(3).endEarly().build()
+        expect(state.phase).toEqual({ name: 'ended' })
+        expect(view.phase).toEqual({ name: 'ended' })
+        expect(view.seat).toBe('cecilia')
+    })
+
+    it('throws on a helper step after the game has ended, naming helpers', () => {
+        expect(() => scenario().players(3).endEarly().misplace().build()).toThrow(
+            'helpers: the game is ended, not playing',
+        )
+    })
+})
+
+describe('the moments the lifecycle spec names', () => {
+    it('all build', () => {
+        const moments = [
+            ...Array.from({ length: 9 }, (_, i) => scenario().players(i + 2)),
+            // An absent reader, skipped.
+            scenario().players(4).activePlayer(2).absent([1]).skip(),
+            // A skip mid-steal.
+            scenario().players(4).activePlayer(1).step('stealing').absent([2]).skip(),
+            // A removed player.
+            scenario().players(4).removed([3]),
+            // A game ended early.
+            scenario().players(4).endEarly(),
+        ]
+        for (const moment of moments) expect(moment.build).not.toThrow()
     })
 })
 

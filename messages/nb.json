@@ -79,6 +79,7 @@
     "refusal_game_over": "Spillet er over.",
     "refusal_nothing_to_skip": "Den spilleren holder ikke opp spillet akkurat nå.",
     "refusal_no_other_reader": "Det er ingen andre som kan lese kortet.",
+    "refusal_not_system": "Et spill avsluttes bare slik etter 24 timer uten at noen spiller.",
     "player_icon_cat": "Katt",
     "player_icon_dog": "Hund",
     "player_icon_bird": "Fugl",

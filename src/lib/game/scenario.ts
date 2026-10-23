@@ -38,10 +38,10 @@ export type ScenarioStep = (typeof scenarioSteps)[number]
 
 /**
  * Exact moves a recipe plays, in order, once it has reached its step: the active player
- * misplaces the card in play, the current stealer misses or steals it, or the host skips an
- * absent player holding up play.
+ * misplaces the card in play, the current stealer misses or steals it, the host skips an absent
+ * player holding up play, or the host ends the game early.
  */
-export const helperSteps = ['misplace', 'missedSteal', 'correctSteal', 'skip'] as const
+export const helperSteps = ['misplace', 'missedSteal', 'correctSteal', 'skip', 'endEarly'] as const
 export type HelperStep = (typeof helperSteps)[number]
 
 /** A moment in a game, flat and serialisable. Players are numbered from 1 in seating order. */
@@ -69,13 +69,21 @@ export type Recipe = {
     scores: number[] | null
     /** Played after the step is reached, in order. */
     helpers: HelperStep[]
-    /** The player whose phone the view is for; null for the active player. */
+    /**
+     * The player whose phone the view is for; null for the active player, or once the game is
+     * over, the player who was active last.
+     */
     viewer: number | null
     /**
      * The players not at the table. Absence isn't part of the rules, so it's only an overlay
      * beside the state and the view, as a phone adds it from presence; `skip` acts on it.
      */
     absent: number[]
+    /**
+     * The players the host removed, while the table was still being seated: they keep their
+     * numbers, listed as removed, with no seat or timeline. Never the host, player 1.
+     */
+    removed: number[]
 }
 
 export const defaultRecipe: Recipe = {
@@ -89,6 +97,7 @@ export const defaultRecipe: Recipe = {
     helpers: [],
     viewer: null,
     absent: [],
+    removed: [],
 }
 
 /** A recipe the rules can't reach. `field` is the recipe field at fault. */
@@ -135,15 +144,28 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
     missedSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'missedSteal'] }),
     correctSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'correctSteal'] }),
     skip: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'skip'] }),
+    endEarly: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'endEarly'] }),
     absent: (absent: number[]) => scenario({ ...recipe, absent }),
+    removed: (removed: number[]) => scenario({ ...recipe, removed }),
     viewer: (viewer: number) => scenario({ ...recipe, viewer }),
     build: () => buildScenario(recipe),
 })
 
 /** Play the real game to the moment `recipe` describes. Throws a `ScenarioError` if it can't. */
 export function buildScenario(recipe: Recipe): Scenario {
-    const { seed, players, activePlayer, step, unlocked, target, scores, helpers, viewer, absent } =
-        recipe
+    const {
+        seed,
+        players,
+        activePlayer,
+        step,
+        unlocked,
+        target,
+        scores,
+        helpers,
+        viewer,
+        absent,
+        removed,
+    } = recipe
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         throw new ScenarioError('seed', 'a whole number from 0 to 4294967295')
     }
@@ -187,9 +209,22 @@ export function buildScenario(recipe: Recipe): Scenario {
         }
     }
     checkPlayerNumber('viewer', viewer, players)
-    for (const n of absent) checkPlayerNumber('absent', n, players)
-    if (new Set(absent).size !== absent.length) {
-        throw new ScenarioError('absent', 'names each player once')
+    checkPlayerList('absent', absent, players)
+    checkPlayerList('removed', removed, players)
+    if (removed.includes(1)) throw new ScenarioError('removed', 'the host, player 1, stays')
+    if (players - removed.length < 2) {
+        throw new ScenarioError('removed', 'a game plays on with at least two players left')
+    }
+    if (activePlayer !== null && removed.includes(activePlayer)) {
+        throw new ScenarioError('activePlayer', `player ${activePlayer} is removed`)
+    }
+    const absentRemoved = absent.find((n) => removed.includes(n))
+    if (absentRemoved !== undefined) {
+        throw new ScenarioError('absent', `player ${absentRemoved} is removed, not absent`)
+    }
+    const scoringRemoved = removed.find((n) => (scores?.[n - 1] ?? 0) > 0)
+    if (scoringRemoved !== undefined) {
+        throw new ScenarioError('scores', `player ${scoringRemoved} is removed and scores nothing`)
     }
 
     const ids = names.slice(0, players).map((name) => name.toLowerCase())
@@ -226,7 +261,8 @@ export function buildScenario(recipe: Recipe): Scenario {
         check(state)
     }
 
-    // Players sit in their numbered order; the host, player 1, confirms it.
+    // Players sit in their numbered order; the host removes anyone to remove, then confirms it.
+    for (const n of removed) play({ type: 'remove', by: ids[0], playerId: ids[n - 1] }, 'removed')
     if (state.phase.name === 'seating') {
         play({ type: 'confirmSeating', by: ids[0], currentYear }, 'players')
     }
@@ -393,7 +429,7 @@ export function buildScenario(recipe: Recipe): Scenario {
             continue
         }
         state = roundStart
-        for (let i = 0; i < players; i++) turnPlayed(field)
+        for (let i = 0; i < state.seating.length; i++) turnPlayed(field)
         roundStart = state
     }
 
@@ -417,8 +453,14 @@ export function buildScenario(recipe: Recipe): Scenario {
     }
 
     const absentIds = absent.map((n) => ids[n - 1])
+    let lastActive = playing(state, 'step').activeId
     for (const helper of helpers) {
         const current = playing(state, 'helpers')
+        lastActive = current.activeId
+        if (helper === 'endEarly') {
+            play({ type: 'endEarly', by: ids[0] }, 'helpers')
+            continue
+        }
         if (helper === 'skip') {
             // The first absent player holding up play: an absent active player before the
             // reader, as a new reader wouldn't help them.
@@ -474,18 +516,31 @@ export function buildScenario(recipe: Recipe): Scenario {
         play({ type: 'steal', by: current.stealerId, slot }, 'helpers')
     }
 
-    const seat = viewer === null ? playing(state, 'viewer').activeId : ids[viewer - 1]
+    const seat =
+        viewer !== null
+            ? ids[viewer - 1]
+            : state.phase.name === 'playing'
+              ? state.phase.activeId
+              : lastActive
     return { recipe, state, view: redact(state, seat), absent: absentIds }
 }
 
 /** An error on `field` unless `n` is null or numbers one of the `players`. */
 function checkPlayerNumber(
-    field: 'activePlayer' | 'viewer' | 'absent',
+    field: 'activePlayer' | 'viewer' | 'absent' | 'removed',
     n: number | null,
     players: number,
 ) {
     if (n !== null && (!Number.isInteger(n) || n < 1 || n > players)) {
         throw new ScenarioError(field, `there is no player ${n}`)
+    }
+}
+
+/** An error on `field` unless `list` numbers players of the `players`, each once. */
+function checkPlayerList(field: 'absent' | 'removed', list: number[], players: number) {
+    for (const n of list) checkPlayerNumber(field, n, players)
+    if (new Set(list).size !== list.length) {
+        throw new ScenarioError(field, 'names each player once')
     }
 }
 

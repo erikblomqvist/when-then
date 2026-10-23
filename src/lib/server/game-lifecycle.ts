@@ -48,6 +48,7 @@ const refusals = {
     game_over: 'The game is over.',
     nothing_to_skip: 'That player is not holding up play: no turn, steal or reading of theirs.',
     no_other_reader: 'Nobody else can read the card.',
+    not_system: 'Only the system abandons a game.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */

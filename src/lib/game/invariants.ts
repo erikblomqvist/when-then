@@ -56,8 +56,15 @@ export function invariantProblems(state: GameState): string[] {
     )
     if (new Set(anchors).size !== anchors.length) problems.push('two anchors share a year')
 
+    const { startingPlayerId } = state
+    const open = playing !== undefined || state.phase.name === 'seating'
+    if (open && startingPlayerId !== null && !state.seating.includes(startingPlayerId)) {
+        problems.push('the starting player is not seated')
+    }
+
     if (playing) {
         const { activeId, play } = playing
+        if (state.seating.length < 2) problems.push('playing with fewer than two players')
         if (!state.seating.includes(activeId)) problems.push('the active player is not seated')
         if (!state.seating.includes(play.readerId)) problems.push('the reader is not seated')
         if (play.readerId === activeId) problems.push('the active player reads their own card')

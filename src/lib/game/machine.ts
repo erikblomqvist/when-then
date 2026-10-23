@@ -37,7 +37,10 @@ export type CreateInput = {
     currentYear: number
 }
 
-/** A command, with `by` the player the server resolved from the session. */
+/** Who sends the commands no player does: the abandon. */
+export const system = 'system'
+
+/** A command, with `by` the player the server resolved from the session, or `system`. */
 export type Command =
     | { type: 'setSeating'; by: string; seating: Seating }
     /** `currentYear` caps the anchors, which confirming deals the first time. */
@@ -54,6 +57,12 @@ export type Command =
     | { type: 'steal'; by: string; slot: number }
     /** Move play past what absent `playerId` is holding up: their turn, steal or reading. */
     | { type: 'skip'; by: string; playerId: string }
+    /** Take `playerId` out of the game for good, with their timeline. */
+    | { type: 'remove'; by: string; playerId: string }
+    /** End the game now, with no winner. */
+    | { type: 'endEarly'; by: string }
+    /** Nobody has played for 24 hours: the game ends with no winner. Only `system` sends it. */
+    | { type: 'abandon'; by: typeof system }
 
 /** The next state, or the code for why the command was refused. */
 export type ApplyResult = { ok: true; state: GameState } | { ok: false; refusal: GameRefusalCode }
@@ -140,13 +149,16 @@ function startTurn(state: GameState, activeId: string): GameState {
 }
 
 /**
- * The active player's turn is over and the player on their left is next, unless that's the
- * starting player and the round is over. Then the highest score at or above the target wins,
+ * The active player's turn is over and `next` is up, by default the player on their left, unless
+ * that's the starting player and the round is over. Then the highest score at or above the target wins,
  * equal top scores sharing the win; without a winner, a flagged round goes into seating (with
  * more than two players, who can only sit one way round) and the next round waits for Confirm.
  */
-function endTurn(state: GameState, activeId: string): GameState {
-    const next = leftOf(state.seating, activeId)
+function endTurn(
+    state: GameState,
+    activeId: string,
+    next = leftOf(state.seating, activeId),
+): GameState {
     if (next !== state.startingPlayerId) return startTurn(state, next)
     const { top, ids } = leaders(state)
     if (top >= state.settings.targetScore) {
@@ -249,6 +261,10 @@ export function load(saved: unknown): GameState {
 
 /** Play `command` on `state`: the next state, or why it was refused. */
 export function apply(state: GameState, command: Command): ApplyResult {
+    if (command.type === 'abandon') {
+        if (command.by !== system) return refuse('not_system')
+        return over(state, 'abandoned')
+    }
     const player = state.players.find((candidate) => candidate.id === command.by)
     if (!player) return refuse('no_seat')
     if (player.removed) return refuse('removed')
@@ -271,14 +287,20 @@ export function apply(state: GameState, command: Command): ApplyResult {
         }
         case 'setReseat': {
             if (!player.host) return refuse('not_host')
-            if (state.phase.name !== 'seating' && state.phase.name !== 'playing') {
-                return refuse('game_over')
-            }
+            if (!isOpen(state)) return refuse('game_over')
             return succeed({ ...state, reseat: command.reseat })
         }
         case 'skip': {
             if (!player.host) return refuse('not_host')
             return skip(state, command.playerId)
+        }
+        case 'remove': {
+            if (!player.host) return refuse('not_host')
+            return remove(state, command.playerId)
+        }
+        case 'endEarly': {
+            if (!player.host) return refuse('not_host')
+            return over(state, 'ended')
         }
     }
 
@@ -388,15 +410,94 @@ function skip(state: GameState, playerId: string): ApplyResult {
         if (play.step !== 'placing') return succeed(endTurn(next, activeId))
         return succeed(endTurn(discarded(next, play.cardId), activeId))
     }
-    // To the right from the active player: the players who read in their place.
-    const readers = startingFrom(state.seating, activeId).slice(1).reverse()
-    if (readers.length < 2) return refuse('no_other_reader')
-    const readerId = readers[(readers.indexOf(playerId) + 1) % readers.length]
+    if (state.seating.length < 3) return refuse('no_other_reader')
+    const readerId = nextReader(state.seating, activeId, playerId)
     return succeed({
         ...state,
         log,
         phase: { ...state.phase, play: { ...play, readerId } },
     })
+}
+
+/**
+ * Who reads after `readerId`: the next player before the active one, to the right, round again
+ * to the first reader. With two players there is nobody else, and it's `readerId` again.
+ */
+function nextReader(seating: Seating, activeId: string, readerId: string) {
+    const readers = startingFrom(seating, activeId).slice(1).reverse()
+    return readers[(readers.indexOf(readerId) + 1) % readers.length]
+}
+
+/**
+ * The host takes `playerId` out of the game for good: out of the seating with their timeline,
+ * still listed, as removed. What they were holding up moves on as a skip would: the active
+ * player's turn ends, a card in play or being stolen discarded; a stealer's card passes on; the
+ * reading moves to the next player before the active one. A removed starting player hands the
+ * starting player's place to the next player clockwise from their seat. Fewer than two players left ends
+ * the game with no winner.
+ */
+function remove(state: GameState, playerId: string): ApplyResult {
+    if (!isOpen(state)) return refuse('game_over')
+    const target = state.players.find((candidate) => candidate.id === playerId)
+    if (!target || target.removed) return refuse('no_player')
+    if (target.host) return refuse('host_cannot_leave')
+
+    const { seating } = state
+    const nextStarting = state.startingPlayerId === playerId ? leftOf(seating, playerId) : undefined
+    const next: GameState = {
+        ...state,
+        players: state.players.map((player) =>
+            player.id === playerId ? { ...player, removed: true } : player,
+        ),
+        seating: seating.filter((id) => id !== playerId),
+        timelines: Object.fromEntries(
+            Object.entries(state.timelines).filter(([id]) => id !== playerId),
+        ),
+        startingPlayerId: nextStarting ?? state.startingPlayerId,
+        log: [...state.log, { kind: 'remove', playerId }],
+    }
+    if (next.seating.length < 2) return succeed({ ...next, phase: { name: 'ended' } })
+    if (state.phase.name !== 'playing') return succeed(next)
+
+    const { activeId, play } = state.phase
+    if (playerId === activeId) {
+        const after = leftOf(seating, activeId)
+        const out =
+            play.step === 'placing' || play.step === 'stealing'
+                ? discarded(next, play.cardId)
+                : next
+        // The round opened with them, so it opens again with the player after them.
+        if (nextStarting !== undefined) return succeed(startTurn(out, after))
+        return succeed(endTurn(out, activeId, after))
+    }
+    if (play.step === 'stealing' && play.stealerId === playerId) {
+        return succeed(toNextStealer(next, activeId, playerId, seating))
+    }
+    if (play.readerId !== playerId) return succeed(next)
+    // Mid-steal, the reading goes to whoever now steals last, so the steal order stays as it was.
+    const readerId =
+        play.step === 'stealing'
+            ? stealOrder(seating, activeId, playerId)
+                  .filter((id) => id !== playerId)
+                  .at(-1)!
+            : nextReader(seating, activeId, playerId)
+    return succeed({ ...next, phase: { ...state.phase, play: { ...play, readerId } } })
+}
+
+/** The game is over with no winner: ended early by the host, or abandoned. */
+function over(state: GameState, name: 'ended' | 'abandoned'): ApplyResult {
+    if (!isOpen(state)) return refuse('game_over')
+    return succeed({ ...state, phase: { name } })
+}
+
+/** Whether the game is still on: being seated or played, not over. */
+const isOpen = (state: GameState) =>
+    state.phase.name === 'seating' || state.phase.name === 'playing'
+
+/** Who steals a misplaced card, in turn: seating order from the active player's left, the reader last. */
+function stealOrder(seating: Seating, activeId: string, readerId: string) {
+    const others = startingFrom(seating, activeId).slice(1)
+    return [...others.filter((id) => id !== readerId), readerId]
 }
 
 /** Whether `slot` is a gap on `timeline`: 0 before the first entry up to after the last. */
@@ -446,15 +547,20 @@ function unlockedLost(state: GameState, playerId: string): GameState {
 /**
  * The misplaced card goes to the next stealer after `from` (or to the first, without one): the
  * players in seating order from the active player's left, the reader last. With nobody left, it
- * is discarded with its date revealed and the player after the active one is up.
+ * is discarded with its date revealed and the player after the active one is up. `seating` is
+ * the seating from before `from` was removed, if they were.
  */
-function toNextStealer(state: GameState, activeId: string, from?: string): GameState {
+function toNextStealer(
+    state: GameState,
+    activeId: string,
+    from?: string,
+    seating: Seating = state.seating,
+): GameState {
     if (state.phase.name !== 'playing' || state.phase.play.step === 'picking') {
         throw new Error('Only a dealt card can be stolen.')
     }
     const { readerId, draw, cardId } = state.phase.play
-    const others = startingFrom(state.seating, activeId).slice(1)
-    const order = [...others.filter((id) => id !== readerId), readerId]
+    const order = stealOrder(seating, activeId, readerId)
     const stealerId = order[from === undefined ? 0 : order.indexOf(from) + 1]
     if (stealerId === undefined) return endTurn(discarded(state, cardId), activeId)
     return {
