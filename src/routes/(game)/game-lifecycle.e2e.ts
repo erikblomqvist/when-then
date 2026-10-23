@@ -13,9 +13,20 @@ import { qrPath } from '../../lib/ui/qr-path'
 
 const db = localServiceClient()
 
-test('a stepper tap is kept when a refetch of the lobby lands before its save', async ({
+test('a typed score and a stepper tap are kept when a refetch of the lobby lands before their save', async ({
     page,
 }) => {
+    // The lobby refetches once its live channel is joined; that join is held back until the
+    // host has typed a score, as on a slow phone.
+    let join!: () => void
+    const joining = new Promise<void>((resolve) => (join = resolve))
+    await page.routeWebSocket(/\/realtime\//, (ws) => {
+        const server = ws.connectToServer()
+        ws.onMessage(async (message) => {
+            await joining
+            server.send(message)
+        })
+    })
     await gotoHydrated(page, '/new')
     await page.getByLabel('Your name').fill('Astrid')
     await page.getByRole('radio', { name: 'Cat' }).check()
@@ -41,6 +52,12 @@ test('a stepper tap is kept when a refetch of the lobby lands before its save', 
         },
     )
     await score.fill('15')
+
+    // The refetch on joining says 10, from before the host typed; the typed 15 stays.
+    const subscribed = page.waitForResponse((response) => response.url().includes('__data.json'))
+    join()
+    await subscribed
+    await expect(score).toHaveValue('15')
     await score.press('Tab')
     await up.click()
     await expect(score).toHaveValue('16')

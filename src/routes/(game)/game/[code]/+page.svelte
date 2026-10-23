@@ -92,10 +92,11 @@
     const settingsRefused = $derived(form?.settings === true)
 
     // The host's settings, saved on every change. They follow the lobby, so a refetch shows
-    // what was saved. A stepper tap not saved yet wins over a refetch (the last save's, or a
-    // nudge) landing before its own save, which would otherwise undo it.
-    let unsavedScore = $state<number | null>(null)
-    let targetScore = $derived(unsavedScore ?? lobby.targetScore)
+    // what was saved. A score typed or tapped but not saved yet wins over a refetch (the last
+    // save's, a nudge, or the one on subscribing) landing before its own save, which would
+    // otherwise undo it. Undefined is nothing unsaved; null is a field emptied to type anew.
+    let unsavedScore = $state<number | null>()
+    const targetScore = $derived(unsavedScore === undefined ? lobby.targetScore : unsavedScore)
     let exactYear = $derived(lobby.exactYear)
     let cardLanguage = $derived(lobby.cardLanguage)
     let leftOutCountries = $derived(lobby.leftOutCountries)
@@ -118,11 +119,10 @@
         return async ({ result, update }) => {
             await update({ reset: false })
             // Saved: the lobby has it now, unless the host tapped on meanwhile.
-            if (unsavedScore === sent) unsavedScore = null
+            if (unsavedScore === sent) unsavedScore = undefined
             // A refused setting goes back to what's saved.
             if (result.type === 'failure') {
-                unsavedScore = null
-                targetScore = lobby.targetScore
+                unsavedScore = undefined
                 exactYear = lobby.exactYear
                 cardLanguage = lobby.cardLanguage
                 leftOutCountries = lobby.leftOutCountries
@@ -226,7 +226,7 @@
                             <IconButton
                                 label={m.target_score_down()}
                                 aria-controls="target-score"
-                                disabled={targetScore <= minTargetScore}
+                                disabled={targetScore !== null && targetScore <= minTargetScore}
                                 onclick={() => stepScore(-1)}>
                                 <MinusIcon />
                             </IconButton>
@@ -241,11 +241,11 @@
                                 step="1"
                                 required
                                 aria-describedby="target-score-hint"
-                                bind:value={targetScore} />
+                                bind:value={() => targetScore, (typed) => (unsavedScore = typed)} />
                             <IconButton
                                 label={m.target_score_up()}
                                 aria-controls="target-score"
-                                disabled={targetScore >= maxTargetScore}
+                                disabled={targetScore !== null && targetScore >= maxTargetScore}
                                 onclick={() => stepScore(1)}>
                                 <PlusIcon />
                             </IconButton>
