@@ -1,7 +1,7 @@
 // What the card editor shows before Publish: every requirement of the publish rule (and the
 // form), always the same list, each ticked off once the form as typed meets it, and after it
-// the things worth adding that aren't required (translations, a source, a verified date),
-// listed only while missing. Publish is offered when every requirement is done.
+// the things worth having that aren't required (translations, a source, a verified date),
+// ticked off the same way. Publish is offered when every requirement is done.
 
 import type { Card } from './card'
 import {
@@ -74,42 +74,39 @@ export function publishChecklist(values: CardFormValues): PublishCheck[] {
     return checks
 }
 
-/** Something worth adding that the publish rule doesn't ask for. */
-export type PublishSuggestion = { key: string; label: string; detail?: string }
+/** Something worth having that the publish rule doesn't ask for, and whether the card has it. */
+export type PublishSuggestion = { key: string; label: string; done: boolean; detail?: string }
 
 /**
- * What the card still lacks among the things worth having: each translation (missing, or
- * machine-made or stale and so not reviewed, as it will be once saved), a source, and a
- * verified date (`card` is the saved card, if any). Empty when it has them all.
+ * The things worth having, always the same list, each ticked off once the card has it: each
+ * translation, reviewed (as it will be once saved; a machine-made or stale one is there but
+ * open, saying why), a source, and a verified date (`card` is the saved card, if any).
  */
 export function publishSuggestions(values: CardFormValues, card?: Card): PublishSuggestion[] {
     const englishChanged =
         card !== undefined && values.text_en.trim() !== (card.translations.en?.text ?? '')
-    const suggestions: PublishSuggestion[] = []
-    for (const locale of translationLocales) {
+    const translations = translationLocales.map((locale): PublishSuggestion => {
         const state = statusOnSave({
             saved: card?.translations[locale],
             draft: translationDraft(values, locale),
             englishChanged,
         })
-        const language = localeName[locale]
-        if (state === 'missing') {
-            suggestions.push({ key: locale, label: `${language} translation` })
-        } else if (state === 'machine') {
-            suggestions.push({
-                key: locale,
-                label: `Review the ${language} translation`,
-                detail: 'Machine translated, not reviewed yet',
-            })
-        } else if (state === 'stale') {
-            suggestions.push({
-                key: locale,
-                label: `Review the ${language} translation`,
-                detail: 'The English changed since it was reviewed',
-            })
+        const detail =
+            state === 'machine'
+                ? 'Machine translated, not reviewed yet'
+                : state === 'stale'
+                  ? 'The English changed since it was reviewed'
+                  : undefined
+        return {
+            key: locale,
+            label: `${localeName[locale]} translation`,
+            done: state === 'reviewed',
+            detail,
         }
-    }
-    if (!values.source_url.trim()) suggestions.push({ key: 'source', label: 'Source' })
-    if (!card?.verifiedAt) suggestions.push({ key: 'verified', label: 'Date verified' })
-    return suggestions
+    })
+    return [
+        ...translations,
+        { key: 'source', label: 'Source link for the date', done: values.source_url.trim() !== '' },
+        { key: 'verified', label: 'Date verified', done: Boolean(card?.verifiedAt) },
+    ]
 }

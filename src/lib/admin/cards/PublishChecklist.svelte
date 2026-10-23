@@ -2,8 +2,9 @@
     What a card needs before Publish, as a read-only checklist under the card editor's actions
     (`publishChecklist`): a heading, then every requirement in a framed box from the start, each
     ticked off once the form meets it, with a short note where one needs it. Below a line, the
-    things worth adding that aren't required (`publishSuggestions`), only while missing. Publish
-    points at it with `aria-describedby` while something is still open.
+    things worth having that aren't required (`publishSuggestions`), ticked off the same way; an
+    open one has a dashed circle, being optional. Publish points at it with `aria-describedby`
+    while something required is still open.
 -->
 <script lang="ts">
     import CircleIcon from '@lucide/svelte/icons/circle'
@@ -15,6 +16,35 @@
 
     let { id, checks, suggestions }: Props = $props()
 </script>
+
+{#snippet item(done: boolean, label: string, detail: string | undefined, optional: boolean)}
+    <li class="flex items-start gap-2">
+        <span class="flex h-5 shrink-0 items-center">
+            {#if done}
+                <CircleCheckIcon
+                    class="size-4 text-tone-constructive"
+                    aria-hidden="true" />
+            {:else if optional}
+                <CircleDashedIcon
+                    class="size-4 text-muted-foreground/60"
+                    aria-hidden="true" />
+            {:else}
+                <CircleIcon
+                    class="size-4 text-muted-foreground/60"
+                    aria-hidden="true" />
+            {/if}
+        </span>
+        <span class="flex min-w-0 flex-col">
+            <span class={done ? 'text-muted-foreground' : ''}>
+                <span class="sr-only">{done ? 'Done:' : optional ? 'Missing:' : 'To do:'}</span>
+                {label}
+            </span>
+            {#if detail}
+                <span class="text-xs break-words text-muted-foreground">{detail}</span>
+            {/if}
+        </span>
+    </li>
+{/snippet}
 
 <section
     {id}
@@ -28,62 +58,23 @@
     <div class="flex flex-col gap-3 rounded-lg border p-3">
         <ul class="flex flex-col gap-1.5">
             {#each checks as check (check.key)}
-                <li class="flex items-start gap-2">
-                    <span class="flex h-5 shrink-0 items-center">
-                        {#if check.done}
-                            <CircleCheckIcon
-                                class="size-4 text-tone-constructive"
-                                aria-hidden="true" />
-                        {:else}
-                            <CircleIcon
-                                class="size-4 text-muted-foreground/60"
-                                aria-hidden="true" />
-                        {/if}
-                    </span>
-                    <span class="flex min-w-0 flex-col">
-                        <span class={check.done ? 'text-muted-foreground' : ''}>
-                            <span class="sr-only">{check.done ? 'Done:' : 'To do:'}</span>
-                            {check.label}
-                        </span>
-                        {#if check.detail}
-                            <span class="text-xs break-words text-muted-foreground">
-                                {check.detail}
-                            </span>
-                        {/if}
-                    </span>
-                </li>
+                {@render item(check.done, check.label, check.detail, false)}
             {/each}
         </ul>
-        {#if suggestions.length > 0}
-            <div
-                role="group"
-                aria-labelledby="{id}-suggestions"
-                class="flex flex-col gap-1.5 border-t pt-3">
-                <h3
-                    id="{id}-suggestions"
-                    class="text-xs font-medium text-muted-foreground">
-                    Also worth adding
-                </h3>
-                <ul class="flex flex-col gap-1.5">
-                    {#each suggestions as suggestion (suggestion.key)}
-                        <li class="flex items-start gap-2">
-                            <span class="flex h-5 shrink-0 items-center">
-                                <CircleDashedIcon
-                                    class="size-4 text-muted-foreground/60"
-                                    aria-hidden="true" />
-                            </span>
-                            <span class="flex min-w-0 flex-col">
-                                <span>{suggestion.label}</span>
-                                {#if suggestion.detail}
-                                    <span class="text-xs break-words text-muted-foreground">
-                                        {suggestion.detail}
-                                    </span>
-                                {/if}
-                            </span>
-                        </li>
-                    {/each}
-                </ul>
-            </div>
-        {/if}
+        <div
+            role="group"
+            aria-labelledby="{id}-suggestions"
+            class="flex flex-col gap-1.5 border-t pt-3">
+            <h3
+                id="{id}-suggestions"
+                class="text-xs font-medium text-muted-foreground">
+                Also worth adding
+            </h3>
+            <ul class="flex flex-col gap-1.5">
+                {#each suggestions as suggestion (suggestion.key)}
+                    {@render item(suggestion.done, suggestion.label, suggestion.detail, true)}
+                {/each}
+            </ul>
+        </div>
     </div>
 </section>

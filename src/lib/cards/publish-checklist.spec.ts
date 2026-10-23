@@ -67,16 +67,16 @@ describe('publishChecklist', () => {
 })
 
 describe('publishSuggestions', () => {
-    it('lists what is worth adding: translations, a source, a verified date', () => {
+    it('lists what is worth having, always the same, none done on a new card', () => {
         expect(publishSuggestions(form(ready))).toEqual([
-            { key: 'sv', label: 'Swedish translation' },
-            { key: 'nb', label: 'Norwegian translation' },
-            { key: 'source', label: 'Source' },
-            { key: 'verified', label: 'Date verified' },
+            { key: 'sv', label: 'Swedish translation', done: false, detail: undefined },
+            { key: 'nb', label: 'Norwegian translation', done: false, detail: undefined },
+            { key: 'source', label: 'Source link for the date', done: false },
+            { key: 'verified', label: 'Date verified', done: false },
         ])
     })
 
-    it('leaves out what the card has, and asks to review a machine translation', () => {
+    it('ticks off what the card has, and leaves a machine translation open to review', () => {
         const values = form({
             ...ready,
             text_sv: 'En påhittad drake flyger',
@@ -85,12 +85,15 @@ describe('publishSuggestions', () => {
             source_url: 'https://example.com/kite',
         })
         expect(publishSuggestions(values)).toEqual([
+            { key: 'sv', label: 'Swedish translation', done: true, detail: undefined },
             {
                 key: 'nb',
-                label: 'Review the Norwegian translation',
+                label: 'Norwegian translation',
+                done: false,
                 detail: 'Machine translated, not reviewed yet',
             },
-            { key: 'verified', label: 'Date verified' },
+            { key: 'source', label: 'Source link for the date', done: true },
+            { key: 'verified', label: 'Date verified', done: false },
         ])
     })
 })

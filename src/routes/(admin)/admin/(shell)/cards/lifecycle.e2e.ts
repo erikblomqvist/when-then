@@ -133,20 +133,22 @@ test('the publish checklist shows every requirement at once and ticks them off a
     await expect(checklist.getByRole('listitem').nth(3)).toContainText('Not needed before 1500')
     await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeEnabled()
 
-    // Below a line, what is worth adding but not required, while it is missing.
+    // Below a line, what is worth having but not required.
     const worth = checklist.getByRole('group', { name: 'Also worth adding' })
     await expect(worth.getByRole('listitem')).toHaveText([
-        'Swedish translation',
-        'Norwegian translation',
-        'Source',
-        'Date verified',
+        /Missing:\s*Swedish translation/,
+        /Missing:\s*Norwegian translation/,
+        /Missing:\s*Source link for the date/,
+        /Missing:\s*Date verified/,
     ])
+    // Ticked off as they come, not dropped.
     await page.getByRole('tab', { name: /Swedish/ }).click()
     await page.getByLabel('Swedish text').fill('En påhittad komet återvänder')
     await expect(worth.getByRole('listitem')).toHaveText([
-        'Norwegian translation',
-        'Source',
-        'Date verified',
+        /Done:\s*Swedish translation/,
+        /Missing:\s*Norwegian translation/,
+        /Missing:\s*Source link for the date/,
+        /Missing:\s*Date verified/,
     ])
 })
 
