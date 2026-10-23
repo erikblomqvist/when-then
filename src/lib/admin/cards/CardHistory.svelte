@@ -122,7 +122,9 @@
             Close
         </Button>
     </header>
-    <ol class="flex flex-col gap-3">
+    <!-- The flash is the card list's "just added" amber, set here so Tailwind makes both. -->
+    <ol
+        class="flex flex-col gap-3 [--flash:var(--color-amber-50)] dark:[--flash:color-mix(in_oklab,var(--color-amber-950)_40%,transparent)]">
         {#each changes as change (saveKey(change))}
             <li
                 id={saveId(saveKey(change))}
@@ -139,7 +141,8 @@
 </dialog>
 
 <style>
-    /* The save the dialog was opened at: tinted, then fading back to nothing. */
+    /* The save the dialog was opened at: tinted (--flash, on the list), then fading back to
+       nothing. */
     .flash {
         animation: flash 2.4s ease-out;
     }
@@ -147,7 +150,7 @@
     @keyframes flash {
         0%,
         25% {
-            background-color: color-mix(in oklch, var(--ring) 22%, transparent);
+            background-color: var(--flash);
         }
         100% {
             background-color: transparent;

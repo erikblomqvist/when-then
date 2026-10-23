@@ -132,5 +132,18 @@ test('the sidebar shows the last three saves; Show all and each save open the di
     await expect(focused).toBeInViewport()
     // It flashes, then the highlight fades away.
     await expect(focused).toHaveClass(/\bflash\b/)
+    // In the amber the card list highlights cards just added with.
+    const [flash, justAdded] = await focused.evaluate((save) => {
+        const colour = (style: string) => {
+            const probe = document.createElement('div')
+            probe.setAttribute('style', style)
+            save.append(probe)
+            const { backgroundColor } = getComputedStyle(probe)
+            probe.remove()
+            return backgroundColor
+        }
+        return [colour('background: var(--flash)'), colour('background: var(--color-amber-50)')]
+    })
+    expect(flash).toBe(justAdded)
     await expect(focused).not.toHaveClass(/\bflash\b/)
 })
