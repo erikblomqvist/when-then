@@ -6,7 +6,7 @@
 // Before Start a game is rows (migration `20261023006400_lobby.sql`, ADR 0002): the game and
 // one row per player.
 
-import { cardLocales, type CardLocale } from '../cards/card'
+import { isCardLocale, type CardLocale } from '../cards/card'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
 import { isPlayerIcon, maxPlayers, normalisePlayerName, type PlayerIcon } from '../game/player'
@@ -307,9 +307,7 @@ export async function updateSettings(
     const code = normaliseGameCode(input.code)
     if (!isGameCode(code)) refuse('not_found')
     if (!isTargetScore(input.targetScore)) refuse('invalid_target_score')
-    const cardLanguage =
-        cardLocales.find((locale) => locale === input.cardLanguage) ??
-        refuse('invalid_card_language')
+    if (!isCardLocale(input.cardLanguage)) return refuse('invalid_card_language')
 
     const { data, error } = await db
         .rpc('update_settings', {
@@ -317,7 +315,7 @@ export async function updateSettings(
             code,
             target_score: input.targetScore,
             exact_year: input.exactYear,
-            card_language: cardLanguage,
+            card_language: input.cardLanguage,
         })
         .single()
     checkRpc(error, refusals, GameRefusal)

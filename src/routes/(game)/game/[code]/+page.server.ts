@@ -37,10 +37,10 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
  * Runs a lobby command as the signed-in player, turning a refusal into a failed form that
  * carries `echo` back, so the page can show it in the form that was sent.
  */
-async function asPlayer<Echo extends object>(
+async function asPlayer<Echo extends object = object>(
     locals: App.Locals,
     command: (userId: string) => Promise<void>,
-    echo: Echo,
+    echo = {} as Echo,
 ) {
     const { user } = await locals.safeGetSession()
     if (!user) return fail(403, { ...echo, refusal: 'no_seat' as const })
@@ -83,10 +83,8 @@ export const actions: Actions = {
 
     // Leave lobby: back to the home page.
     leave: async ({ locals, params }) => {
-        const failed = await asPlayer(
-            locals,
-            (userId) => leaveGame(supabaseService(), { userId, code: params.code }),
-            {},
+        const failed = await asPlayer(locals, (userId) =>
+            leaveGame(supabaseService(), { userId, code: params.code }),
         )
         if (failed) return failed
         redirect(303, '/')
@@ -95,10 +93,8 @@ export const actions: Actions = {
     // Host removes from lobby: the player in the form's seat.
     remove: async ({ request, locals, params }) => {
         const seatId = field(await request.formData(), 'seat')
-        return asPlayer(
-            locals,
-            (userId) => removePlayer(supabaseService(), { userId, code: params.code, seatId }),
-            {},
+        return asPlayer(locals, (userId) =>
+            removePlayer(supabaseService(), { userId, code: params.code, seatId }),
         )
     },
 }

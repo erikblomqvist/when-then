@@ -27,6 +27,7 @@ begin
     ) then
         raise exception 'not_host' using detail = 'Only the host can do that.';
     end if;
+    -- The column's check holds these limits too; this one names the refusal for the phone.
     if update_settings.target_score is null or update_settings.target_score not between 3 and 30
     then
         raise exception 'invalid_target_score' using detail = 'The target score is 3 to 30.';

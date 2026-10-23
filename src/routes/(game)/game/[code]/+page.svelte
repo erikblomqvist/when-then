@@ -16,7 +16,8 @@
         Tabs,
         Text,
     } from '#lib'
-    import { cardLocales, type CardLocale } from '#lib/cards/card.js'
+    import { cardLocales } from '#lib/cards/card.js'
+    import { cardLanguageLabel } from '#lib/game/card-language-labels.js'
     import {
         isNameTaken,
         maxPlayers,
@@ -93,11 +94,6 @@
     let exactYear = $derived(lobby.exactYear)
     let cardLanguage = $derived(lobby.cardLanguage)
     let settingsForm = $state<HTMLFormElement>()
-    const languageNames: Record<CardLocale, () => string> = {
-        en: m.card_language_en,
-        sv: m.card_language_sv,
-        nb: m.card_language_nb,
-    }
     // The tabs aren't form fields: wait for their hidden inputs to update, then send.
     async function saveSettings() {
         await tick()
@@ -201,6 +197,7 @@
                     action="?/settings"
                     bind:this={settingsForm}
                     use:enhance={savingSettings}
+                    novalidate
                     onchange={() => settingsForm?.requestSubmit()}>
                     <div class="field">
                         <label
@@ -250,7 +247,7 @@
                             label={m.card_language()}
                             tabs={cardLocales.map((locale) => ({
                                 id: locale,
-                                label: languageNames[locale](),
+                                label: cardLanguageLabel(locale),
                             }))}
                             selected={cardLanguage}
                             onchange={(id) => {
@@ -282,7 +279,7 @@
                     </div>
                     <div>
                         <dt class="ui-caption">{m.card_language()}</dt>
-                        <dd>{languageNames[lobby.cardLanguage]()}</dd>
+                        <dd>{cardLanguageLabel(lobby.cardLanguage)}</dd>
                     </div>
                 </dl>
                 <Text
@@ -419,8 +416,10 @@
     }
     .settings-list dd {
         margin: 0;
-        font-family: var(--font-family-serif);
-        font-size: var(--font-size-21);
+        font-family: var(--type-field-family);
+        font-size: var(--type-field-size);
+        font-weight: var(--type-field-weight);
+        font-variation-settings: var(--type-field-variation);
         font-variant-numeric: tabular-nums lining-nums;
     }
     .field {

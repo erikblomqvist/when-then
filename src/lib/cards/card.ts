@@ -11,6 +11,9 @@ type Enums = Database['public']['Enums']
 export const cardLocales = Constants.public.Enums.card_locale
 export type CardLocale = Enums['card_locale']
 
+export const isCardLocale = (value: unknown): value is CardLocale =>
+    cardLocales.some((locale) => locale === value)
+
 /** Draft → Published → Archived (glossary). */
 export type CardStatus = Enums['card_status']
 

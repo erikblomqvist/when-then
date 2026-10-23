@@ -144,6 +144,12 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await hostLanguage.getByRole('tab', { name: 'Swedish' }).click()
     await expect(boSetting('Card language')).toContainText('Swedish')
     await expect(caro.locator('.settings-list')).toContainText('15')
+    // A target score outside 3–30 is refused, and the field goes back to the saved one.
+    await host.getByLabel('Target score').fill('31')
+    await host.getByLabel('Target score').press('Tab')
+    await expect(host.getByText('Pick a target score from 3 to 30.')).toBeVisible()
+    await expect(host.getByLabel('Target score')).toHaveValue('15')
+    await expect(boSetting('Target score')).toContainText('15')
 
     // The settings stay after a reload.
     await reloadHydrated(host)
