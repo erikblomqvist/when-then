@@ -1,11 +1,11 @@
--- The lobby (#64): the browser's roles can't touch games or players, only the server can
+-- The lobby (#64, #65): the browser's roles can't touch games or players, only the server can
 -- (ADR 0002), and a game's code is unique among games that haven't ended.
 -- Run with `vpr test:db` against the local stack. Everything is rolled back.
 
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(11);
 
 insert into auth.users (id, is_anonymous) values
     ('00000000-0000-0000-0000-0000000064a1', true),
@@ -57,6 +57,12 @@ select throws_ok(
     '42501',
     null,
     'a player cannot call create_game'
+);
+select throws_ok(
+    $$ select public.join_game('00000000-0000-0000-0000-0000000064a1', 'QQQQ', 'Sneaky', 'fish') $$,
+    '42501',
+    null,
+    'a player cannot call join_game'
 );
 
 set local role anon;

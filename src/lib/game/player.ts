@@ -15,6 +15,15 @@ export function normalisePlayerName(input: string): string | undefined {
     return length >= 1 && length <= playerNameMaxLength ? name : undefined
 }
 
+/**
+ * Whether `input` names one of `takenNames` once trimmed, ignoring case, as the database's
+ * `lower(name)` index compares them. The join step warns with it before the player submits.
+ */
+export function isNameTaken(input: string, takenNames: readonly string[]): boolean {
+    const name = input.trim().toLowerCase()
+    return name !== '' && takenNames.some((taken) => taken.toLowerCase() === name)
+}
+
 /** Lucide icon names (kebab-case, as on lucide.dev) a player can pick, one per player. */
 export const playerIcons = [
     'cat',

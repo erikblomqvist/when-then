@@ -6,8 +6,10 @@
     Extension points:
     - Locale tabs (sv, nb): `TranslationTabs`, inside the <form>, sharing this save and guard.
       `translationActions` renders in each tab with `{ locale, english, fill }` (see there).
-    - Publish: in the <aside>, for a new card or a draft, posting this form to the page's
-      `?/saveAndPublish` (it saves and publishes); it goes back to the card list.
+    - Save and Publish: in the <aside>, outside the <form> (posting it with `form`). Save is
+      the secondary button, above Publish (beside it on narrow screens). Publish, for a new
+      card or a draft, posts to the page's `?/saveAndPublish` (it saves and publishes); it goes
+      back to the card list.
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
       actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
@@ -391,22 +393,6 @@
                 {@render error('source_quote')}
             </div>
         </fieldset>
-
-        <div class="flex items-center gap-4">
-            <Button
-                bind:ref={saveButton}
-                type="submit"
-                disabled={saving}
-                aria-keyshortcuts={ariaKeyshortcuts(['mod', 's'])}>
-                Save
-                <Keys keys={['mod', 's']} />
-            </Button>
-            <p
-                role="status"
-                class="text-sm text-muted-foreground">
-                {#if dirty}Unsaved changes{/if}
-            </p>
-        </div>
     </form>
 
     <aside
@@ -424,21 +410,41 @@
                 <span class="text-muted-foreground">Not saved yet</span>
             {/if}
         </div>
-        {#if offerPublish}
-            <div class="flex flex-col items-start gap-2">
+        <div class="flex flex-col items-start gap-2">
+            <!-- Save is the secondary action: above Publish, or beside it on narrow screens. -->
+            <div class="flex flex-wrap items-start gap-2 lg:flex-col">
                 <Button
+                    bind:ref={saveButton}
                     type="submit"
                     form="card-editor"
-                    formaction="?/saveAndPublish"
-                    bind:ref={publishButton}
-                    aria-keyshortcuts={ariaKeyshortcuts(['mod', 'enter'])}
-                    disabled={saving || publishBlocked.length > 0}
-                    aria-describedby={publishBlocked.length > 0
-                        ? 'save-and-publish-why'
-                        : undefined}>
-                    Publish
-                    <Keys keys={['mod', 'enter']} />
+                    variant="outline"
+                    disabled={saving}
+                    aria-keyshortcuts={ariaKeyshortcuts(['mod', 's'])}>
+                    Save
+                    <Keys keys={['mod', 's']} />
                 </Button>
+                {#if offerPublish}
+                    <Button
+                        type="submit"
+                        form="card-editor"
+                        formaction="?/saveAndPublish"
+                        bind:ref={publishButton}
+                        aria-keyshortcuts={ariaKeyshortcuts(['mod', 'enter'])}
+                        disabled={saving || publishBlocked.length > 0}
+                        aria-describedby={publishBlocked.length > 0
+                            ? 'save-and-publish-why'
+                            : undefined}>
+                        Publish
+                        <Keys keys={['mod', 'enter']} />
+                    </Button>
+                {/if}
+            </div>
+            <p
+                role="status"
+                class="text-muted-foreground empty:hidden">
+                {#if dirty}Unsaved changes{/if}
+            </p>
+            {#if offerPublish}
                 {#if publishBlocked.length > 0}
                     <div
                         id="save-and-publish-why"
@@ -458,8 +464,8 @@
                         {publishError}
                     </p>
                 {/if}
-            </div>
-        {/if}
+            {/if}
+        </div>
         {@render sidebar?.({ dirty })}
     </aside>
 </div>

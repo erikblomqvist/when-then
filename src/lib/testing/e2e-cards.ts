@@ -37,3 +37,17 @@ export async function saveAndReopen(page: Page) {
     await gotoHydrated(page, url)
     await expect(page.getByRole('heading', { name: 'Edit card' })).toBeVisible()
 }
+
+/** The editor sidebar's history panel: the latest changes, one line each. */
+export const historyPanel = (page: Page) => page.getByRole('region', { name: 'History' })
+
+/**
+ * Opens the card's full history (every entry with its diff and details) from the newest change
+ * in the panel, and returns the dialog.
+ */
+export async function openFullHistory(page: Page) {
+    await historyPanel(page).getByRole('listitem').first().getByRole('button').click()
+    const dialog = page.getByRole('dialog', { name: 'History' })
+    await expect(dialog).toBeVisible()
+    return dialog
+}

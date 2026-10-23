@@ -404,7 +404,8 @@
     {selected}
     categories={activeCategories}
     report={result?.bulk}
-    error={result?.bulkError}>
+    error={result?.bulkError}
+    canDelete={data.role === 'admin'}>
     {#snippet actions({ busy })}
         <Button
             type="submit"

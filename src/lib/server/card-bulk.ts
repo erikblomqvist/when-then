@@ -1,5 +1,6 @@
-// Bulk lifecycle steps over many cards (publish, archive, move to category), one rpc per call
-// (`public.bulk_card_action`, migration `20261023004600_bulk_card_actions.sql`). Each card
+// Bulk lifecycle steps over many cards (publish, archive, move to category, delete drafts), one
+// rpc per call (`public.bulk_card_action`, migrations `20261023004600_bulk_card_actions.sql`
+// and `20261023006600_bulk_delete_drafts.sql`). Each card
 // goes through the same single-card rpc as the editor's sidebar, in its own savepoint: a
 // card the rule refuses is skipped with the reason, the rest still happen, and the audit log
 // gets one row per affected card, naming the actor.
@@ -15,7 +16,7 @@ export type BulkResult = { done: string[]; skipped: SkippedCard[] }
 async function bulk(
     db: Db,
     actorId: string,
-    action: 'publish' | 'archive' | 'move',
+    action: 'publish' | 'archive' | 'move' | 'delete',
     cardIds: string[],
     categoryId?: string,
 ): Promise<BulkResult> {
@@ -49,3 +50,10 @@ export const archiveCards = (db: Db, actorId: string, cardIds: string[]) =>
  */
 export const moveCards = (db: Db, actorId: string, cardIds: string[], categoryId: string) =>
     bulk(db, actorId, 'move', cardIds, categoryId)
+
+/**
+ * Deletes the never-published drafts (admins only, as from the editor); skips the rest, saying
+ * why. An editor's call skips every card.
+ */
+export const deleteDrafts = (db: Db, actorId: string, cardIds: string[]) =>
+    bulk(db, actorId, 'delete', cardIds)

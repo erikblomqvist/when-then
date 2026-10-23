@@ -143,3 +143,25 @@ test('only an empty category can be deleted', async ({ page }) => {
     await expect(categoryRow(page, empty)).toHaveCount(0)
     await expect(categoryRow(page, full)).toHaveCount(1)
 })
+
+test('a category’s card count opens the card list filtered to it', async ({ page }) => {
+    const { userId } = await signInAs(page, 'admin')
+    const name = unique('Lighthouses')
+    const id = await newCategory(userId, name)
+    const text = `A made-up lighthouse is lit ${randomUUID().slice(0, 8)}`
+    await saveCard(db, userId, {
+        categoryId: id,
+        date: { decade: 1960, year: null, month: null, day: null },
+        sourceUrl: null,
+        sourceQuote: null,
+        translations: { en: { text } },
+    })
+    await gotoHydrated(page, '/admin/categories')
+
+    await categoryRow(page, name).getByRole('link', { name: 'Show 1 card' }).click()
+    await expect(page).toHaveURL(`/admin/cards?category=${id}`)
+    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    const rows = page.getByRole('row').filter({ hasText: 'A made-up lighthouse is lit' })
+    await expect(rows).toHaveCount(1)
+    await expect(rows).toContainText(text)
+})

@@ -138,6 +138,57 @@ test('an editor moves picked cards to another category', async ({ page }) => {
     expect(await auditedActions(ids)).toEqual(ids.map((id) => [id, 'update', userId]))
 })
 
+test('an admin deletes picked drafts after confirming; a published one is skipped', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'admin')
+    const unique = word()
+    const kite = `A made-up ${unique} kite`
+    const raft = `A made-up ${unique} raft`
+    const glider = `A made-up ${unique} glider`
+    const ids = [await draft(userId, kite), await draft(userId, raft)]
+    const published = await draft(userId, glider)
+    await publishCards(db, userId, [published])
+
+    await gotoHydrated(page, `/admin/cards?q=${unique}`)
+    await pick(page, kite)
+    await pick(page, raft)
+    await pick(page, glider)
+
+    // Dismissing the confirmation deletes nothing and keeps the selection.
+    const messages: string[] = []
+    page.once('dialog', (dialog) => {
+        messages.push(dialog.message())
+        void dialog.dismiss()
+    })
+    await bulkBar(page).getByRole('button', { name: 'Delete' }).click()
+    await expect.poll(() => messages).toHaveLength(1)
+    expect(messages[0]).toContain('Delete the drafts among 3 cards for good?')
+    await expect(bulkBar(page)).toContainText('3 selected')
+    expect(await getCard(db, ids[0])).not.toBeNull()
+
+    page.once('dialog', (dialog) => void dialog.accept())
+    await bulkBar(page).getByRole('button', { name: 'Delete' }).click()
+    const report = page.getByRole('status')
+    await expect(report).toContainText('Deleted 2 cards.')
+    await expect(report.getByRole('listitem')).toHaveText(
+        `${glider}: Only a never-published draft can be deleted.`,
+    )
+    await expect(page.getByRole('row').filter({ hasText: kite })).toHaveCount(0)
+    for (const id of ids) expect(await getCard(db, id)).toBeNull()
+    expect(await auditedActions(ids)).toEqual(ids.map((id) => [id, 'delete', userId]))
+})
+
+test('an editor is not offered bulk Delete', async ({ page }) => {
+    const { userId } = await signInAs(page, 'editor')
+    const kite = `A made-up ${word()} kite`
+    await draft(userId, kite)
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(kite)}`)
+    await pick(page, kite)
+    await expect(bulkBar(page).getByRole('button', { name: 'Archive' })).toBeVisible()
+    await expect(bulkBar(page).getByRole('button', { name: 'Delete' })).toHaveCount(0)
+})
+
 async function exportSelected(page: Page) {
     const [download] = await Promise.all([
         page.waitForEvent('download'),

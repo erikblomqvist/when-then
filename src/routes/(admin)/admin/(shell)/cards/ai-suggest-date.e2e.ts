@@ -10,7 +10,7 @@ import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
-import { saveAndReopen } from '../../../../../lib/testing/e2e-cards'
+import { openFullHistory, saveAndReopen } from '../../../../../lib/testing/e2e-cards'
 
 const db = localServiceClient()
 const word = () => `Sd${randomUUID().slice(0, 8)}`
@@ -87,7 +87,7 @@ test('an editor gets a Wikidata-sourced suggestion and accepts it into the form,
         month: null,
         day: null,
     })
-    const history = page.getByRole('region', { name: 'History' })
+    const history = await openFullHistory(page)
     await expect(history).toContainText('Suggested a date with AI')
     await expect(history).toContainText('Accepted the AI date suggestion')
     await expect(history).toContainText('$0.008')

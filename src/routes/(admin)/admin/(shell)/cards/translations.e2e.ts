@@ -7,7 +7,13 @@ import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
-import { openCard, saveAndReopen, saveInEditor } from '../../../../../lib/testing/e2e-cards'
+import {
+    historyPanel,
+    openCard,
+    openFullHistory,
+    saveAndReopen,
+    saveInEditor,
+} from '../../../../../lib/testing/e2e-cards'
 
 const unique = (text: string) => `${text} ${randomUUID().slice(0, 8)}`
 
@@ -56,7 +62,9 @@ test('an editor translates a card into Swedish, with a note, and it is reviewed'
         'En påhittad bro öppnas',
     )
     await expect(panel(page, 'Swedish').getByLabel('Swedish note')).toHaveValue('Bro, inte brygga')
-    await expect(page.getByRole('region', { name: 'History' })).toContainText('Card text (Swedish)')
+    await expect(historyPanel(page)).toContainText('Swedish text')
+    await expect(await openFullHistory(page)).toContainText('Card text (Swedish)')
+    await page.keyboard.press('Escape')
 
     const row = await listRow(page, text)
     await expect(row.getByTestId('translation-sv')).toHaveText(/Reviewed/)
