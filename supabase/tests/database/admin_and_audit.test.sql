@@ -53,10 +53,10 @@ select is(
 
 -- Every admin-only function uses it.
 select throws_ok(
-    $$ select public.delete_draft('00000000-0000-0000-0000-0000000000e1', gen_random_uuid()) $$,
+    $$ select public.delete_card('00000000-0000-0000-0000-0000000000e1', gen_random_uuid()) $$,
     'P0001',
     'not_admin',
-    'delete_draft is admin only'
+    'delete_card is admin only'
 );
 select throws_ok(
     $$ select public.import_cards('00000000-0000-0000-0000-0000000000e1', '[]'::jsonb) $$,
