@@ -1,11 +1,12 @@
--- The lobby (#64, #65, #66): the browser's roles can't touch games or players, only the server can
--- (ADR 0002), and a game's code is unique among games that haven't ended.
+-- The lobby (#64 to #67): the browser's roles can't touch games or players, only the server can
+-- (ADR 0002), a game's code is unique among games that haven't ended, and the database itself
+-- holds the target score to its limits.
 -- Run with `vpr test:db` against the local stack. Everything is rolled back.
 
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(17);
 
 insert into auth.users (id, is_anonymous) values
     ('00000000-0000-0000-0000-0000000064a1', true),
@@ -37,6 +38,12 @@ select throws_ok(
     '23514',
     null,
     'a code with look-alike letters is refused'
+);
+select throws_ok(
+    $$ select public.update_settings('00000000-0000-0000-0000-0000000064a2', 'QQQQ', 31, false, 'en') $$,
+    'P0001',
+    'invalid_target_score',
+    'a target score above 30 is refused'
 );
 
 -- The browser's roles: anonymous players sign in as `authenticated`, the rest are `anon`.
@@ -81,6 +88,12 @@ select throws_ok(
     '42501',
     null,
     'a player cannot call remove_player'
+);
+select throws_ok(
+    $$ select public.update_settings('00000000-0000-0000-0000-0000000064a1', 'QQQQ', 12, true, 'sv') $$,
+    '42501',
+    null,
+    'a player cannot call update_settings'
 );
 select throws_ok($$ select * from public.game_removals $$, '42501', null, 'a player cannot read removals');
 

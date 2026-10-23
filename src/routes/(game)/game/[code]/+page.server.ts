@@ -7,6 +7,7 @@ import {
     getLobby,
     leaveGame,
     removePlayer,
+    updateSettings,
 } from '#lib/server/game-lifecycle.js'
 import { field } from '#lib/server/people-form.js'
 import { supabaseService } from '#lib/server/supabase.js'
@@ -32,18 +33,21 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     }
 }
 
-/** Runs a lobby command as the signed-in player, turning a refusal into a failed form. */
-async function asPlayer(
+/**
+ * Runs a lobby command as the signed-in player, turning a refusal into a failed form that
+ * carries `echo` back, so the page can show it in the form that was sent.
+ */
+async function asPlayer<Echo extends object>(
     locals: App.Locals,
     command: (userId: string) => Promise<void>,
-    values?: Record<string, string>,
+    echo: Echo,
 ) {
     const { user } = await locals.safeGetSession()
-    if (!user) return fail(403, { values, refusal: 'no_seat' as const })
+    if (!user) return fail(403, { ...echo, refusal: 'no_seat' as const })
     try {
         await command(user.id)
     } catch (caught) {
-        if (caught instanceof GameRefusal) return fail(400, { values, refusal: caught.code })
+        if (caught instanceof GameRefusal) return fail(400, { ...echo, refusal: caught.code })
         throw caught
     }
 }
@@ -56,14 +60,33 @@ export const actions: Actions = {
         return asPlayer(
             locals,
             (userId) => changePlayer(supabaseService(), { userId, code: params.code, ...values }),
-            values,
+            { values },
+        )
+    },
+
+    // Update settings: the host's whole settings form, sent on every change.
+    settings: async ({ request, locals, params }) => {
+        const form = await request.formData()
+        const settings = {
+            // A blank field is 0, refused like any other score outside the limits.
+            targetScore: Number(field(form, 'targetScore')),
+            exactYear: field(form, 'exactYear') === 'on',
+            cardLanguage: field(form, 'cardLanguage'),
+        }
+        return asPlayer(
+            locals,
+            (userId) =>
+                updateSettings(supabaseService(), { userId, code: params.code, ...settings }),
+            { settings: true as const },
         )
     },
 
     // Leave lobby: back to the home page.
     leave: async ({ locals, params }) => {
-        const failed = await asPlayer(locals, (userId) =>
-            leaveGame(supabaseService(), { userId, code: params.code }),
+        const failed = await asPlayer(
+            locals,
+            (userId) => leaveGame(supabaseService(), { userId, code: params.code }),
+            {},
         )
         if (failed) return failed
         redirect(303, '/')
@@ -72,8 +95,10 @@ export const actions: Actions = {
     // Host removes from lobby: the player in the form's seat.
     remove: async ({ request, locals, params }) => {
         const seatId = field(await request.formData(), 'seat')
-        return asPlayer(locals, (userId) =>
-            removePlayer(supabaseService(), { userId, code: params.code, seatId }),
+        return asPlayer(
+            locals,
+            (userId) => removePlayer(supabaseService(), { userId, code: params.code, seatId }),
+            {},
         )
     },
 }

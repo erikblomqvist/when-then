@@ -1,5 +1,6 @@
 <script lang="ts">
     import XIcon from '@lucide/svelte/icons/x'
+    import { tick } from 'svelte'
     import { enhance, type SubmitFunction } from '$app/forms'
     import { invalidateAll } from '$app/navigation'
     import {
@@ -12,8 +13,10 @@
         PlayerRow,
         QrCode,
         Surface,
+        Tabs,
         Text,
     } from '#lib'
+    import { cardLocales, type CardLocale } from '#lib/cards/card.js'
     import {
         isNameTaken,
         maxPlayers,
@@ -22,6 +25,7 @@
     } from '#lib/game/player.js'
     import { playerIconLabels } from '#lib/game/player-icon-labels.js'
     import { refusalMessage } from '#lib/game/refusals.js'
+    import { maxTargetScore, minTargetScore } from '#lib/game/settings.js'
     import { m } from '#lib/paraglide/messages.js'
     import { watchGame } from '#lib/supabase-browser.js'
     import type { PageProps } from './$types'
@@ -78,9 +82,38 @@
             !(form.refusal === 'name_taken' && nameTaken) &&
             refusalMessage(form.refusal),
     )
-    // Only the change form sends values back: its refusals show in the form, the rest below
-    // the list.
+    // The change and settings forms send back which form was refused, and their refusals show
+    // in that form; the rest show below the list.
     const changeRefused = $derived(form?.values !== undefined)
+    const settingsRefused = $derived(form?.settings === true)
+
+    // The host's settings, saved on every change. They follow the lobby, so a refetch shows
+    // what was saved.
+    let targetScore = $derived(lobby.targetScore)
+    let exactYear = $derived(lobby.exactYear)
+    let cardLanguage = $derived(lobby.cardLanguage)
+    let settingsForm = $state<HTMLFormElement>()
+    const languageNames: Record<CardLocale, () => string> = {
+        en: m.card_language_en,
+        sv: m.card_language_sv,
+        nb: m.card_language_nb,
+    }
+    // The tabs aren't form fields: wait for their hidden inputs to update, then send.
+    async function saveSettings() {
+        await tick()
+        settingsForm?.requestSubmit()
+    }
+    const savingSettings: SubmitFunction = () => {
+        return async ({ result, update }) => {
+            await update({ reset: false })
+            // A refused setting goes back to what's saved.
+            if (result.type === 'failure') {
+                targetScore = lobby.targetScore
+                exactYear = lobby.exactYear
+                cardLanguage = lobby.cardLanguage
+            }
+        }
+    }
 
     let busy = $state(false)
     const submitting: SubmitFunction = ({ action }) => {
@@ -157,7 +190,108 @@
             {/each}
         </Notepad>
 
-        {#if error && !(editing && changeRefused)}
+        <Surface
+            kind="sheet"
+            class="settings">
+            <Text role="heading-2">{m.settings()}</Text>
+            {#if you?.isHost}
+                <form
+                    class="settings-form"
+                    method="post"
+                    action="?/settings"
+                    bind:this={settingsForm}
+                    use:enhance={savingSettings}
+                    onchange={() => settingsForm?.requestSubmit()}>
+                    <div class="field">
+                        <label
+                            class="ui-caption"
+                            for="target-score">{m.target_score()}</label>
+                        <Input
+                            id="target-score"
+                            class="score"
+                            type="number"
+                            name="targetScore"
+                            inputmode="numeric"
+                            min={minTargetScore}
+                            max={maxTargetScore}
+                            step="1"
+                            required
+                            aria-describedby="target-score-hint"
+                            bind:value={targetScore} />
+                        <span
+                            id="target-score-hint"
+                            class="ui-caption"
+                            >{m.target_score_hint({
+                                min: minTargetScore,
+                                max: maxTargetScore,
+                            })}</span>
+                    </div>
+                    <div class="field">
+                        <span class="ui-caption">{m.exact_year_rule()}</span>
+                        <Tabs
+                            label={m.exact_year_rule()}
+                            tabs={[
+                                { id: 'off', label: m.setting_off() },
+                                { id: 'on', label: m.setting_on() },
+                            ]}
+                            selected={exactYear ? 'on' : 'off'}
+                            onchange={(id) => {
+                                exactYear = id === 'on'
+                                void saveSettings()
+                            }} />
+                        <input
+                            type="hidden"
+                            name="exactYear"
+                            value={exactYear ? 'on' : 'off'} />
+                    </div>
+                    <div class="field">
+                        <span class="ui-caption">{m.card_language()}</span>
+                        <Tabs
+                            label={m.card_language()}
+                            tabs={cardLocales.map((locale) => ({
+                                id: locale,
+                                label: languageNames[locale](),
+                            }))}
+                            selected={cardLanguage}
+                            onchange={(id) => {
+                                cardLanguage = id
+                                void saveSettings()
+                            }} />
+                        <input
+                            type="hidden"
+                            name="cardLanguage"
+                            value={cardLanguage} />
+                    </div>
+                    {#if error && settingsRefused}
+                        <p
+                            class="error"
+                            role="alert">
+                            {error}
+                        </p>
+                    {/if}
+                </form>
+            {:else}
+                <dl class="settings-list">
+                    <div>
+                        <dt class="ui-caption">{m.target_score()}</dt>
+                        <dd>{lobby.targetScore}</dd>
+                    </div>
+                    <div>
+                        <dt class="ui-caption">{m.exact_year_rule()}</dt>
+                        <dd>{lobby.exactYear ? m.setting_on() : m.setting_off()}</dd>
+                    </div>
+                    <div>
+                        <dt class="ui-caption">{m.card_language()}</dt>
+                        <dd>{languageNames[lobby.cardLanguage]()}</dd>
+                    </div>
+                </dl>
+                <Text
+                    role="caption"
+                    as="p">{m.settings_host_only()}</Text>
+            {/if}
+        </Surface>
+
+        {#if error && !(editing && changeRefused) && !settingsRefused}
             <p
                 class="error on-table"
                 role="alert">
@@ -255,12 +389,39 @@
         text-align: center;
     }
     .lobby :global(.ui-notepad),
-    .lobby :global(.edit) {
+    .lobby :global(.edit),
+    .lobby :global(.settings) {
         text-align: start;
     }
-    .edit-form {
+    .edit-form,
+    .settings-form {
         display: grid;
         gap: var(--space-8);
+    }
+    .settings-form :global(.ui-tabs) {
+        justify-self: start;
+    }
+    .settings-form :global(.score) {
+        width: 6ch;
+        min-width: 96px;
+        text-align: center;
+    }
+    .settings-list {
+        display: grid;
+        gap: var(--space-5);
+        margin: 0;
+    }
+    .settings-list div {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: var(--space-5);
+    }
+    .settings-list dd {
+        margin: 0;
+        font-family: var(--font-family-serif);
+        font-size: var(--font-size-21);
+        font-variant-numeric: tabular-nums lining-nums;
     }
     .field {
         display: grid;

@@ -1,8 +1,8 @@
 // The game lifecycle, played through on phones (spec #59, seam 3): one flow that grows with
 // each lifecycle ticket. So far: the host creates a game and lands in its lobby, one player
 // joins by link and another by the code typed on the home page, and every lobby updates live.
-// In the lobby a player changes their name and icon, another leaves, and the host removes a
-// player, who joins again.
+// The host changes the settings, which the others see live. In the lobby a player changes their
+// name and icon, another leaves, and the host removes a player, who joins again.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -118,6 +118,40 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     const response = await stranger.goto(`/game/${code}`)
     expect(response?.status()).toBe(403)
     await expect(stranger.getByText('Astrid')).toHaveCount(0)
+
+    // The host adjusts the settings; the others see them live and can't change them. The card
+    // language started as the host's app language.
+    const hostLanguage = host.getByRole('tablist', { name: 'Card language' })
+    await expect(hostLanguage.getByRole('tab', { name: 'English' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+    )
+    const boSetting = (name: string) =>
+        bo.locator('.settings-list > div').filter({ has: bo.locator('dt', { hasText: name }) })
+    await expect(boSetting('Target score')).toContainText('10')
+    await expect(bo.getByLabel('Target score')).toHaveCount(0)
+    await expect(bo.getByRole('tab')).toHaveCount(0)
+    await expect(bo.getByText('Only the host can change these.')).toBeVisible()
+
+    await host.getByLabel('Target score').fill('15')
+    await host.getByLabel('Target score').press('Tab')
+    await expect(boSetting('Target score')).toContainText('15')
+    await host
+        .getByRole('tablist', { name: 'Exact-year house rule' })
+        .getByRole('tab', { name: 'On' })
+        .click()
+    await expect(boSetting('Exact-year house rule')).toContainText('On')
+    await hostLanguage.getByRole('tab', { name: 'Swedish' }).click()
+    await expect(boSetting('Card language')).toContainText('Swedish')
+    await expect(caro.locator('.settings-list')).toContainText('15')
+
+    // The settings stay after a reload.
+    await reloadHydrated(host)
+    await expect(host.getByLabel('Target score')).toHaveValue('15')
+    await expect(hostLanguage.getByRole('tab', { name: 'Swedish' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+    )
 
     // Bo changes name and icon; a name someone else has is flagged, ignoring case.
     await expect(bo.getByRole('button', { name: /^Remove / })).toHaveCount(0)
