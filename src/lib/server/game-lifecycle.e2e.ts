@@ -333,9 +333,12 @@ test('a join nudges the game’s channel with only the game and its version', as
     expect(signedIn.error).toBeNull()
     const statuses: string[] = []
     let received!: Promise<Nudge>
-    // Wait until subscribed, or the nudge can go out before the phone listens.
+    // Wait until subscribed, or the nudge can go out before the phone listens. On a cold
+    // Realtime (CI, where this test runs first) the first joins can time out; the client
+    // retries them.
+    test.setTimeout(120_000)
     await new Promise<void>((subscribed, failed) => {
-        setTimeout(() => failed(new Error(`Not subscribed: ${statuses.join(', ')}`)), 15_000)
+        setTimeout(() => failed(new Error(`Not subscribed: ${statuses.join(', ')}`)), 90_000)
         received = new Promise<Nudge>((resolve) => {
             phone
                 .channel(nudgeTopic(gameId))
