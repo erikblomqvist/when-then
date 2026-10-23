@@ -39,7 +39,13 @@ export const POST: RequestHandler = async (event) => {
     try {
         const { suggestion, requestId } = await suggestCardDate(
             { ...aiDeps(), lookupWikidata: wikidataLookup() },
-            { actorId: user.id, cardId: card.id, english, category: category?.name ?? null },
+            {
+                actorId: user.id,
+                entity: 'card',
+                entityId: card.id,
+                english,
+                category: category?.name ?? null,
+            },
         )
         return json({ suggestion, requestId })
     } catch (failure) {

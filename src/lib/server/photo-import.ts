@@ -39,25 +39,25 @@ export async function findNearbyCards(db: Db, years: number[]): Promise<NearbyCa
     })
 }
 
-/** Creates the drafts in one call, in order, and returns their ids. */
+/** Creates the drafts in one call, in order, each naming its own AI request, and returns their ids. */
 export async function importPhotoCards(
     db: Db,
     actor: string,
     drafts: readonly PhotoDraft[],
-    requestId: number | null,
 ): Promise<string[]> {
     const { data, error } = await db.rpc('import_photo_cards', {
         actor,
-        request_id: requestId ?? undefined,
         cards: drafts.map((draft) => ({
             category_id: draft.categoryId,
             decade: draft.date.decade,
             year: draft.date.year,
             month: draft.date.month,
             day: draft.date.day,
+            source_url: draft.sourceUrl,
             source_quote: draft.sourceQuote,
             difficulty: draft.difficulty,
             translations: draft.translations,
+            request_id: draft.requestId,
         })),
     })
     checkRpc(error, refusals, PhotoImportError)

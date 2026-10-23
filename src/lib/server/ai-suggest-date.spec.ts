@@ -117,7 +117,8 @@ function fakeDeps(answers: Message[], lookup: WikidataLookup = olympics) {
 
 const card = {
     actorId: 'actor-1',
-    cardId: 'card-1',
+    entity: 'card' as const,
+    entityId: 'card-1',
     english: 'The Summer Olympics is hosted in London for the first time',
     category: 'Events',
 }

@@ -9,6 +9,10 @@ test('an admin sees the numbers, every section and recent activity', async ({ pa
     await signInAs(page, 'admin')
     await gotoHydrated(page, '/admin')
     await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Add from photo' })).toHaveAttribute(
+        'href',
+        '/admin/cards/photo',
+    )
 
     const glance = page.getByRole('region', { name: 'At a glance' })
     await expect(glance.getByRole('link', { name: /Published/ })).toHaveAttribute(
@@ -52,6 +56,8 @@ test('an editor sees the cards side only', async ({ page }) => {
     await gotoHydrated(page, '/admin')
     const sections = page.getByRole('region', { name: 'Sections' })
     await expect(sections.getByRole('link', { name: /^Cards/ })).toBeVisible()
+    // Adding from a photo is for admins.
+    await expect(page.getByText('Add from photo')).toHaveCount(0)
     // Categories are shown, but only admins manage them.
     await expect(sections).toContainText('An admin manages the categories.')
     await expect(sections.getByRole('link', { name: /^Categories/ })).toHaveCount(0)

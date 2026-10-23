@@ -51,7 +51,9 @@ export type DateSuggestion = {
 
 export type SuggestCardDate = {
     actorId: string
-    cardId: string
+    /** What the request is audited against: the card, or the photo reading a candidate came from. */
+    entity: 'card' | 'photo'
+    entityId: string
     english: string
     category: string | null
 }
@@ -290,7 +292,8 @@ function checkSubmission(
 }
 
 /**
- * Suggests a year for the card's English statement (as `actorId`, audited against the card).
+ * Suggests a year for the card's English statement (as `actorId`, audited against the card or
+ * the photo reading).
  * Returns the suggestion and the id of its audit row (`requestId`, for the accept/reject
  * entry). Throws the `runModel` errors, and `AiAnswerRejectedError` when the source wasn't
  * retrieved (`unsourced`), the answer is unusable, or no source gives a year (`no_suggestion`).
@@ -308,8 +311,8 @@ export async function suggestCardDate(
         {
             actorId: input.actorId,
             action: 'ai_suggest_date',
-            entity: 'card',
-            entityId: input.cardId,
+            entity: input.entity,
+            entityId: input.entityId,
             params: params([lookupTool, submitTool], wikidataSteps, messages),
         },
         async (reply) => {

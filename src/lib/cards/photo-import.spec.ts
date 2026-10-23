@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
     dateNeeded,
     normaliseDate,
+    photoDraftLimit,
     photoTextStatus,
     readPhotoDrafts,
     suggestedCategory,
@@ -77,8 +78,10 @@ describe('readPhotoDrafts', () => {
     const draft = {
         categoryId: 'cat-1',
         date: { decade: 1620, year: 1628, month: null, day: null },
+        sourceUrl: null,
         sourceQuote: ' Vasa sank 1628 ',
         difficulty: 2,
+        requestId: 41,
         translations: {
             en: { text: 'The Vasa sinks', status: 'machine' },
             sv: { text: 'Vasa sjunker', status: 'reviewed' },
@@ -119,8 +122,26 @@ describe('readPhotoDrafts', () => {
         ])
     })
 
-    it('refuses what is not a list of drafts', () => {
+    it('keeps a looked-up source that is a web address, and a request id that is one', () => {
+        const [read] = readPhotoDrafts(
+            JSON.stringify([
+                { ...draft, sourceUrl: ' https://en.wikipedia.org/wiki/Vasa ', requestId: 'x' },
+            ]),
+        )!
+        expect(read.draft.sourceUrl).toBe('https://en.wikipedia.org/wiki/Vasa')
+        expect(read.draft.requestId).toBeNull()
+        expect(read.errors).toEqual([])
+
+        const [bad] = readPhotoDrafts(JSON.stringify([{ ...draft, sourceUrl: 'wikipedia' }]))!
+        expect(bad.errors).toEqual(['The source is not a web address.'])
+    })
+
+    it('refuses what is not a list of drafts, or too long a one', () => {
         expect(readPhotoDrafts('nope')).toBeNull()
         expect(readPhotoDrafts('[]')).toBeNull()
+        expect(readPhotoDrafts(JSON.stringify(Array(photoDraftLimit).fill(draft)))).toHaveLength(
+            photoDraftLimit,
+        )
+        expect(readPhotoDrafts(JSON.stringify(Array(photoDraftLimit + 1).fill(draft)))).toBeNull()
     })
 })

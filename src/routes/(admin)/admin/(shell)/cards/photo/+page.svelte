@@ -1,13 +1,22 @@
 <!--
-    "Add from photo" (#60), made for a phone. Take a photo (or choose one) of anything with
-    historical facts in it; the AI reads it into candidate cards. Tick the ones to keep, edit
-    them in place, create a suggested category where none fits, and save the ticked ones as
-    drafts. What the AI inferred rather than read (a date not in the photo, the difficulty, the
-    translations) is marked, and likely repeats of existing cards start unticked.
+    "Add from photo" (#60), made for a phone. Take photos (or choose them) of anything with
+    historical facts in it; they wait as thumbnails until "Read", then the AI reads each into
+    candidate cards. Tick the ones to keep, edit them in place, look up a missing date ("Find
+    date": Wikidata, then the web), create a suggested category where none fits, and save the
+    ticked ones as drafts. More photos can be added under the list; their cards join it. What
+    the AI inferred rather than read (a date not in the photo, the difficulty, the translations)
+    is marked, and likely repeats of existing cards start unticked.
+
+    On a phone the page only takes photos with the camera; the "Add from photo" link opens the
+    camera itself and hands the photo over (`#lib/admin/cards/photo-handoff.ts`).
 -->
 <script lang="ts">
-    import { untrack } from 'svelte'
+    import { onMount, untrack } from 'svelte'
+    import CameraIcon from '@lucide/svelte/icons/camera'
+    import ImagesIcon from '@lucide/svelte/icons/images'
     import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle'
+    import SearchIcon from '@lucide/svelte/icons/search'
+    import XIcon from '@lucide/svelte/icons/x'
     import { enhance } from '$app/forms'
     import type { SubmitFunction } from '$app/forms'
     import { Badge } from '#lib/components/ui/badge/index.js'
@@ -17,6 +26,7 @@
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import NewCategoryDialog from '#lib/admin/categories/NewCategoryDialog.svelte'
+    import { takeHandedPhotos, usesCamera } from '#lib/admin/cards/photo-handoff.js'
     import { shrinkPhoto } from '#lib/admin/cards/shrink-photo.js'
     import { cardLocales, type CardLocale } from '#lib/cards/card.js'
     import { decadeLabel, decadeOf, formatCardDate, monthNames } from '#lib/cards/date-parts.js'
@@ -24,6 +34,7 @@
         dateNeeded,
         isAiTranslation,
         photoDraftErrors,
+        photoLimit,
         photoTextStatus,
         type PhotoCandidate,
         type PhotoDraft,
@@ -31,13 +42,19 @@
     } from '#lib/cards/photo-import.js'
     import { localeName } from '#lib/cards/translation.js'
     import { englishNameKey, type CategoryFormValues } from '#lib/categories/category-form.js'
+    import type { DateSuggestion } from '#lib/server/ai-suggest-date.js'
     import type { PageProps } from './$types'
 
     let { data, form }: PageProps = $props()
 
     /** A candidate as the admin edits it. */
     type Row = {
+        /** Unique across readings, to key the list and its fields by. */
+        id: number
         candidate: PhotoCandidate
+        /** The reading it came from: its audit row, and its key for "Find date". */
+        requestId: number | null
+        requestKey: string
         ticked: boolean
         texts: Record<CardLocale, string>
         year: string
@@ -47,10 +64,21 @@
         decade: number | null
         difficulty: string
         categoryId: string
+        /** "Find date": the sourced year it found, while looking, and why it found none. */
+        found: DateSuggestion | null
+        finding: boolean
+        findProblem: string | null
     }
 
-    const toRow = (candidate: PhotoCandidate): Row => ({
+    let nextId = 0
+    const toRow = (
+        candidate: PhotoCandidate,
+        reading: { requestId: number | null; requestKey: string },
+    ): Row => ({
+        id: nextId++,
         candidate,
+        requestId: reading.requestId,
+        requestKey: reading.requestKey,
         ticked: candidate.duplicateOf === null,
         texts: { ...candidate.texts },
         year: candidate.date.year === null ? '' : String(candidate.date.year),
@@ -59,26 +87,38 @@
         decade: candidate.date.year === null ? candidate.date.decade : null,
         difficulty: candidate.difficulty === null ? '' : String(candidate.difficulty),
         categoryId: candidate.categoryId ?? '',
+        found: null,
+        finding: false,
+        findProblem: null,
     })
 
     let rows: Row[] = $state([])
-    let requestId: number | null = $state(null)
+    let photosRead = $state(0)
 
-    // A new reading replaces the list; reloads (after creating a category) keep the edits.
+    // A new reading joins the list; reloads (after creating a category) keep the edits.
     let shownReading: unknown = null
     $effect.pre(() => {
         const reading = form?.stage === 'review' ? form : null
         untrack(() => {
             if (!reading || reading === shownReading) return
             shownReading = reading
-            rows = reading.candidates.map(toRow)
-            requestId = reading.requestId
+            rows = [
+                ...rows,
+                ...reading.readings.flatMap((one) =>
+                    one.candidates.map((candidate) => toRow(candidate, one)),
+                ),
+            ]
+            photosRead += reading.readings.length
         })
     })
 
     const reviewing = $derived(rows.length > 0)
 
     const whole = (value: string) => (/^-?\d+$/.test(value.trim()) ? Number(value) : null)
+
+    /** The found date, while the year typed is still the one it found. */
+    const foundDate = (row: Row) =>
+        row.found && whole(row.year) === row.found.year ? row.found : null
 
     function draftOf(row: Row): PhotoDraft {
         const year = whole(row.year)
@@ -93,6 +133,7 @@
                 }
             }
         }
+        const found = foundDate(row)
         return {
             categoryId: row.categoryId,
             date: {
@@ -101,9 +142,11 @@
                 month,
                 day: month === null ? null : whole(row.day),
             },
-            sourceQuote: row.candidate.sourceQuote || null,
+            sourceUrl: found?.sourceUrl ?? null,
+            sourceQuote: (found ? found.sourceQuote : row.candidate.sourceQuote) || null,
             difficulty: whole(row.difficulty),
             translations,
+            requestId: row.requestId,
         }
     }
 
@@ -113,9 +156,56 @@
         tickedDrafts.map(photoDraftErrors).findIndex((errors) => errors.length > 0),
     )
 
-    // Photo: shrink it, then submit the form with the smaller file.
-    let photoForm: HTMLFormElement | undefined = $state()
-    let reading = $state(false)
+    // Photos wait as thumbnails until "Read"; then they are shrunk and sent together.
+    type Waiting = { id: number; file: File; url: string }
+    let waiting: Waiting[] = $state([])
+    let nextPhoto = 0
+    let camera = $state(false)
+    let reading = $state(0)
+
+    function addPhotos(files: File[]) {
+        const room = photoLimit - waiting.length
+        waiting = [
+            ...waiting,
+            ...files.slice(0, room).map((file) => ({
+                id: nextPhoto++,
+                file,
+                url: URL.createObjectURL(file),
+            })),
+        ]
+    }
+
+    function removePhoto(photo: Waiting) {
+        URL.revokeObjectURL(photo.url)
+        waiting = waiting.filter((one) => one !== photo)
+    }
+
+    onMount(() => {
+        camera = usesCamera()
+        addPhotos(takeHandedPhotos())
+        return () => waiting.forEach((photo) => URL.revokeObjectURL(photo.url))
+    })
+
+    function choose(event: Event & { currentTarget: HTMLInputElement }) {
+        const files = [...(event.currentTarget.files ?? [])]
+        event.currentTarget.value = ''
+        addPhotos(files)
+    }
+
+    const readPhotos: SubmitFunction = async ({ formData, cancel }) => {
+        const sent = waiting
+        if (sent.length === 0) return cancel()
+        reading = sent.length
+        formData.delete('photo')
+        for (const photo of await Promise.all(sent.map(({ file }) => shrinkPhoto(file)))) {
+            formData.append('photo', photo)
+        }
+        return async ({ result, update }) => {
+            await update()
+            if (result.type === 'success') sent.forEach(removePhoto)
+            reading = 0
+        }
+    }
 
     // Saving: the button waits (with a spinner) until the drafts are created and the page moves
     // on to the card list, or a refusal comes back.
@@ -127,25 +217,65 @@
             if (result.type !== 'redirect') saving = false
         }
     }
-    let chosen: File | null = null
 
-    async function choose(event: Event & { currentTarget: HTMLInputElement }) {
-        const file = event.currentTarget.files?.[0]
-        event.currentTarget.value = ''
-        if (!file) return
-        chosen = file
-        photoForm?.requestSubmit()
+    // "Find date": the editor's sourced lookup, for a card without a year. The year it finds
+    // goes straight in, with its source; Undo puts the AI's own date back.
+    async function findDate(row: Row) {
+        row.finding = true
+        row.findProblem = null
+        try {
+            const response = await fetch('/admin/cards/photo/suggest-date', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify({
+                    english: row.texts.en,
+                    categoryId: row.categoryId,
+                    requestKey: row.requestKey,
+                }),
+            })
+            const answer = (await response.json().catch(() => ({}))) as {
+                suggestion?: DateSuggestion
+                message?: string
+            }
+            if (response.ok && answer.suggestion) {
+                const { year } = answer.suggestion
+                if (whole(row.year) !== year) {
+                    row.month = ''
+                    row.day = ''
+                }
+                row.found = answer.suggestion
+                row.year = String(year)
+                row.decade = null
+            } else row.findProblem = answer.message ?? 'No date found. Try again.'
+        } catch {
+            row.findProblem = 'The lookup failed. Check your connection and try again.'
+        } finally {
+            row.finding = false
+        }
     }
 
-    const readPhoto: SubmitFunction = async ({ formData, cancel }) => {
-        if (!chosen) return cancel()
-        reading = true
-        formData.set('photo', await shrinkPhoto(chosen))
-        chosen = null
-        return async ({ update }) => {
-            await update()
-            reading = false
+    function undoFound(row: Row) {
+        const { date } = row.candidate
+        row.found = null
+        row.year = date.year === null ? '' : String(date.year)
+        row.month = date.month === null ? '' : String(date.month)
+        row.day = date.day === null ? '' : String(date.day)
+        row.decade = date.year === null ? date.decade : null
+    }
+
+    const yearMissing = (row: Row) => whole(row.year) === null && !!row.texts.en.trim()
+    const missing = $derived(ticked.filter((row) => yearMissing(row) && !row.finding))
+
+    /** Looks up every ticked card's missing year, three at a time. */
+    async function findMissingDates() {
+        const queue = [...missing]
+        const next = async (): Promise<void> => {
+            const row = queue.shift()
+            if (!row) return
+            await findDate(row)
+            return next()
         }
+        await Promise.all([next(), next(), next()])
     }
 
     // A category the AI suggested: create it (prefilled), then every row waiting for it gets it.
@@ -179,9 +309,11 @@
     const categoryName = (id: string) =>
         data.categories.find((category) => category.id === id)?.name
 
-    const cardsWord = (count: number) => `${count} ${count === 1 ? 'card' : 'cards'}`
-    const textId = (row: Row, locale: CardLocale) => `text-${row.candidate.key}-${locale}`
-    const fieldId = (row: Row, name: string) => `${name}-${row.candidate.key}`
+    const plural = (count: number, word: string) => `${count} ${count === 1 ? word : `${word}s`}`
+    const cardsWord = (count: number) => plural(count, 'card')
+    const textId = (row: Row, locale: CardLocale) => `text-${row.id}-${locale}`
+    const fieldId = (row: Row, name: string) => `${name}-${row.id}`
+    const hostOf = (url: string) => new URL(url).hostname.replace(/^www\./, '')
 
     const shownDate = (row: Row) => {
         const draft = draftOf(row)
@@ -192,6 +324,104 @@
 <svelte:head>
     <title>Add from photo · When Then? admin</title>
 </svelte:head>
+
+<!-- The photos waiting to be read, with a way to add more and to read them. Above the list
+     until there is one, then under it. -->
+{#snippet photoPicker()}
+    <form
+        method="POST"
+        action="?/read"
+        enctype="multipart/form-data"
+        aria-label="Read photos"
+        class="flex flex-col gap-3"
+        use:enhance={readPhotos}>
+        {#if waiting.length > 0}
+            <ul
+                class="grid grid-cols-3 gap-2 sm:grid-cols-5"
+                aria-label="Photos to read">
+                {#each waiting as photo, index (photo.id)}
+                    <li class="relative aspect-square overflow-hidden rounded-md border bg-muted">
+                        <img
+                            src={photo.url}
+                            alt="Photo {index + 1}"
+                            class="size-full object-cover" />
+                        {#if !reading}
+                            <button
+                                type="button"
+                                class="absolute top-1 right-1 grid size-8 cursor-pointer place-items-center rounded-full bg-background/90 shadow"
+                                aria-label="Remove photo {index + 1}"
+                                onclick={() => removePhoto(photo)}>
+                                <XIcon
+                                    class="size-4"
+                                    aria-hidden="true" />
+                            </button>
+                        {/if}
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+        <div class="flex flex-wrap gap-3">
+            <!-- A label, not a button: a file input can't sit inside a button. On a touch screen
+                 it opens the camera, otherwise it picks files (several at once). -->
+            <label
+                class={[
+                    buttonVariants({
+                        size: 'lg',
+                        variant: waiting.length > 0 || reviewing ? 'outline' : 'default',
+                    }),
+                    'min-h-12 flex-1 cursor-pointer sm:flex-none',
+                    (reading || waiting.length >= photoLimit) && 'pointer-events-none opacity-50',
+                ]}>
+                {#if camera}
+                    <CameraIcon aria-hidden="true" />
+                {:else}
+                    <ImagesIcon aria-hidden="true" />
+                {/if}
+                {#if waiting.length > 0 || reviewing}
+                    Add more photos
+                {:else}
+                    {camera ? 'Take photo' : 'Choose photos'}
+                {/if}
+                <input
+                    type="file"
+                    accept="image/*"
+                    capture={camera ? 'environment' : undefined}
+                    multiple={!camera}
+                    class="sr-only"
+                    disabled={reading > 0 || waiting.length >= photoLimit}
+                    onchange={choose} />
+            </label>
+            {#if waiting.length > 0}
+                <Button
+                    type="submit"
+                    size="lg"
+                    class="min-h-12 flex-1 sm:flex-none"
+                    disabled={reading > 0}
+                    aria-busy={reading > 0}>
+                    {#if reading}
+                        <LoaderCircleIcon
+                            class="animate-spin"
+                            aria-hidden="true" />
+                        Reading {plural(reading, 'photo')}…
+                    {:else}
+                        Read {plural(waiting.length, 'photo')}
+                    {/if}
+                </Button>
+            {/if}
+        </div>
+        {#if reading}
+            <p
+                role="status"
+                class="text-sm text-muted-foreground">
+                This can take half a minute.
+            </p>
+        {:else if waiting.length >= photoLimit}
+            <p class="text-sm text-muted-foreground">
+                {photoLimit} photos is the most at a time. Read these, then add more.
+            </p>
+        {/if}
+    </form>
+{/snippet}
 
 <div class="flex flex-wrap items-end justify-between gap-4">
     <h1 class="text-2xl font-semibold tracking-tight">Add from photo</h1>
@@ -207,80 +437,52 @@
         {form.error}
     </p>
 {/if}
+{#if form?.stage === 'review' && form.problems.length > 0}
+    <ul
+        role="alert"
+        class="mt-4 flex flex-col gap-1 rounded-md border border-destructive px-3 py-2 text-sm text-destructive">
+        {#each form.problems as problem (problem)}
+            <li>{problem}</li>
+        {/each}
+    </ul>
+{/if}
 
-<form
-    bind:this={photoForm}
-    method="POST"
-    action="?/read"
-    enctype="multipart/form-data"
-    aria-label="Read a photo"
-    class={['mt-4 flex flex-col gap-3', reviewing && 'border-b pb-4']}
-    use:enhance={readPhoto}>
-    {#if !reviewing}
+{#if !reviewing}
+    <div class="mt-4 flex flex-col gap-3">
         <p class="max-w-prose text-muted-foreground">
-            Take a photo of anything with historical facts in it: a card from another game, your
+            Take photos of anything with historical facts in them: cards from another game, your
             notes, a book page, a museum sign, a screenshot. The AI turns each fact into a draft
-            card for you to check. Nothing is saved until you save, and the photo isn't kept.
+            card for you to check. Nothing is saved until you save, and the photos aren't kept.
         </p>
-    {/if}
-    <div class="flex flex-wrap gap-3">
-        <!-- Labels, not buttons: a file input can't sit inside a button. On a phone the first
-             opens the camera, the second the photo library. -->
-        <label
-            class={[
-                buttonVariants({ size: 'lg' }),
-                'min-h-12 flex-1 cursor-pointer sm:flex-none',
-                reading && 'pointer-events-none opacity-50',
-            ]}>
-            {reviewing ? 'Take another photo' : 'Take photo'}
-            <input
-                type="file"
-                name="photo"
-                accept="image/*"
-                capture="environment"
-                class="sr-only"
-                disabled={reading}
-                onchange={choose} />
-        </label>
-        <label
-            class={[
-                buttonVariants({ size: 'lg', variant: 'outline' }),
-                'min-h-12 flex-1 cursor-pointer sm:flex-none',
-                reading && 'pointer-events-none opacity-50',
-            ]}>
-            Choose image
-            <input
-                type="file"
-                name="photo"
-                accept="image/*"
-                class="sr-only"
-                disabled={reading}
-                onchange={choose} />
-        </label>
+        {@render photoPicker()}
     </div>
-    {#if reading}
+{:else}
+    <div class="mt-4 flex flex-wrap items-center gap-3">
         <p
-            role="status"
-            class="text-sm text-muted-foreground">
-            Reading the photo… this can take half a minute.
+            class="text-sm"
+            data-testid="photo-summary">
+            Found {cardsWord(rows.length)}{photosRead > 1 ? ` in ${photosRead} photos` : ''}. Tick
+            the ones to keep and check what's marked <em>AI-suggested</em>.
         </p>
-    {/if}
-</form>
-
-{#if reviewing}
-    <p
-        class="mt-4 text-sm"
-        data-testid="photo-summary">
-        Found {cardsWord(rows.length)}. Tick the ones to keep and check what's marked
-        <em>AI-suggested</em>.
-    </p>
+        {#if missing.length > 0}
+            <Button
+                type="button"
+                variant="outline"
+                class="min-h-11"
+                onclick={findMissingDates}>
+                <SearchIcon aria-hidden="true" />
+                Find {plural(missing.length, 'missing date')}
+            </Button>
+        {/if}
+    </div>
 
     <ul
-        class="mt-4 flex flex-col gap-3 pb-28"
-        aria-label="Cards found in the photo">
-        {#each rows as row (row.candidate.key)}
+        class="mt-4 flex flex-col gap-3"
+        aria-label="Cards found in the photos">
+        {#each rows as row (row.id)}
             {@const date = shownDate(row)}
             {@const candidate = row.candidate}
+            {@const found = foundDate(row)}
             <li
                 class={['rounded-lg border p-3', row.ticked ? 'bg-background' : 'bg-muted/40']}
                 data-testid="candidate">
@@ -297,7 +499,11 @@
                             {#if date}
                                 <Badge variant="outline">{date}</Badge>
                             {/if}
-                            {#if !row.year && !row.decade}
+                            {#if row.finding}
+                                <Badge variant="outline">Finding the date…</Badge>
+                            {:else if found}
+                                <Badge variant="secondary">Date found online</Badge>
+                            {:else if !row.year && !row.decade}
                                 <Badge variant="destructive">Date needed</Badge>
                             {:else if !candidate.dateFromPhoto}
                                 <Badge variant="secondary">AI-suggested date</Badge>
@@ -315,6 +521,48 @@
                         </span>
                     </span>
                 </label>
+
+                {#if found}
+                    <p class="mt-2 text-sm text-muted-foreground">
+                        {found.year < 0 ? `${-found.year} BC` : found.year} from
+                        <a
+                            href={found.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="underline underline-offset-4">{hostOf(found.sourceUrl)}</a
+                        >{#if found.sourceQuote}: “{found.sourceQuote}”{/if}
+                        <button
+                            type="button"
+                            class="cursor-pointer underline underline-offset-4"
+                            onclick={() => undoFound(row)}>Undo</button>
+                    </p>
+                {:else if yearMissing(row) || row.finding}
+                    <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="min-h-11"
+                            disabled={row.finding}
+                            aria-busy={row.finding}
+                            onclick={() => findDate(row)}>
+                            {#if row.finding}
+                                <LoaderCircleIcon
+                                    class="animate-spin"
+                                    aria-hidden="true" />
+                                Looking it up…
+                            {:else}
+                                <SearchIcon aria-hidden="true" />
+                                Find date
+                            {/if}
+                        </Button>
+                        {#if row.findProblem}
+                            <span
+                                role="alert"
+                                class="text-destructive">{row.findProblem}</span>
+                        {/if}
+                    </div>
+                {/if}
 
                 {#if candidate.duplicateOf}
                     <p class="mt-2 text-sm text-muted-foreground">
@@ -382,7 +630,11 @@
                         <fieldset class="flex flex-col gap-1.5">
                             <legend class="mb-1.5 text-sm font-medium">
                                 Date
-                                {#if !candidate.dateFromPhoto && (candidate.date.year !== null || candidate.date.decade !== null)}
+                                {#if found}
+                                    <span class="font-normal text-muted-foreground">
+                                        · found online
+                                    </span>
+                                {:else if !candidate.dateFromPhoto && (candidate.date.year !== null || candidate.date.decade !== null)}
                                     <span class="font-normal text-muted-foreground">
                                         · AI-suggested, not from the photo
                                     </span>
@@ -483,6 +735,11 @@
         {/each}
     </ul>
 
+    <!-- Room for the save bar fixed at the bottom. -->
+    <div class="mt-6 pb-28">
+        {@render photoPicker()}
+    </div>
+
     <form
         method="POST"
         action="?/save"
@@ -493,10 +750,6 @@
             type="hidden"
             name="cards"
             value={JSON.stringify(tickedDrafts)} />
-        <input
-            type="hidden"
-            name="request_id"
-            value={requestId ?? ''} />
         {#if blocked !== -1}
             <p class="text-sm text-destructive">
                 {ticked[blocked].texts.en || 'A ticked card'}: {photoDraftErrors(

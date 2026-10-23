@@ -9,7 +9,7 @@
 
 import type { CardLocale, TranslationStatus } from './card'
 import { cardLocales } from './card'
-import { cardTextMaxLength, sourceQuoteMaxLength } from './card-form'
+import { cardTextMaxLength, isWebAddress, sourceQuoteMaxLength } from './card-form'
 import { decadeOf, validateDateParts, type DateParts } from './date-parts'
 import { yearRequiredFrom } from './publish-rule'
 import type { CategoryColour, CategoryIconName } from '../categories/look'
@@ -47,6 +47,12 @@ export type PhotoCandidate = {
 
 /** The most candidates one photo gives, so the review list stays manageable. */
 export const photoCandidateLimit = 15
+
+/** The most photos read at once (each is its own AI request, all in one upload). */
+export const photoLimit = 5
+
+/** The most drafts saved at once: a few readings' worth. */
+export const photoDraftLimit = 100
 
 export const emptyDate: DateParts = { decade: null, year: null, month: null, day: null }
 
@@ -102,9 +108,13 @@ export function suggestedCategory(raw: unknown): SuggestedCategory | null {
 export type PhotoDraft = {
     categoryId: string
     date: DateParts
+    /** Where the date was looked up, when it was (otherwise the photo is the source). */
+    sourceUrl: string | null
     sourceQuote: string | null
     difficulty: number | null
     translations: { en: PhotoTranslation } & Partial<Record<CardLocale, PhotoTranslation>>
+    /** The AI request (audit row) the card was read in. */
+    requestId: number | null
 }
 
 export type PhotoTranslation = { text: string; status: TranslationStatus }
@@ -145,6 +155,9 @@ export function photoDraftErrors(draft: PhotoDraft): string[] {
     if (draft.difficulty !== null && !isDifficulty(draft.difficulty)) {
         errors.push('Difficulty is 1 to 4.')
     }
+    if (draft.sourceUrl !== null && !isWebAddress(draft.sourceUrl)) {
+        errors.push('The source is not a web address.')
+    }
     if ((draft.sourceQuote ?? '').length > sourceQuoteMaxLength) {
         errors.push(`Keep the quote under ${sourceQuoteMaxLength} characters.`)
     }
@@ -164,7 +177,7 @@ export function readPhotoDrafts(json: string): { draft: PhotoDraft; errors: stri
     } catch {
         return null
     }
-    if (!Array.isArray(raw) || raw.length === 0 || raw.length > photoCandidateLimit) return null
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > photoDraftLimit) return null
     return raw.map((item: Record<string, unknown>) => {
         const translations = {} as PhotoDraft['translations']
         const posted = (item?.translations ?? {}) as Record<
@@ -186,12 +199,22 @@ export function readPhotoDrafts(json: string): { draft: PhotoDraft; errors: stri
                 month: wholeOrNull(date.month),
                 day: wholeOrNull(date.day),
             },
+            sourceUrl:
+                typeof item?.sourceUrl === 'string' && item.sourceUrl.trim()
+                    ? item.sourceUrl.trim()
+                    : null,
             sourceQuote:
                 typeof item?.sourceQuote === 'string' && item.sourceQuote.trim()
                     ? item.sourceQuote.trim()
                     : null,
             difficulty: item?.difficulty === null ? null : (item?.difficulty as number),
             translations,
+            requestId:
+                typeof item?.requestId === 'number' &&
+                Number.isInteger(item.requestId) &&
+                item.requestId > 0
+                    ? item.requestId
+                    : null,
         }
         if (draft.difficulty === undefined) draft.difficulty = null
         return { draft, errors: photoDraftErrors(draft) }

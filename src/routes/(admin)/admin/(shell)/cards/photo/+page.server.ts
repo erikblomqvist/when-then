@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { fail, redirect } from '@sveltejs/kit'
-import { readPhotoDrafts } from '#lib/cards/photo-import.js'
+import { photoLimit, readPhotoDrafts } from '#lib/cards/photo-import.js'
 import { AiCallError, AiRateLimitError, AiUnavailableError } from '#lib/server/ai.js'
 import { aiDeps } from '#lib/server/ai-client.js'
 import {
     photoImageTypes,
     readCardsFromPhoto,
     type PhotoImageType,
+    type PhotoReading,
 } from '#lib/server/ai-read-photo.js'
 import { listCategories } from '#lib/server/categories.js'
 import { createCategoryAction } from '#lib/server/category-editor.js'
@@ -15,9 +16,11 @@ import { findNearbyCards, importPhotoCards, PhotoImportError } from '#lib/server
 import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
 
-// "Add from photo" (#60), admin only like CSV import. Read sends the photo to the AI and
-// returns candidate cards (nothing saved, the photo not kept); the page edits them and Save
-// posts the ticked ones back as JSON, checked again here before they are created as drafts.
+// "Add from photo" (#60), admin only like CSV import. Read sends up to five photos to the AI,
+// one request each side by side, and returns their candidate cards (nothing saved, the photos
+// not kept); the page edits them and Save posts the ticked ones back as JSON, checked again
+// here before they are created as drafts. A photo that can't be read is reported while the
+// others' cards still come back. `./suggest-date` looks a candidate's date up.
 
 // Reading a dense page, plus the duplicate check, can take a while.
 export const config = { maxDuration: 120 }
@@ -50,53 +53,82 @@ export const actions: Actions = {
     read: async (event) => {
         const { user } = await requireRole(event, 'admin')
         const form = await event.request.formData()
-        const photo = form.get('photo')
-        if (!(photo instanceof File) || photo.size === 0) {
+        const photos = form
+            .getAll('photo')
+            .filter((photo): photo is File => photo instanceof File && photo.size > 0)
+        if (photos.length === 0) {
             return fail(400, { stage: 'photo' as const, error: 'Take or choose a photo.' })
         }
-        if (!isImageType(photo.type)) {
+        if (photos.length > photoLimit) {
+            return fail(400, {
+                stage: 'photo' as const,
+                error: `Read at most ${photoLimit} photos at a time.`,
+            })
+        }
+        if (!photos.every((photo) => isImageType(photo.type))) {
             return fail(400, {
                 stage: 'photo' as const,
                 error: 'Use a JPEG, PNG, WebP or GIF image.',
             })
         }
-        if (photo.size > maxPhotoBytes) {
+        if (photos.some((photo) => photo.size > maxPhotoBytes)) {
             return fail(400, {
                 stage: 'photo' as const,
-                error: 'The photo is over 5 MB. Take it at a lower resolution and try again.',
+                error: 'A photo is over 5 MB. Take it at a lower resolution and try again.',
             })
         }
 
         const db = supabaseService()
         const categories = await activeCategories()
-        try {
-            const { candidates, requestId } = await readCardsFromPhoto(
-                { ...aiDeps(), findNearbyCards: (years) => findNearbyCards(db, years) },
-                {
-                    actorId: user.id,
-                    requestKey: randomUUID(),
-                    image: {
-                        mediaType: photo.type,
-                        base64: Buffer.from(await photo.arrayBuffer()).toString('base64'),
+        const results = await Promise.allSettled(
+            photos.map(async (photo) => {
+                const requestKey = randomUUID()
+                const reading: PhotoReading = await readCardsFromPhoto(
+                    { ...aiDeps(), findNearbyCards: (years) => findNearbyCards(db, years) },
+                    {
+                        actorId: user.id,
+                        requestKey,
+                        image: {
+                            mediaType: photo.type as PhotoImageType,
+                            base64: Buffer.from(await photo.arrayBuffer()).toString('base64'),
+                        },
+                        categories,
+                        usedColours: [...new Set(categories.map(({ colour }) => colour))],
                     },
-                    categories,
-                    usedColours: [...new Set(categories.map(({ colour }) => colour))],
-                },
-            )
-            return { stage: 'review' as const, candidates, requestId }
-        } catch (failure) {
+                )
+                return { requestKey, ...reading }
+            }),
+        )
+
+        const readings = results.flatMap((result) =>
+            result.status === 'fulfilled' ? [result.value] : [],
+        )
+        const failures = results.flatMap((result, index) => {
+            if (result.status === 'fulfilled') return []
+            const failure: unknown = result.reason
             if (
                 failure instanceof AiUnavailableError ||
                 failure instanceof AiRateLimitError ||
                 failure instanceof AiCallError
             ) {
-                return fail(failure instanceof AiCallError ? 502 : 503, {
-                    stage: 'photo' as const,
-                    error: failure.message,
-                })
+                return [{ index, failure }]
             }
             throw failure
+        })
+        if (readings.length === 0) {
+            const [{ failure }] = failures
+            return fail(failure instanceof AiCallError ? 502 : 503, {
+                stage: 'photo' as const,
+                error:
+                    photos.length === 1
+                        ? failure.message
+                        : `None of the photos could be read. ${failure.message}`,
+            })
         }
+        const problems = failures.map(
+            ({ index, failure }) => `Photo ${index + 1}: ${failure.message}`,
+        )
+        return { stage: 'review' as const, readings, problems }
     },
 
     createCategory: createCategoryAction,
@@ -105,7 +137,6 @@ export const actions: Actions = {
         const { user } = await requireRole(event, 'admin')
         const form = await event.request.formData()
         const drafts = readPhotoDrafts(text(form, 'cards'))
-        const request = Number(form.get('request_id'))
         if (!drafts) return fail(400, { stage: 'save' as const, error: 'Tick at least one card.' })
         const invalid = drafts.findIndex(({ errors }) => errors.length > 0)
         if (invalid !== -1) {
@@ -121,7 +152,6 @@ export const actions: Actions = {
                 supabaseService(),
                 user.id,
                 drafts.map(({ draft }) => draft),
-                Number.isInteger(request) && request > 0 ? request : null,
             )
         } catch (failure) {
             if (!(failure instanceof PhotoImportError)) throw failure

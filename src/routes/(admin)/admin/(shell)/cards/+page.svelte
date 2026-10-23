@@ -1,12 +1,13 @@
 <script lang="ts">
     import { goto } from '$app/navigation'
     import { page } from '$app/state'
-    import { Button } from '#lib/components/ui/button/index.js'
+    import { Button, buttonVariants } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
     import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
     import * as Table from '#lib/components/ui/table/index.js'
+    import AddFromPhoto from '#lib/admin/cards/AddFromPhoto.svelte'
     import ExportCards from '#lib/admin/cards/ExportCards.svelte'
     import TranslationBadge from '#lib/admin/cards/TranslationBadge.svelte'
     import { cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
@@ -221,9 +222,8 @@
             <Button
                 href="/admin/cards/import"
                 variant="outline">Import</Button>
-            <Button
-                href="/admin/cards/photo"
-                variant="outline">Add from photo</Button>
+            <AddFromPhoto class={buttonVariants({ variant: 'outline' })}
+                >Add from photo</AddFromPhoto>
         {/if}
         <Button href="/admin/cards/new">New card</Button>
     </div>

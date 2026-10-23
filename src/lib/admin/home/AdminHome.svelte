@@ -15,6 +15,7 @@
     import UsersIcon from '@lucide/svelte/icons/users'
     import ArrowRightIcon from '@lucide/svelte/icons/arrow-right'
     import { buttonVariants } from '#lib/components/ui/button/index.js'
+    import AddFromPhoto from '#lib/admin/cards/AddFromPhoto.svelte'
     import CategoryBadge from '#lib/admin/categories/CategoryBadge.svelte'
     import { actionLabel, entityHref, entityLabel, formatTime } from '#lib/audit/display.js'
     import { relativeTime } from '#lib/audit/history-summary.js'
@@ -139,12 +140,12 @@
             <p class="mt-1 text-muted-foreground">{nudge}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a
-                href="/admin/cards/photo"
-                class={buttonVariants({ variant: 'outline' })}>
-                <CameraIcon aria-hidden="true" />
-                Add from photo
-            </a>
+            {#if admin}
+                <AddFromPhoto class={buttonVariants({ variant: 'outline' })}>
+                    <CameraIcon aria-hidden="true" />
+                    Add from photo
+                </AddFromPhoto>
+            {/if}
             <a
                 href="/admin/cards/new"
                 class={buttonVariants()}>
