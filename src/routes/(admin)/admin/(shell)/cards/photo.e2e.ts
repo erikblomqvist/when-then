@@ -91,7 +91,15 @@ test('an unticked card is left out', async ({ page }) => {
     await expect(candidates).toHaveCount(3)
     await candidates.nth(1).getByRole('checkbox').uncheck()
 
+    // While it saves, the button waits with a spinner (the save is held back to see it).
+    await page.route('**/admin/cards/photo?/save', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await route.continue()
+    })
     await page.getByRole('button', { name: 'Save 2 cards as drafts' }).click()
+    const saving = page.getByRole('button', { name: 'Saving 2 cards…' })
+    await expect(saving).toBeDisabled()
+    await expect(saving).toHaveAttribute('aria-busy', 'true')
     await expect(page.getByText('Added 2 drafts from your photo')).toBeVisible()
     expect(new URL(page.url()).searchParams.getAll('new')).toHaveLength(2)
 })

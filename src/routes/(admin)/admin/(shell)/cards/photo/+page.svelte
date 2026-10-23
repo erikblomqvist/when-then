@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
     import { untrack } from 'svelte'
+    import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle'
     import { enhance } from '$app/forms'
     import type { SubmitFunction } from '$app/forms'
     import { Badge } from '#lib/components/ui/badge/index.js'
@@ -115,6 +116,17 @@
     // Photo: shrink it, then submit the form with the smaller file.
     let photoForm: HTMLFormElement | undefined = $state()
     let reading = $state(false)
+
+    // Saving: the button waits (with a spinner) until the drafts are created and the page moves
+    // on to the card list, or a refusal comes back.
+    let saving = $state(false)
+    const saveDrafts: SubmitFunction = () => {
+        saving = true
+        return async ({ result, update }) => {
+            await update()
+            if (result.type !== 'redirect') saving = false
+        }
+    }
     let chosen: File | null = null
 
     async function choose(event: Event & { currentTarget: HTMLInputElement }) {
@@ -475,6 +487,7 @@
         method="POST"
         action="?/save"
         aria-label="Save cards"
+        use:enhance={saveDrafts}
         class="fixed inset-x-0 bottom-0 z-10 flex flex-col gap-2 border-t bg-background p-4 shadow-lg sm:flex-row sm:items-center">
         <input
             type="hidden"
@@ -495,8 +508,16 @@
             type="submit"
             size="lg"
             class="min-h-12 sm:ml-auto"
-            disabled={ticked.length === 0 || blocked !== -1}>
-            Save {cardsWord(ticked.length)} as drafts
+            disabled={saving || ticked.length === 0 || blocked !== -1}
+            aria-busy={saving}>
+            {#if saving}
+                <LoaderCircleIcon
+                    class="animate-spin"
+                    aria-hidden="true" />
+                Saving {cardsWord(ticked.length)}…
+            {:else}
+                Save {cardsWord(ticked.length)} as drafts
+            {/if}
         </Button>
     </form>
 {/if}
