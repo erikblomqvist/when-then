@@ -75,6 +75,9 @@ export function create(input: CreateInput): GameState {
 
 /** Give everyone their anchor year, pick the starting player and start the first turn. */
 function beginPlaying(state: GameState, currentYear: number): GameState {
+    if (!Number.isInteger(currentYear)) {
+        throw new Error(`The current year is a whole number, not ${currentYear}.`)
+    }
     const dice = roll(state.rng)
     const dates = Object.values(state.cards).map((card) => card.date)
     const timelines: Record<string, TimelineEntry[]> = {}

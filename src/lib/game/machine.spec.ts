@@ -402,6 +402,15 @@ describe('seating', () => {
         }
     })
 
+    it('throws on a current year that is not a whole number, rather than deal broken anchors', () => {
+        for (const currentYear of [Number.NaN, 2026.5, Number.POSITIVE_INFINITY]) {
+            expect(() => confirm(create(fourPlayers()), 'astrid', currentYear)).toThrow(
+                'current year',
+            )
+            expect(() => create(twoPlayers({ currentYear }))).toThrow('current year')
+        }
+    })
+
     it('picks the starting player from the seed', () => {
         const starter = (seed: number) => confirmed(create(fourPlayers({ seed }))).startingPlayerId
         expect(starter(3)).toBe(starter(3))
