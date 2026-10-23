@@ -82,7 +82,7 @@
     }
     .option:has(input:disabled) {
         opacity: 0.35;
-        cursor: default;
+        cursor: not-allowed;
     }
     /* Invisible, over the whole tile: the tile is what you see and tap. */
     input {
@@ -91,5 +91,8 @@
         margin: 0;
         opacity: 0;
         cursor: pointer;
+    }
+    input:disabled {
+        cursor: not-allowed;
     }
 </style>
