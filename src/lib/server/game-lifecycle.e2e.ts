@@ -1,6 +1,6 @@
 // The game lifecycle service against the local database (run through with-db.sh / CI's
 // stack): creating and joining a game and opening its lobby, changing a name or icon, leaving
-// and removing, the code rules and the refusals.
+// and removing, the host's settings, the code rules and the refusals.
 
 import { expect, test } from '@playwright/test'
 import { isGameCode, randomGameCode } from '../game/game-code'
@@ -15,6 +15,7 @@ import {
     joinGame,
     leaveGame,
     removePlayer,
+    updateSettings,
 } from './game-lifecycle'
 
 const db = localServiceClient()
@@ -530,4 +531,63 @@ test('nobody is removed from the lobby once the game has started', async () => {
     await expect(removePlayer(db, { userId: host, code, seatId })).rejects.toMatchObject({
         code: 'game_started',
     })
+})
+
+// Settings ---------------------------------------------------------------------------------
+
+const settings = { targetScore: 10, exactYear: false, cardLanguage: 'en' }
+
+test('the host changes the settings, and everyone sees them in a new version', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    const before = await getLobby(db, bo, code)
+
+    await updateSettings(db, {
+        userId: host,
+        code: code.toLowerCase(),
+        targetScore: 15,
+        exactYear: true,
+        cardLanguage: 'nb',
+    })
+
+    const after = await getLobby(db, bo, code)
+    expect(after).toMatchObject({ targetScore: 15, exactYear: true, cardLanguage: 'nb' })
+    expect(after.version).toBeGreaterThan(before.version)
+})
+
+test('a target score is a whole number from 3 to 30', async () => {
+    const { host, code } = await newLobby()
+    const update = (targetScore: number) =>
+        updateSettings(db, { userId: host, code, ...settings, targetScore })
+
+    await update(3)
+    expect((await getLobby(db, host, code)).targetScore).toBe(3)
+    await update(30)
+    expect((await getLobby(db, host, code)).targetScore).toBe(30)
+    for (const refused of [2, 31, 0, 12.5, Number.NaN]) {
+        await expect(update(refused)).rejects.toMatchObject({ code: 'invalid_target_score' })
+    }
+    expect((await getLobby(db, host, code)).targetScore).toBe(30)
+})
+
+test('the card language is one of the card locales', async () => {
+    const { host, code } = await newLobby()
+
+    await expect(
+        updateSettings(db, { userId: host, code, ...settings, cardLanguage: 'de' }),
+    ).rejects.toMatchObject({ code: 'invalid_card_language' })
+    expect((await getLobby(db, host, code)).cardLanguage).toBe('en')
+})
+
+test('only the host changes the settings, and only before the game starts', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    const update = (userId: string) =>
+        updateSettings(db, { userId, code, ...settings, targetScore: 20 })
+
+    await expect(update(bo)).rejects.toMatchObject({ code: 'not_host' })
+    await expect(update(await newPlayer())).rejects.toMatchObject({ code: 'not_host' })
+    expect((await getLobby(db, host, code)).targetScore).toBe(10)
+
+    await markStarted(code)
+    await expect(update(host)).rejects.toMatchObject({ code: 'game_started' })
+    expect((await getLobby(db, host, code)).targetScore).toBe(10)
 })

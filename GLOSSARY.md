@@ -109,15 +109,18 @@ A new game started from a finished one, beginning in a lobby with the same playe
 _Avoid_: Replay, new round
 
 **Target score**:
-The number of points a player must reach to win, set when the game is created.
+The number of points a player must reach to win, from 3 to 30 (10 unless the host changes it in the lobby), fixed once the game starts.
 _Avoid_: Winning score
 
 **Game mode**:
 The rules for how precisely cards must be placed, chosen when the game is created. The standard mode places cards from 1500 onwards by year and earlier cards by decade; a card not known that precisely is not dealt. A game mode changes what an answer is, unlike a house rule, which tweaks scoring or locking.
 _Avoid_: Difficulty level
 
+**Exact-year house rule**:
+A house rule, off unless the host turns it on in the lobby, that rewards knowing a card's exact year rather than only where it goes on the timeline. How it plays is still open (#20).
+
 **Card language**:
-The language a game's cards are read aloud in, chosen when the game is created and independent of each player's own app language. A card without text in that language is read in English.
+The language a game's cards are read aloud in, independent of each player's own app language. It starts as the host's app language, the host can change it in the lobby, and it is fixed once the game starts. A card without text in that language is read in English.
 
 ### Authoring
 

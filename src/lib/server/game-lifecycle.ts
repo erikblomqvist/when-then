@@ -6,11 +6,12 @@
 // Before Start a game is rows (migration `20261023006400_lobby.sql`, ADR 0002): the game and
 // one row per player.
 
-import type { CardLocale } from '../cards/card'
+import { isCardLocale, type CardLocale } from '../cards/card'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
 import { isPlayerIcon, maxPlayers, normalisePlayerName, type PlayerIcon } from '../game/player'
 import type { GameRefusalCode } from '../game/refusals'
+import { isTargetScore, maxTargetScore, minTargetScore } from '../game/settings'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
@@ -28,6 +29,8 @@ const refusals = {
     no_player: 'That player has already left.',
     host_cannot_leave: "The host can't leave or be removed.",
     removed: 'The host removed you from the game.',
+    invalid_target_score: `The target score is ${minTargetScore} to ${maxTargetScore}.`,
+    invalid_card_language: 'Cards come in English, Swedish or Norwegian.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */
@@ -283,6 +286,42 @@ export async function removePlayer(
     if (!data) throw new Error('remove_player returned no game')
 
     await nudge(db, { gameId: data.removed_game, version: data.game_version })
+}
+
+/**
+ * Update settings: the host `userId` gives the lobby of the running game with `code` (any case)
+ * a target score (3–30), the exact-year house rule on or off, and a card language, then
+ * nudges everyone in it. Refused with `not_host` for anyone else, `game_started` after Start,
+ * `invalid_target_score` or `invalid_card_language`.
+ */
+export async function updateSettings(
+    db: Db,
+    input: {
+        userId: string
+        code: string
+        targetScore: number
+        exactYear: boolean
+        cardLanguage: string
+    },
+): Promise<void> {
+    const code = normaliseGameCode(input.code)
+    if (!isGameCode(code)) refuse('not_found')
+    if (!isTargetScore(input.targetScore)) refuse('invalid_target_score')
+    if (!isCardLocale(input.cardLanguage)) return refuse('invalid_card_language')
+
+    const { data, error } = await db
+        .rpc('update_settings', {
+            host: input.userId,
+            code,
+            target_score: input.targetScore,
+            exact_year: input.exactYear,
+            card_language: input.cardLanguage,
+        })
+        .single()
+    checkRpc(error, refusals, GameRefusal)
+    if (!data) throw new Error('update_settings returned no game')
+
+    await nudge(db, { gameId: data.updated_game, version: data.game_version })
 }
 
 /** Whether the host removed `userId` from the game's lobby, and they haven't joined again. */

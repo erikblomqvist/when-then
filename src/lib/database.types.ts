@@ -652,6 +652,19 @@ export type Database = {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
             }
+            update_settings: {
+                Args: {
+                    card_language: Database['public']['Enums']['card_locale']
+                    code: string
+                    exact_year: boolean
+                    host: string
+                    target_score: number
+                }
+                Returns: {
+                    game_version: number
+                    updated_game: string
+                }[]
+            }
         }
         Enums: {
             app_role: 'admin' | 'editor'

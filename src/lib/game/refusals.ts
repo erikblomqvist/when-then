@@ -3,6 +3,7 @@
 
 import { m } from '#lib/paraglide/messages.js'
 import { maxPlayers } from './player'
+import { maxTargetScore, minTargetScore } from './settings'
 
 /** Why a lifecycle command was refused. */
 export type GameRefusalCode =
@@ -18,6 +19,8 @@ export type GameRefusalCode =
     | 'no_player'
     | 'host_cannot_leave'
     | 'removed'
+    | 'invalid_target_score'
+    | 'invalid_card_language'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -32,6 +35,9 @@ const words: Record<GameRefusalCode, () => string> = {
     no_player: m.refusal_no_player,
     host_cannot_leave: m.refusal_host_cannot_leave,
     removed: m.refusal_removed,
+    invalid_target_score: () =>
+        m.refusal_invalid_target_score({ min: minTargetScore, max: maxTargetScore }),
+    invalid_card_language: m.refusal_invalid_card_language,
 }
 
 /** The message for a refusal, in the current locale. */
