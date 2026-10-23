@@ -1,12 +1,12 @@
--- The lobby (#64 to #67): the browser's roles can't touch games or players, only the server can
--- (ADR 0002), a game's code is unique among games that haven't ended, and the database itself
--- holds the target score to its limits.
+-- The lobby (#64 to #67, #69): the browser's roles can't touch games or players or sweep them,
+-- only the server can (ADR 0002), a game's code is unique among games that haven't ended, and
+-- the database itself holds the target score to its limits.
 -- Run with `vpr test:db` against the local stack. Everything is rolled back.
 
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(19);
 
 insert into auth.users (id, is_anonymous) values
     ('00000000-0000-0000-0000-0000000064a1', true),
@@ -44,6 +44,12 @@ select throws_ok(
     'P0001',
     'invalid_target_score',
     'a target score above 30 is refused'
+);
+
+select results_eq(
+    $$ select schedule, command from cron.job where jobname = 'sweep-games' $$,
+    $$ values ('*/15 * * * *', 'select public.sweep_games(now())') $$,
+    'pg_cron sweeps the games every 15 minutes'
 );
 
 -- The browser's roles: anonymous players sign in as `authenticated`, the rest are `anon`.
@@ -94,6 +100,12 @@ select throws_ok(
     '42501',
     null,
     'a player cannot call update_settings'
+);
+select throws_ok(
+    $$ select public.sweep_games(now() + interval '1 year') $$,
+    '42501',
+    null,
+    'a player cannot call sweep_games'
 );
 select throws_ok($$ select * from public.game_removals $$, '42501', null, 'a player cannot read removals');
 

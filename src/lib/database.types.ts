@@ -315,6 +315,7 @@ export type Database = {
                     ended_at: string | null
                     exact_year: boolean
                     id: string
+                    last_active_at: string
                     started_at: string | null
                     target_score: number
                     version: number
@@ -326,6 +327,7 @@ export type Database = {
                     ended_at?: string | null
                     exact_year?: boolean
                     id?: string
+                    last_active_at?: string
                     started_at?: string | null
                     target_score?: number
                     version?: number
@@ -337,6 +339,7 @@ export type Database = {
                     ended_at?: string | null
                     exact_year?: boolean
                     id?: string
+                    last_active_at?: string
                     started_at?: string | null
                     target_score?: number
                     version?: number
@@ -489,12 +492,12 @@ export type Database = {
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
-            delete_category: {
-                Args: { actor: string; category_id: string }
-                Returns: undefined
-            }
             delete_card: {
                 Args: { actor: string; card_id: string }
+                Returns: undefined
+            }
+            delete_category: {
+                Args: { actor: string; category_id: string }
                 Returns: undefined
             }
             import_cards: {
@@ -557,6 +560,7 @@ export type Database = {
                     ended_at: string | null
                     exact_year: boolean
                     id: string
+                    last_active_at: string
                     started_at: string | null
                     target_score: number
                     version: number
@@ -647,6 +651,13 @@ export type Database = {
                     person_id: string
                 }
                 Returns: undefined
+            }
+            sweep_games: {
+                Args: { now: string }
+                Returns: {
+                    deleted: number
+                    expired: number
+                }[]
             }
             unarchive_card: {
                 Args: { actor: string; card_id: string }

@@ -345,6 +345,19 @@ export async function findMySeat(db: Db, userId: string): Promise<Seat | null> {
     return data && { gameId: data.games.id, code: data.games.code, seatId: data.seat_id }
 }
 
+/**
+ * Sweep: at `now`, ends every lobby with no activity for 2 hours (its code is free again, and
+ * joining it is `not_found`), then deletes every game that ended 30 days ago, with its player
+ * rows. Returns how many of each. pg_cron runs the same sweep every 15 minutes in production
+ * (migration `20261023115047_sweep_lobbies.sql`) with the database's clock; tests pass their own.
+ */
+export async function sweep(db: Db, now: Date): Promise<{ expired: number; deleted: number }> {
+    const { data, error } = await db.rpc('sweep_games', { now: now.toISOString() }).single()
+    if (error) throw new Error(error.message, { cause: error })
+    if (!data) throw new Error('sweep_games returned nothing')
+    return data
+}
+
 /** Whether the host removed `userId` from the game's lobby, and they haven't joined again. */
 async function wasRemoved(db: Db, gameId: string, userId: string): Promise<boolean> {
     const { count, error } = await db

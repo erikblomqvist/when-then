@@ -16,6 +16,7 @@ import {
     joinGame,
     leaveGame,
     removePlayer,
+    sweep,
     updateSettings,
 } from './game-lifecycle'
 
@@ -648,4 +649,154 @@ test('a player seated in two games that haven’t finished finds the one they jo
     await joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })
 
     expect(await findMySeat(db, bo)).toMatchObject({ code })
+})
+
+// Sweep ----------------------------------------------------------------------------------
+
+const minute = 60_000
+const hour = 60 * minute
+const day = 24 * hour
+
+// The sweep runs over every game in the database, so a clock in the future would expire the
+// lobbies of tests running alongside. Instead the sweep's clock is the database's own time when
+// the game last moved, and the game's timestamps are moved back to make it look idle or long
+// ended.
+async function lastActive(gameId: string) {
+    const { data, error } = await db
+        .from('games')
+        .select('last_active_at')
+        .eq('id', gameId)
+        .single()
+    if (error) throw new Error(error.message, { cause: error })
+    return new Date(data.last_active_at)
+}
+
+/** Moves the game's last activity, or its end, back to `by` milliseconds before `now`. */
+async function moveBack(
+    gameId: string,
+    column: 'last_active_at' | 'ended_at',
+    now: Date,
+    by: number,
+) {
+    const at = new Date(now.getTime() - by).toISOString()
+    const moved = await db
+        .from('games')
+        .update(column === 'ended_at' ? { ended_at: at } : { last_active_at: at })
+        .eq('id', gameId)
+    expect(moved.error).toBeNull()
+}
+
+/** What is left of a game in the database: the game and its player rows. */
+async function rowsOf(gameId: string) {
+    const [games, players] = await Promise.all([
+        db.from('games').select('id', { count: 'exact', head: true }).eq('id', gameId),
+        db
+            .from('game_players')
+            .select('user_id', { count: 'exact', head: true })
+            .eq('game_id', gameId),
+    ])
+    return { games: games.count, players: players.count }
+}
+
+test('a lobby with no activity for 2 hours expires, and its code is free again', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    const { gameId } = await getLobby(db, host, code)
+    const now = await lastActive(gameId)
+
+    await moveBack(gameId, 'last_active_at', now, 2 * hour - minute)
+    await sweep(db, now)
+    expect((await getLobby(db, host, code)).gameId).toBe(gameId)
+
+    await moveBack(gameId, 'last_active_at', now, 2 * hour)
+    await sweep(db, now)
+
+    await expect(getLobby(db, host, code)).rejects.toMatchObject({ code: 'not_found' })
+    await expect(getJoinStep(db, await newPlayer(), code)).rejects.toMatchObject({
+        code: 'not_found',
+    })
+    await expect(
+        joinGame(db, { userId: await newPlayer(), code, name: 'Cai', icon: 'sun' }),
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(await findMySeat(db, bo)).toBeNull()
+
+    const again = await createGame(
+        db,
+        { userId: await newPlayer(), name: 'Dag', icon: 'moon', cardLanguage: 'en' },
+        { newCode: () => code },
+    )
+    expect(again.code).toBe(code)
+})
+
+type LobbyWithBo = Awaited<ReturnType<typeof lobbyWithBo>>
+
+const activities: [string, (lobby: LobbyWithBo) => Promise<void>][] = [
+    [
+        'a join',
+        async ({ code }) => {
+            await joinGame(db, { userId: await newPlayer(), code, name: 'Cai', icon: 'sun' })
+        },
+    ],
+    [
+        'a name or icon change',
+        ({ bo, code }) => changePlayer(db, { userId: bo, code, name: 'Bosse', icon: 'dog' }),
+    ],
+    [
+        'a settings change',
+        ({ host, code }) =>
+            updateSettings(db, { userId: host, code, ...settings, targetScore: 12 }),
+    ],
+    ['a leave', ({ bo, code }) => leaveGame(db, { userId: bo, code })],
+    [
+        'a removal',
+        async ({ host, code }) => {
+            await removePlayer(db, { userId: host, code, seatId: await seatOf(host, code, 'Bo') })
+        },
+    ],
+]
+
+for (const [activity, act] of activities) {
+    test(`${activity} in the lobby starts its 2 hours over`, async () => {
+        const lobby = await lobbyWithBo()
+        const { host, code } = lobby
+        const { gameId } = await getLobby(db, host, code)
+        const now = await lastActive(gameId)
+        await moveBack(gameId, 'last_active_at', now, 3 * hour)
+
+        await act(lobby)
+
+        // The 2 hours now count from the activity, not from 3 hours ago.
+        const restarted = await lastActive(gameId)
+        expect(restarted.getTime()).toBeGreaterThanOrEqual(now.getTime())
+        await sweep(db, restarted)
+        expect((await getLobby(db, host, code)).gameId).toBe(gameId)
+    })
+}
+
+test('a game that has started is not expired as a lobby', async () => {
+    const { host, code } = await newLobby()
+    const { gameId } = await getLobby(db, host, code)
+    const now = await lastActive(gameId)
+    await markStarted(code)
+    await moveBack(gameId, 'last_active_at', now, 3 * hour)
+
+    await sweep(db, now)
+
+    expect(await findMySeat(db, host)).toMatchObject({ gameId })
+})
+
+test('an expired lobby and its players are deleted 30 days after it expired', async () => {
+    const { host, code } = await lobbyWithBo()
+    const { gameId } = await getLobby(db, host, code)
+    const now = await lastActive(gameId)
+    await moveBack(gameId, 'last_active_at', now, 3 * hour)
+    await sweep(db, now)
+    expect(await rowsOf(gameId)).toEqual({ games: 1, players: 2 })
+
+    await moveBack(gameId, 'ended_at', now, 30 * day - minute)
+    await sweep(db, now)
+    expect(await rowsOf(gameId)).toEqual({ games: 1, players: 2 })
+
+    await moveBack(gameId, 'ended_at', now, 30 * day)
+    await sweep(db, now)
+    expect(await rowsOf(gameId)).toEqual({ games: 0, players: 0 })
 })
