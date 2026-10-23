@@ -1,0 +1,323 @@
+/* ==========================================================================
+   Timeline card game — design tokens
+   Extracted from the timeline card game mobile prototype.
+
+   Structure
+     1. Primitives   raw values (color ramps, font stacks, sizes). Never use
+                     these directly in components.
+     2. Semantic     role-based aliases that components consume.
+     3. Category     per-category color scopes (.cat-*).
+
+   Colors are OKLCH. Translucent variants use relative color syntax:
+     oklch(from var(--token) l c h / <alpha>)
+   Baseline: Chrome/Edge 119+, Safari 16.4+, Firefox 128+.
+   ========================================================================== */
+
+:root {
+    /* ------------------------------------------------------------------------
+     1. PRIMITIVES
+     ------------------------------------------------------------------------ */
+
+    /* Navy: the game table and dark surfaces */
+    --color-navy-950: oklch(11.7% 0.031 280.6);
+    --color-navy-900: oklch(14.2% 0.041 279.9);
+    --color-navy-850: oklch(16.6% 0.051 277.6);
+    --color-navy-800: oklch(19.5% 0.044 281.6);
+    --color-navy-750: oklch(22.2% 0.068 276.9);
+    --color-navy-700: oklch(23.4% 0.053 281.5);
+    --color-navy-650: oklch(24.3% 0.08 274.8);
+    --color-navy-600: oklch(26.8% 0.071 277.1);
+    --color-navy-500: oklch(30.5% 0.077 275.9);
+    --color-navy-400: oklch(37.9% 0.107 276);
+
+    /* Paper: card faces, sheets, raised tiles (warm cream ramp) */
+    --color-paper-50: oklch(98.9% 0.013 86.8);
+    --color-paper-100: oklch(97.4% 0.02 87.5);
+    --color-paper-200: oklch(95.7% 0.025 86.9);
+    --color-paper-300: oklch(95.1% 0.025 86.9);
+    --color-paper-350: oklch(93.9% 0.032 87.3);
+    --color-paper-400: oklch(91.9% 0.038 85.3);
+    --color-paper-500: oklch(90.1% 0.043 86);
+    --color-paper-600: oklch(88.7% 0.046 84.6);
+    --color-paper-700: oklch(79% 0.06 83.9);
+    --color-paper-800: oklch(70.6% 0.062 81.7);
+    --color-paper-850: oklch(63.1% 0.059 80.9);
+    --color-paper-900: oklch(53.5% 0.054 79.7);
+
+    /* Ink: text and marks on paper (warm brown-black) */
+    --color-ink-600: oklch(42.1% 0.033 66.7);
+    --color-ink-700: oklch(36.2% 0.032 62.7);
+    --color-ink-800: oklch(30.6% 0.029 62);
+    --color-ink-900: oklch(25.7% 0.022 63.6);
+    --color-ink-950: oklch(16.4% 0.012 60.7);
+
+    /* Haze: cool secondary text on the table */
+    --color-haze-100: oklch(92.2% 0.02 308.2);
+    --color-haze-200: oklch(87.6% 0.029 292.4);
+    --color-haze-300: oklch(85.7% 0.03 289.9);
+
+    /* Signal */
+    --color-coral-100: oklch(93.1% 0.038 44.9);
+
+    /* Category hues: 500 = lacquer, 700 = edge/shadow */
+    --color-red-500: oklch(55.7% 0.182 29.6);
+    --color-red-700: oklch(41.5% 0.138 28.6);
+    --color-blue-500: oklch(47.3% 0.162 263);
+    --color-blue-700: oklch(34.2% 0.113 263);
+    --color-amber-500: oklch(75.5% 0.152 78.6);
+    --color-amber-700: oklch(56.3% 0.116 75.7);
+    --color-green-500: oklch(55.4% 0.118 158.5);
+    --color-green-700: oklch(39.6% 0.086 157.7);
+
+    --color-white: oklch(100% 0 0);
+    --color-black: oklch(0% 0 0);
+
+    /* Font stacks */
+    --font-family-serif: "Fraunces", "Iowan Old Style", Georgia, "Times New Roman", serif;
+    --font-family-sans: "Bricolage Grotesque", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+
+    /* Font sizes (px scale used in the prototype) */
+    --font-size-11: 11px;
+    --font-size-13: 13px;
+    --font-size-14: 14px;
+    --font-size-15: 15px;
+    --font-size-16: 16px;
+    --font-size-18: 18px;
+    --font-size-19: 19px;
+    --font-size-21: 21px;
+    --font-size-28: 28px;
+    --font-size-36: 36px;
+    --font-size-46: 46px;
+    --font-size-88: 88px;
+
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+    --font-weight-black: 900;
+
+    /* Spacing */
+    --space-1: 4px;
+    --space-2: 6px;
+    --space-3: 8px;
+    --space-4: 10px;
+    --space-5: 12px;
+    --space-6: 14px;
+    --space-7: 16px;
+    --space-8: 18px;
+    --space-9: 22px;
+    --space-10: 28px;
+    --space-11: 32px;
+    --space-12: 40px;
+    --space-13: 48px;
+    --space-14: 64px;
+
+    /* Radius */
+    --radius-xs: 4px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 18px;
+    --radius-2xl: 32px;
+    --radius-pill: 999px;
+    --radius-round: 50%;
+
+    /* Easing */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-overshoot: cubic-bezier(0.3, 0.8, 0.3, 1.15); /* slots, snapping */
+    --ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1.12); /* timeline row */
+    --ease-settle: cubic-bezier(0.2, 0.8, 0.3, 1.08); /* deal, panels */
+    --ease-pop: cubic-bezier(0.3, 0.6, 0.3, 1.3); /* stamp-in */
+    --ease-accelerate: cubic-bezier(0.5, 0, 0.8, 0.6); /* cards falling away */
+    --ease-turn: cubic-bezier(0.65, 0, 0.3, 1); /* rotate device */
+
+    /* Durations */
+    --duration-instant: 100ms;
+    --duration-fast: 300ms;
+    --duration-base: 450ms;
+    --duration-slow: 600ms;
+    --duration-slower: 950ms;
+    --duration-ambient-float: 3.2s;
+    --duration-ambient-sheen: 4.5s;
+    --duration-ambient-breathe: 1.8s;
+
+    /* ------------------------------------------------------------------------
+     2. SEMANTIC
+     ------------------------------------------------------------------------ */
+
+    /* Surfaces */
+    --surface-table: var(--color-navy-500);
+    --surface-table-vignette: oklch(from var(--color-navy-950) l c h / 0.42);
+    --surface-table-inset: oklch(from var(--color-navy-900) l c h / 0.22);
+    --surface-deck: var(--color-navy-750);
+    --surface-paper: var(--color-paper-350);
+    --surface-paper-bright: var(--color-paper-50);
+    --surface-paper-sunken: var(--color-paper-400);
+    --surface-veil: oklch(from var(--color-navy-800) l c h / 0.55);
+
+    --gradient-card-face: radial-gradient(
+        120% 90% at 30% 18%,
+        var(--color-paper-100),
+        var(--color-paper-400)
+    );
+    --gradient-card-sleeve: linear-gradient(var(--color-paper-350), var(--color-paper-500));
+    --gradient-tile: linear-gradient(var(--color-paper-200), var(--color-paper-600));
+    --gradient-tile-ink: linear-gradient(var(--color-navy-700), var(--color-navy-800));
+    --gradient-sheet: linear-gradient(160deg, var(--color-paper-200), var(--color-paper-400));
+    --gradient-panel: linear-gradient(160deg, var(--color-paper-200), var(--color-paper-500));
+    --gradient-field: linear-gradient(var(--color-paper-400), var(--color-paper-350));
+    --gradient-field-empty: linear-gradient(var(--color-paper-600), var(--color-paper-400));
+    --gradient-notepad: linear-gradient(var(--color-paper-100), var(--color-paper-350));
+    --gradient-lacquer-highlight: linear-gradient(
+        155deg,
+        oklch(from var(--color-white) l c h / 0.4),
+        oklch(from var(--color-white) l c h / 0) 36%,
+        oklch(from var(--color-black) l c h / 0) 70%,
+        oklch(from var(--color-black) l c h / 0.14)
+    );
+    --gradient-lacquer-matte: linear-gradient(
+        155deg,
+        oklch(from var(--color-white) l c h / 0.1),
+        oklch(from var(--color-black) l c h / 0.08)
+    );
+
+    /* Text */
+    --text-on-table: var(--color-paper-300);
+    --text-on-table-strong: var(--color-white);
+    --text-on-table-secondary: var(--color-haze-100);
+    --text-on-table-muted: var(--color-haze-300);
+    --text-on-table-subtle: oklch(from var(--color-paper-300) l c h / 0.78);
+    --text-on-table-disabled: oklch(from var(--color-paper-300) l c h / 0.4);
+    --text-on-paper: var(--color-ink-900);
+    --text-on-paper-strong: var(--color-ink-800);
+    --text-on-paper-secondary: var(--color-ink-600);
+    --text-on-paper-muted: oklch(from var(--color-ink-900) l c h / 0.72);
+    --text-on-paper-subtle: oklch(from var(--color-ink-900) l c h / 0.4);
+    --text-on-category: var(--color-paper-100);
+    --text-error-on-table: var(--color-coral-100);
+
+    /* Borders and lines */
+    --border-on-table: oklch(from var(--color-paper-300) l c h / 0.24);
+    --border-on-table-strong: oklch(from var(--color-paper-300) l c h / 0.42);
+    --border-on-paper: oklch(from var(--color-ink-900) l c h / 0.14);
+    --border-on-paper-strong: oklch(from var(--color-ink-800) l c h / 0.5);
+    --border-notepad-header: oklch(from var(--color-red-500) l c h / 0.55);
+    --border-notepad-row: oklch(from var(--color-blue-500) l c h / 0.24);
+
+    --focus-ring-color: var(--color-paper-300);
+    --focus-ring: 0 0 0 3px oklch(from var(--color-paper-300) l c h / 0.55);
+
+    /* Typography roles */
+    --type-display-family: var(--font-family-serif);
+    --type-display-size: var(--font-size-88);
+    --type-display-weight: var(--font-weight-black);
+    --type-display-leading: 0.84;
+    --type-display-tracking: -0.02em;
+    --type-display-variation: "SOFT" 100, "opsz" 144;
+
+    --type-heading-1-family: var(--font-family-serif);
+    --type-heading-1-size: var(--font-size-46);
+    --type-heading-1-weight: var(--font-weight-extrabold);
+    --type-heading-1-leading: 1;
+    --type-heading-1-tracking: -0.012em;
+    --type-heading-1-variation: "SOFT" 100, "opsz" 144;
+
+    --type-heading-2-family: var(--font-family-serif);
+    --type-heading-2-size: var(--font-size-28);
+    --type-heading-2-weight: var(--font-weight-extrabold);
+    --type-heading-2-tracking: -0.02em;
+    --type-heading-2-variation: "SOFT" 100, "opsz" 72;
+
+    --type-body-family: var(--font-family-sans);
+    --type-body-size: var(--font-size-16);
+    --type-body-weight: var(--font-weight-semibold);
+    --type-body-leading: 1.45;
+
+    --type-label-family: var(--font-family-sans);
+    --type-label-size: var(--font-size-14);
+    --type-label-weight: var(--font-weight-bold);
+
+    --type-caption-family: var(--font-family-sans);
+    --type-caption-size: var(--font-size-13);
+    --type-caption-weight: var(--font-weight-bold);
+
+    --type-button-family: var(--font-family-sans);
+    --type-button-weight: var(--font-weight-extrabold);
+    --type-button-size: var(--font-size-16);
+    --type-button-size-lg: var(--font-size-19);
+
+    --type-field-family: var(--font-family-serif);
+    --type-field-size: var(--font-size-21);
+    --type-field-weight: var(--font-weight-bold);
+    --type-field-variation: "SOFT" 100, "opsz" 36;
+
+    --type-code-family: var(--font-family-serif);
+    --type-code-size: var(--font-size-36);
+    --type-code-weight: var(--font-weight-bold);
+    --type-code-variation: "SOFT" 0, "opsz" 72;
+
+    /* Fraunces variation presets, for one-off use */
+    --font-variation-soft-display: "SOFT" 100, "opsz" 144;
+    --font-variation-soft-text: "SOFT" 100, "opsz" 30;
+    --font-variation-soft-small: "SOFT" 100, "opsz" 12;
+    --font-variation-numeral: "SOFT" 0, "WONK" 0, "opsz" 72; /* crisp years */
+
+    --tracking-label: 0.1em;
+    --tracking-stamp: 0.14em;
+    --tracking-eyebrow: 0.16em;
+
+    /* Elevation */
+    --shadow-tile:
+        0 5px 0 var(--color-paper-800), 0 6px 0 var(--color-paper-900),
+        0 10px 16px oklch(from var(--color-black) l c h / 0.4),
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.9);
+    --shadow-tile-pressed:
+        0 1px 0 var(--color-paper-800), 0 2px 0 var(--color-paper-900),
+        0 4px 6px oklch(from var(--color-black) l c h / 0.35),
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.9);
+    --shadow-tile-ghost:
+        0 3px 0 var(--color-navy-650), 0 8px 14px oklch(from var(--color-black) l c h / 0.3),
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.12);
+    --shadow-tile-ghost-pressed:
+        0 1px 0 var(--color-navy-850), 0 3px 6px oklch(from var(--color-black) l c h / 0.3);
+    --shadow-tile-ink:
+        0 4px 0 var(--color-navy-900), 0 10px 18px oklch(from var(--color-black) l c h / 0.45),
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.1),
+        inset 0 0 0 1px oklch(from var(--color-paper-300) l c h / 0.14);
+    --shadow-tile-ink-pressed:
+        0 1px 0 var(--color-navy-900), 0 4px 6px oklch(from var(--color-black) l c h / 0.35),
+        inset 0 0 0 1px oklch(from var(--color-paper-300) l c h / 0.14);
+    --shadow-paper:
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.7),
+        0 6px 16px oklch(from var(--color-black) l c h / 0.22);
+    --shadow-paper-raised:
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.7),
+        0 10px 24px oklch(from var(--color-black) l c h / 0.28);
+    --shadow-notepad:
+        inset 0 1px 0 oklch(from var(--color-white) l c h / 0.6),
+        0 12px 26px oklch(from var(--color-black) l c h / 0.32);
+    --shadow-overlay: 0 30px 60px oklch(from var(--color-black) l c h / 0.5);
+    --shadow-field-inset: inset 0 2px 5px oklch(from var(--color-black) l c h / 0.22);
+    --shadow-outline-on-table: inset 0 0 0 1.5px var(--border-on-table);
+}
+
+/* --------------------------------------------------------------------------
+   3. CATEGORY SCOPES
+   Set on a card (or any ancestor). Components read --cat and --cat-dark.
+   -------------------------------------------------------------------------- */
+.cat-events {
+    --cat: var(--color-red-500);
+    --cat-dark: var(--color-red-700);
+}
+.cat-people {
+    --cat: var(--color-blue-500);
+    --cat-dark: var(--color-blue-700);
+}
+.cat-inventions {
+    --cat: var(--color-amber-500);
+    --cat-dark: var(--color-amber-700);
+}
+.cat-places {
+    --cat: var(--color-green-500);
+    --cat-dark: var(--color-green-700);
+}

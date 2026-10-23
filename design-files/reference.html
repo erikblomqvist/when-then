@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1" />
+        <title>Timeline card game: component reference</title>
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..900,0..100,0..1&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" />
+        <link
+            rel="stylesheet"
+            href="tokens.css" />
+        <link
+            rel="stylesheet"
+            href="components.css" />
+        <style>
+            body {
+                margin: 0;
+            }
+            .ref {
+                min-height: 100vh;
+                padding: 56px 64px 96px;
+                display: flex;
+                flex-direction: column;
+                gap: 56px;
+                overflow: hidden;
+            }
+            .ref > :not(.ui-table__grain) {
+                position: relative;
+            }
+            .ref section {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .ref .section-title {
+                margin: 0;
+                font-family: var(--font-family-sans);
+                font-size: var(--font-size-15);
+                font-weight: 700;
+                color: var(--text-on-table-muted);
+            }
+            .row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 28px;
+                align-items: flex-end;
+            }
+            .col {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .swatch {
+                width: 72px;
+                height: 48px;
+                border-radius: 10px;
+                box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.12);
+            }
+            .note {
+                font-family: var(--font-family-sans);
+                font-size: 13px;
+                color: var(--text-on-table-muted);
+            }
+        </style>
+    </head>
+    <body>
+        <main class="ui-table ref">
+            <svg
+                class="ui-table__grain"
+                aria-hidden="true">
+                <filter id="ui-grain">
+                    <feTurbulence
+                        type="fractalNoise"
+                        baseFrequency="0.85"
+                        numOctaves="2"
+                        stitchTiles="stitch" />
+                    <feColorMatrix
+                        type="saturate"
+                        values="0" />
+                </filter>
+                <rect
+                    width="100%"
+                    height="100%"
+                    filter="url(#ui-grain)" />
+            </svg>
+            <h1 class="ui-heading-1">Component reference</h1>
+
+            <section>
+                <h2 class="section-title">Category colors</h2>
+                <div class="row">
+                    <div class="col cat-events">
+                        <div
+                            class="swatch"
+                            style="background: var(--cat)"></div>
+                        <div
+                            class="swatch"
+                            style="background: var(--cat-dark)"></div>
+                        <span class="note">.cat-events</span>
+                    </div>
+                    <div class="col cat-people">
+                        <div
+                            class="swatch"
+                            style="background: var(--cat)"></div>
+                        <div
+                            class="swatch"
+                            style="background: var(--cat-dark)"></div>
+                        <span class="note">.cat-people</span>
+                    </div>
+                    <div class="col cat-inventions">
+                        <div
+                            class="swatch"
+                            style="background: var(--cat)"></div>
+                        <div
+                            class="swatch"
+                            style="background: var(--cat-dark)"></div>
+                        <span class="note">.cat-inventions</span>
+                    </div>
+                    <div class="col cat-places">
+                        <div
+                            class="swatch"
+                            style="background: var(--cat)"></div>
+                        <div
+                            class="swatch"
+                            style="background: var(--cat-dark)"></div>
+                        <span class="note">.cat-places</span>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Card: front face, one per category</h2>
+                <div class="row">
+                    <div class="ui-card ui-card--glossy cat-events">
+                        <div class="ui-card__face">
+                            <span class="ui-card__symbol"
+                                ><i
+                                    data-lucide="zap"
+                                    aria-hidden="true"></i
+                            ></span>
+                            <div class="ui-card__question">Berlin Wall falls</div>
+                            <div class="ui-card__category">Events</div>
+                        </div>
+                    </div>
+                    <div class="ui-card ui-card--glossy cat-people">
+                        <div class="ui-card__face">
+                            <span class="ui-card__symbol"
+                                ><i
+                                    data-lucide="user"
+                                    aria-hidden="true"></i
+                            ></span>
+                            <div class="ui-card__question">Shake&shy;speare is born</div>
+                            <div class="ui-card__category">People</div>
+                        </div>
+                    </div>
+                    <div class="ui-card ui-card--glossy cat-inventions">
+                        <div class="ui-card__face">
+                            <span class="ui-card__symbol"
+                                ><i
+                                    data-lucide="lightbulb"
+                                    aria-hidden="true"></i
+                            ></span>
+                            <div class="ui-card__question">First iPhone released</div>
+                            <div class="ui-card__category">Inventions</div>
+                        </div>
+                    </div>
+                    <div class="ui-card ui-card--glossy cat-places">
+                        <div class="ui-card__face">
+                            <span class="ui-card__symbol"
+                                ><i
+                                    data-lucide="map-pin"
+                                    aria-hidden="true"></i
+                            ></span>
+                            <div class="ui-card__question">Eiffel Tower opens</div>
+                            <div class="ui-card__category">Places</div>
+                        </div>
+                    </div>
+                    <div class="ui-card-back">
+                        <span class="ui-card-back__emblem"><b>?</b></span>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">
+                    Timeline with axis, slots, selected gap and card states
+                </h2>
+                <div class="ui-tray ui-timeline">
+                    <div class="ui-timeline__slot">
+                        <div class="ui-card ui-card--matte cat-people">
+                            <div class="ui-card__face ui-card__face--timeline">
+                                <div class="ui-stamp">Locked</div>
+                                <div class="ui-card__year">1492</div>
+                                <div class="ui-card__caption">Columbus reaches America</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        class="ui-timeline__gap ui-timeline__gap--selected"
+                        aria-label="Insert here"></div>
+                    <div class="ui-timeline__slot">
+                        <div
+                            class="ui-card ui-card--glossy ui-card--unsecured ui-card--wobble-2 cat-people"
+                            data-lean="left">
+                            <div class="ui-card__face ui-card__face--timeline">
+                                <div class="ui-stamp ui-stamp--dashed">Unsecured</div>
+                                <div class="ui-card__year">1564</div>
+                                <div class="ui-card__caption">Shakespeare is born</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ui-timeline__slot">
+                        <div class="ui-card ui-card--matte cat-places">
+                            <div class="ui-card__face ui-card__face--timeline">
+                                <div class="ui-stamp">Locked</div>
+                                <div class="ui-card__year">1789</div>
+                                <div class="ui-card__caption">Storming of the Bastille</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ui-timeline__slot">
+                        <div class="ui-card ui-card--matte cat-events">
+                            <div class="ui-card__face ui-card__face--timeline">
+                                <div class="ui-stamp">Locked</div>
+                                <div class="ui-card__year">1969</div>
+                                <div class="ui-card__caption">Apollo 11 lands on the moon</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ui-timeline__axis">
+                        <span class="ui-timeline__axis-label ui-timeline__axis-label--start"
+                            >← Earlier</span
+                        >
+                        <span class="ui-timeline__axis-label ui-timeline__axis-label--end"
+                            >Later →</span
+                        >
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="ui-float">
+                            <div class="ui-card ui-card--glossy ui-card--lifted cat-inventions">
+                                <div class="ui-card__face">
+                                    <span class="ui-card__symbol"
+                                        ><i
+                                            data-lucide="lightbulb"
+                                            aria-hidden="true"></i
+                                    ></span>
+                                    <div class="ui-card__sleeve">
+                                        <div class="ui-card__mark">?</div>
+                                        <div class="ui-card__category">Inventions</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="note">Hidden (guesser) · --lifted</span>
+                    </div>
+                    <div class="col">
+                        <div class="ui-card ui-card--glossy ui-card--lifted cat-inventions">
+                            <div class="ui-card__face">
+                                <span class="ui-card__symbol"
+                                    ><i
+                                        data-lucide="lightbulb"
+                                        aria-hidden="true"></i
+                                ></span>
+                                <div class="ui-card__question">First iPhone released</div>
+                                <div class="ui-card__category">Inventions</div>
+                            </div>
+                        </div>
+                        <span class="note">Visible (reader) · --lifted</span>
+                    </div>
+                    <div class="col">
+                        <div class="ui-card ui-card--matte cat-inventions">
+                            <div class="ui-card__face ui-card__face--timeline">
+                                <div class="ui-stamp">Locked</div>
+                                <div class="ui-card__year">2007</div>
+                                <div class="ui-card__caption">First iPhone released</div>
+                            </div>
+                        </div>
+                        <span class="note">Locked · --matte</span>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Buttons</h2>
+                <div class="row">
+                    <button class="ui-button ui-button--lg">New game</button>
+                    <button class="ui-button ui-button--lg ui-button--ghost">Join a game</button>
+                    <button class="ui-button ui-button--ink">Play again</button>
+                    <button
+                        class="ui-button"
+                        disabled>
+                        Waiting for players
+                    </button>
+                    <button
+                        class="ui-button ui-button--ghost ui-icon-button"
+                        aria-label="Back">
+                        <i
+                            data-lucide="chevron-left"
+                            aria-hidden="true"></i>
+                    </button>
+                    <button
+                        class="ui-button ui-button--ghost ui-icon-button"
+                        aria-label="Close">
+                        <i
+                            data-lucide="x"
+                            aria-hidden="true"></i>
+                    </button>
+                    <button class="ui-button ui-action-button">
+                        <i
+                            data-lucide="lock"
+                            aria-hidden="true"></i
+                        >Lock<span class="ui-action-button__count">2 cards</span>
+                    </button>
+                    <button class="ui-button ui-action-button">
+                        <i
+                            data-lucide="arrow-down-to-line"
+                            aria-hidden="true"></i
+                        >Place
+                    </button>
+                    <button
+                        class="ui-button ui-action-button"
+                        disabled>
+                        <i
+                            data-lucide="arrow-down-to-line"
+                            aria-hidden="true"></i
+                        >Place
+                    </button>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Inputs</h2>
+                <div class="row">
+                    <div
+                        class="col"
+                        style="width: 330px">
+                        <label
+                            class="ui-label"
+                            for="demo-name"
+                            >Your name</label
+                        >
+                        <input
+                            id="demo-name"
+                            class="ui-input"
+                            placeholder="Enter your name"
+                            autocomplete="off" />
+                    </div>
+                    <div
+                        class="col"
+                        style="width: 330px">
+                        <label
+                            class="ui-label"
+                            for="demo-code"
+                            >Game code</label
+                        >
+                        <div class="ui-code-input">
+                            <span class="ui-code-input__box">K</span
+                            ><span class="ui-code-input__box">B</span>
+                            <span
+                                class="ui-code-input__box ui-code-input__box--empty ui-code-input__box--next"></span
+                            ><span class="ui-code-input__box ui-code-input__box--empty"></span>
+                            <input
+                                id="demo-code"
+                                class="ui-code-input__field"
+                                maxlength="4"
+                                autocomplete="off" />
+                        </div>
+                        <div class="ui-error">That code doesn’t match. Check it and try again.</div>
+                    </div>
+                    <div
+                        class="ui-paper col"
+                        style="width: 220px">
+                        <span class="ui-caption">Game code</span>
+                        <div
+                            class="ui-code-input ui-code-input--sm"
+                            aria-label="KBTX">
+                            <span class="ui-code-input__box">K</span
+                            ><span class="ui-code-input__box">B</span
+                            ><span class="ui-code-input__box">T</span
+                            ><span class="ui-code-input__box">X</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Chips, tabs, category badges</h2>
+                <div
+                    class="row"
+                    style="align-items: center">
+                    <span class="ui-chip"
+                        ><i
+                            data-lucide="users"
+                            aria-hidden="true"></i
+                        >Timelines</span
+                    >
+                    <span class="ui-chip ui-chip--active"
+                        ><i
+                            data-lucide="users"
+                            aria-hidden="true"></i
+                        >Timelines</span
+                    >
+                    <div class="ui-paper">
+                        <div
+                            class="ui-tabs"
+                            role="tablist">
+                            <button
+                                class="ui-tab"
+                                role="tab"
+                                aria-selected="true">
+                                Alva</button
+                            ><button
+                                class="ui-tab"
+                                role="tab"
+                                aria-selected="false">
+                                Kim
+                            </button>
+                        </div>
+                    </div>
+                    <span class="ui-category-dot cat-events"
+                        ><i
+                            data-lucide="zap"
+                            aria-hidden="true"></i></span
+                    ><span class="ui-category-dot cat-people"
+                        ><i
+                            data-lucide="user"
+                            aria-hidden="true"></i></span
+                    ><span class="ui-category-dot cat-inventions"
+                        ><i
+                            data-lucide="lightbulb"
+                            aria-hidden="true"></i></span
+                    ><span class="ui-category-dot cat-places"
+                        ><i
+                            data-lucide="map-pin"
+                            aria-hidden="true"></i
+                    ></span>
+                    <div
+                        class="ui-paper row"
+                        style="gap: 14px">
+                        <span class="ui-category-legend-item cat-events">Events</span
+                        ><span class="ui-category-legend-item cat-people">People</span
+                        ><span class="ui-category-legend-item cat-inventions">Inventions</span
+                        ><span class="ui-category-legend-item cat-places">Places</span>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Player list and surfaces</h2>
+                <div
+                    class="row"
+                    style="align-items: flex-start">
+                    <div
+                        class="ui-notepad"
+                        style="width: 320px">
+                        <div class="ui-notepad__header">
+                            <span>Players</span><span>2 of 4</span>
+                        </div>
+                        <div class="ui-player-row">
+                            <span class="ui-player-row__number">1</span
+                            ><span class="ui-player-row__name">Alva</span
+                            ><span class="ui-role-tag">Host</span>
+                        </div>
+                        <div class="ui-player-row">
+                            <span class="ui-player-row__number">2</span
+                            ><span class="ui-player-row__name">Kim</span
+                            ><span class="ui-role-tag"></span>
+                        </div>
+                        <div class="ui-player-row">
+                            <span class="ui-player-row__number">3</span
+                            ><span class="ui-player-row__empty">Waiting…</span>
+                        </div>
+                    </div>
+                    <div
+                        class="ui-panel"
+                        style="width: 420px">
+                        <h2 class="ui-heading-2">Alva wins!</h2>
+                        <div
+                            class="row"
+                            style="gap: 12px; align-items: center">
+                            <span class="ui-number-badge">1</span
+                            ><span class="ui-number-badge ui-number-badge--empty">2</span>
+                        </div>
+                        <div
+                            class="row"
+                            style="gap: 14px">
+                            <button class="ui-button ui-button--ghost">Back to start</button
+                            ><button class="ui-button ui-button--ink">Play again</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+        <script>
+            lucide.createIcons()
+        </script>
+    </body>
+</html>
