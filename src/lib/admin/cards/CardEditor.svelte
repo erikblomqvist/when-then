@@ -249,8 +249,7 @@
 
 <svelte:window {onkeydown} />
 
-<!-- Room under the form (pb-40), so its end can be scrolled up from the window's edge. -->
-<div class="grid max-w-5xl gap-8 pb-40 lg:grid-cols-[minmax(0,1fr)_16rem]">
+<div class="grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
     <form
         bind:this={formElement}
         id="card-editor"

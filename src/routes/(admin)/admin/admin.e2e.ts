@@ -50,3 +50,23 @@ test('the link from admin to the game reloads the page, leaving admin styles beh
     expect(await rootVariable(page, '--background')).toBe('')
     expect(await rootVariable(page, '--surface-table')).not.toBe('')
 })
+
+test('every admin page has room under it, and the nav’s line runs to the bottom', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await signInAs(page, 'admin')
+    for (const path of ['/admin', '/admin/cards/new', '/admin/audit']) {
+        await gotoHydrated(page, path)
+        const main = page.getByRole('main')
+        expect(await main.evaluate((el) => getComputedStyle(el).paddingBottom)).toBe('160px')
+        const [nav, content] = [
+            await page.getByRole('navigation', { name: 'Admin' }).boundingBox(),
+            await main.boundingBox(),
+        ]
+        expect((nav?.y ?? 0) + (nav?.height ?? 0)).toBeCloseTo(
+            (content?.y ?? 0) + (content?.height ?? 0),
+            0,
+        )
+    }
+})

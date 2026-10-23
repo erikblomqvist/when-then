@@ -132,7 +132,7 @@
     </svelte:element>
 {/snippet}
 
-<div class="flex max-w-5xl flex-col gap-8 pb-16">
+<div class="flex max-w-5xl flex-col gap-8">
     <header class="flex flex-wrap items-end justify-between gap-4">
         <div>
             <h1 class="text-2xl font-semibold tracking-tight">Home</h1>

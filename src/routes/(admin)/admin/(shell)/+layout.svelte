@@ -86,7 +86,9 @@
                 {/if}
             </ul>
         </nav>
-        <main class="min-w-0 flex-1 p-4 md:p-6">
+        <!-- Room under every page (pb-40), so its end can be scrolled up from the window's edge;
+             inside main, so the nav's line beside it still runs to the bottom. -->
+        <main class="min-w-0 flex-1 p-4 pb-40 md:p-6 md:pb-40">
             {@render children()}
         </main>
     </div>
