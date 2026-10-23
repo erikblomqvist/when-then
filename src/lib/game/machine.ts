@@ -5,7 +5,7 @@
 
 import type { GameRefusalCode } from './refusals'
 import { roll, type Dice } from './random'
-import { leftOf, rightOf, samePlayers, type Seating } from './seating'
+import { leftOf, rightOf, samePlayers, startingFrom, type Seating } from './seating'
 import { defaultTargetScore } from './settings'
 import {
     categoriesLeft,
@@ -44,6 +44,10 @@ export type Command =
     | { type: 'pickCategory'; by: string; category: string }
     | { type: 'place'; by: string; slot: number }
     | { type: 'lockIn'; by: string }
+    /** After a correct play, a new play in the same turn. */
+    | { type: 'continue'; by: string }
+    /** The current stealer's go at the misplaced card, in a gap on their own timeline. */
+    | { type: 'steal'; by: string; slot: number }
 
 /** The next state, or the code for why the command was refused. */
 export type ApplyResult = { ok: true; state: GameState } | { ok: false; refusal: GameRefusalCode }
@@ -135,11 +139,11 @@ const endTurn = (state: GameState, activeId: string) =>
  * The Category draw: each category with cards left, Reader's choice and Free choice are equally
  * likely, though with one category left there is nothing to choose and only it is drawn. A
  * category is dealt from at once; a choice waits for its category to be picked. With every
- * category empty the game stops; who wins then comes with rounds (#94).
+ * category empty the turn locks in and the game stops; who wins then comes with rounds (#94).
  */
 function startPlay(state: GameState, activeId: string): GameState {
     const categories = categoriesLeft(state)
-    if (categories.length === 0) return { ...state, phase: { name: 'ended' } }
+    if (categories.length === 0) return { ...lockedIn(state, activeId), phase: { name: 'ended' } }
     const dice = roll(state.rng)
     const choices: DrawOutcome[] =
         categories.length > 1 ? [{ kind: 'readersChoice' }, { kind: 'freeChoice' }] : []
@@ -234,7 +238,7 @@ export function apply(state: GameState, command: Command): ApplyResult {
     if (state.phase.name !== 'playing') return refuse(unavailable[command.type])
     const { activeId, play } = state.phase
 
-    // The one command of a play that isn't only the active player's.
+    // The commands of a play that aren't only the active player's.
     if (command.type === 'pickCategory') {
         if (play.step !== 'picking') return refuse('not_picking')
         if (command.by !== pickerOf(play.draw, activeId, play.readerId)) {
@@ -245,6 +249,29 @@ export function apply(state: GameState, command: Command): ApplyResult {
         }
         return succeed(deal(state, activeId, play.readerId, play.draw, command.category))
     }
+    if (command.type === 'steal') {
+        if (play.step !== 'stealing') return refuse('not_stealing')
+        if (command.by !== play.stealerId) return refuse('not_your_steal')
+        const timeline = state.timelines[play.stealerId]
+        if (!isSlot(timeline, command.slot)) return refuse('invalid_slot')
+        const card = state.cards[play.cardId]
+        const correct = fits(timeline, command.slot, card.date)
+        const log = [
+            ...state.log,
+            { kind: 'steal' as const, playerId: play.stealerId, cardId: card.id, correct },
+        ]
+        if (correct) {
+            const entry = { kind: 'card' as const, cardId: card.id, date: card.date, locked: true }
+            const stolen = inserted(timeline, command.slot, entry)
+            const next = {
+                ...state,
+                log,
+                timelines: { ...state.timelines, [play.stealerId]: stolen },
+            }
+            return succeed(endTurn(next, activeId))
+        }
+        return succeed(toNextStealer({ ...state, log }, activeId, play.stealerId))
+    }
 
     if (command.by !== activeId) return refuse('not_your_turn')
 
@@ -253,61 +280,107 @@ export function apply(state: GameState, command: Command): ApplyResult {
             if (play.step !== 'placing') return refuse('not_placing')
             const timeline = state.timelines[activeId]
             const { slot } = command
-            if (!Number.isInteger(slot) || slot < 0 || slot > timeline.length) {
-                return refuse('invalid_slot')
-            }
+            if (!isSlot(timeline, slot)) return refuse('invalid_slot')
             const card = state.cards[play.cardId]
             const correct = fits(timeline, slot, card.date)
             const log = [
                 ...state.log,
                 { kind: 'play' as const, playerId: activeId, cardId: card.id, correct },
             ]
-            if (!correct) return succeed(misplaced({ ...state, log }, activeId, card.id))
+            if (!correct) return succeed(misplaced({ ...state, log }, activeId))
             const entry = { kind: 'card' as const, cardId: card.id, date: card.date, locked: false }
             return succeed({
                 ...state,
                 log,
-                timelines: {
-                    ...state.timelines,
-                    [activeId]: [...timeline.slice(0, slot), entry, ...timeline.slice(slot)],
-                },
+                timelines: { ...state.timelines, [activeId]: inserted(timeline, slot, entry) },
                 phase: { ...state.phase, play: { ...play, step: 'deciding' } },
             })
         }
         case 'lockIn': {
             if (play.step !== 'deciding') return refuse('lock_in_unavailable')
-            const timeline = state.timelines[activeId].map((entry) =>
-                entry.kind === 'card' ? { ...entry, locked: true } : entry,
-            )
-            const next = { ...state, timelines: { ...state.timelines, [activeId]: timeline } }
-            return succeed(endTurn(next, activeId))
+            return succeed(endTurn(lockedIn(state, activeId), activeId))
+        }
+        case 'continue': {
+            if (play.step !== 'deciding') return refuse('continue_unavailable')
+            return succeed(startPlay(state, activeId))
         }
     }
 }
 
 /** Why a play's command is refused when no play is in progress. */
-const unavailable: Record<'pickCategory' | 'place' | 'lockIn', GameRefusalCode> = {
+const unavailable: Record<
+    'pickCategory' | 'place' | 'lockIn' | 'continue' | 'steal',
+    GameRefusalCode
+> = {
     pickCategory: 'not_picking',
     place: 'not_placing',
     lockIn: 'lock_in_unavailable',
+    continue: 'continue_unavailable',
+    steal: 'not_stealing',
+}
+
+/** Whether `slot` is a gap on `timeline`: 0 before the first entry up to after the last. */
+const isSlot = (timeline: readonly TimelineEntry[], slot: number) =>
+    Number.isInteger(slot) && slot >= 0 && slot <= timeline.length
+
+const inserted = (timeline: readonly TimelineEntry[], slot: number, entry: TimelineEntry) => [
+    ...timeline.slice(0, slot),
+    entry,
+    ...timeline.slice(slot),
+]
+
+/** `state` with every card on `playerId`'s timeline locked. */
+function lockedIn(state: GameState, playerId: string): GameState {
+    const timeline = state.timelines[playerId].map((entry) =>
+        entry.kind === 'card' ? { ...entry, locked: true } : entry,
+    )
+    return { ...state, timelines: { ...state.timelines, [playerId]: timeline } }
 }
 
 const refuse = (refusal: GameRefusalCode): ApplyResult => ({ ok: false, refusal })
 const succeed = (state: GameState): ApplyResult => ({ ok: true, state })
 
 /**
- * A misplaced card ends the turn and loses the unlocked cards. Until steals arrive (#93), the
- * card is discarded with its date revealed, as if nobody stole it.
+ * A misplaced card ends the active player's plays and loses their unlocked cards, which leave the
+ * game. The card passes round the table to steal, starting on the active player's left.
  */
-function misplaced(state: GameState, activeId: string, cardId: string): GameState {
+function misplaced(state: GameState, activeId: string): GameState {
     const timeline = state.timelines[activeId].filter(
         (entry) => entry.kind === 'anchor' || entry.locked,
     )
-    const next: GameState = {
-        ...state,
-        timelines: { ...state.timelines, [activeId]: timeline },
-        discards: [...state.discards, cardId],
-        log: [...state.log, { kind: 'discard', cardId }],
+    return toNextStealer(
+        { ...state, timelines: { ...state.timelines, [activeId]: timeline } },
+        activeId,
+    )
+}
+
+/**
+ * The misplaced card goes to the next stealer after `from` (or to the first, without one): the
+ * players in seating order from the active player's left, the reader last. With nobody left, it
+ * is discarded with its date revealed and the player after the active one is up.
+ */
+function toNextStealer(state: GameState, activeId: string, from?: string): GameState {
+    if (state.phase.name !== 'playing' || state.phase.play.step === 'picking') {
+        throw new Error('Only a dealt card can be stolen.')
     }
-    return endTurn(next, activeId)
+    const { readerId, draw, cardId } = state.phase.play
+    const others = startingFrom(state.seating, activeId).slice(1)
+    const order = [...others.filter((id) => id !== readerId), readerId]
+    const stealerId = order[from === undefined ? 0 : order.indexOf(from) + 1]
+    if (stealerId === undefined) {
+        const next: GameState = {
+            ...state,
+            discards: [...state.discards, cardId],
+            log: [...state.log, { kind: 'discard', cardId }],
+        }
+        return endTurn(next, activeId)
+    }
+    return {
+        ...state,
+        phase: {
+            name: 'playing',
+            activeId,
+            play: { step: 'stealing', readerId, draw, cardId, stealerId },
+        },
+    }
 }

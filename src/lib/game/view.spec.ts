@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { apply, create } from './machine'
-import type { DeckCard } from './state'
+import { apply, create, type ApplyResult, type Command } from './machine'
+import { fits, type DeckCard, type GameState } from './state'
 import { redact } from './view'
 
 const deck: DeckCard[] = Array.from({ length: 12 }, (_, i) => ({
@@ -143,7 +143,9 @@ describe("what a seat sees while a Reader's or Free choice waits", () => {
                         ? { type: 'pickCategory', by: view.pickerId, category: 'events' }
                         : view.step === 'placing'
                           ? { type: 'place', by: view.activeId, slot: 0 }
-                          : { type: 'lockIn', by: view.activeId },
+                          : view.step === 'stealing'
+                            ? { type: 'steal', by: view.stealerId, slot: 0 }
+                            : { type: 'lockIn', by: view.activeId },
                 )
                 if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
                 state = result.state
@@ -192,6 +194,125 @@ describe('what no seat ever sees', () => {
         expect(JSON.stringify(redact(state, activeId))).not.toContain(text)
         for (const seat of [activeId, readerId]) {
             expect(JSON.stringify(redact(state, seat))).not.toContain(`"${cardId}"`)
+        }
+    })
+})
+
+describe('what a seat sees during the steals', () => {
+    const players = ['astrid', 'bjorn', 'cecilia', 'dag']
+    const ok = (result: ApplyResult) => {
+        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+        return result.state
+    }
+    const run = (state: GameState, command: Command) => ok(apply(state, command))
+
+    /** A slot on `playerId`'s timeline where the card in play fits, or doesn't. */
+    const slotFor = (state: GameState, playerId: string, right: boolean) => {
+        const { date } = state.cards[dealtPlay(state).cardId]
+        const timeline = state.timelines[playerId]
+        for (let slot = 0; slot <= timeline.length; slot++) {
+            if (fits(timeline, slot, date) === right) return slot
+        }
+        throw new Error('No such slot.')
+    }
+
+    /**
+     * A four-player game where the active player has placed one card correctly, continued and
+     * misplaced the next: the first stealer is up. Every anchor is off 1950, so anyone can miss.
+     */
+    const misplaced = () => {
+        for (let seed = 1; seed < 50; seed++) {
+            let state = create({
+                players: players.map((id, i) => ({
+                    id,
+                    name: id,
+                    icon: (['cat', 'dog', 'bird', 'fish'] as const)[i],
+                    host: i === 0,
+                })),
+                settings: { targetScore: 10, exactYear: false, cardLanguage: 'en' },
+                seating: players,
+                cards: deck,
+                seed,
+                currentYear: 2026,
+            })
+            state = run(state, { type: 'confirmSeating', by: 'astrid', currentYear: 2026 })
+            const anchors = players.map((id) => state.timelines[id][0].date)
+            if (anchors.includes(1950)) continue
+            const pick = (s: GameState) => {
+                const play = playOf(redact(s, 'astrid'))
+                if (play.step !== 'picking') return s
+                return run(s, {
+                    type: 'pickCategory',
+                    by: play.pickerId,
+                    category: play.categories[0],
+                })
+            }
+            state = pick(state)
+            const by = playOf(state).activeId
+            state = run(state, { type: 'place', by, slot: slotFor(state, by, true) })
+            state = pick(run(state, { type: 'continue', by }))
+            return run(state, { type: 'place', by, slot: slotFor(state, by, false) })
+        }
+        throw new Error('No seed keeps every anchor off 1950.')
+    }
+
+    it('for each attempt, hides the date from every seat and keeps the text for the reader', () => {
+        let state = misplaced()
+        const { activeId, readerId, cardId } = dealtPlay(state)
+        const { text } = state.cards[cardId]
+        let attempts = 0
+        for (;;) {
+            const play = dealtPlay(state)
+            if (play.step !== 'stealing' || play.activeId !== activeId) break
+            attempts++
+            for (const seat of players) {
+                const view = dealtPlay(redact(state, seat))
+                expect(view).toMatchObject({ step: 'stealing', stealerId: play.stealerId })
+                expect(view.card.date).toBeNull()
+                expect(view.card.text).toBe(seat === readerId ? text : null)
+            }
+            const bystander = players.find(
+                (id) => ![activeId, readerId, play.stealerId].includes(id),
+            )
+            expect(bystander).toBeDefined()
+            expect(dealtPlay(redact(state, play.stealerId)).card.text).toBe(
+                play.stealerId === readerId ? text : null,
+            )
+            expect(dealtPlay(redact(state, bystander!)).card.text).toBeNull()
+            state = run(state, {
+                type: 'steal',
+                by: play.stealerId,
+                slot: slotFor(state, play.stealerId, false),
+            })
+        }
+        expect(attempts).toBe(3)
+    })
+
+    it('shows everyone the card the active player lost, with its date', () => {
+        const state = misplaced()
+        const [lost] = state.log
+        if (lost.kind !== 'play') throw new Error('The log starts with a play.')
+        for (const seat of players) {
+            expect(redact(state, seat).cards[lost.cardId]).toEqual(state.cards[lost.cardId])
+        }
+    })
+
+    it('reveals a card nobody steals, with its date, to every seat', () => {
+        let state = misplaced()
+        const { cardId } = dealtPlay(state)
+        for (let i = 0; i < 3; i++) {
+            const play = dealtPlay(state)
+            if (play.step !== 'stealing') throw new Error('Not stealing.')
+            state = run(state, {
+                type: 'steal',
+                by: play.stealerId,
+                slot: slotFor(state, play.stealerId, false),
+            })
+        }
+        for (const seat of players) {
+            const view = redact(state, seat)
+            expect(view.discards).toEqual([cardId])
+            expect(view.cards[cardId]).toEqual(state.cards[cardId])
         }
     })
 })

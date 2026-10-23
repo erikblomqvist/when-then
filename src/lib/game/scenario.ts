@@ -2,7 +2,7 @@
 // reached by playing the real machine against the synthetic deck, choosing slots on purpose. A
 // recipe the rules can't reach throws, naming the field at fault; it's never clamped.
 //
-//     scenario().players(4).activePlayer(2).step('deciding').viewer(1).build()
+//     scenario().players(4).activePlayer(2).unlocked(2).misplace().missedSteal().viewer(1).build()
 
 import { apply, create, type Command } from './machine'
 import { invariantProblems } from './invariants'
@@ -21,10 +21,24 @@ import { redact, type SeatView } from './view'
 
 /**
  * The steps of a play a recipe can stop at so far: a Reader's or Free choice waiting for its
- * category, the card waiting to be placed, or the lock-in choice after a correct play.
+ * category, the card waiting to be placed, the lock-in choice after a correct play, or the first
+ * stealer's go at a misplaced card.
  */
-export const scenarioSteps = ['readersChoice', 'freeChoice', 'placing', 'deciding'] as const
+export const scenarioSteps = [
+    'readersChoice',
+    'freeChoice',
+    'placing',
+    'deciding',
+    'stealing',
+] as const
 export type ScenarioStep = (typeof scenarioSteps)[number]
+
+/**
+ * Exact moves a recipe plays, in order, once it has reached its step: the active player
+ * misplaces the card in play, or the current stealer misses or steals it.
+ */
+export const helperSteps = ['misplace', 'missedSteal', 'correctSteal'] as const
+export type HelperStep = (typeof helperSteps)[number]
 
 /** A moment in a game, flat and serialisable. Players are numbered from 1 in seating order. */
 export type Recipe = {
@@ -36,6 +50,13 @@ export type Recipe = {
      */
     activePlayer: number | null
     step: ScenarioStep
+    /**
+     * The active player's unlocked cards: the turn's earlier correct plays, and at the lock-in
+     * choice the card just placed. Null for the fewest the step allows: none, or that one card.
+     */
+    unlocked: number | null
+    /** Played after the step is reached, in order. */
+    helpers: HelperStep[]
     /** The player whose phone the view is for; null for the active player. */
     viewer: number | null
 }
@@ -45,6 +66,8 @@ export const defaultRecipe: Recipe = {
     players: 2,
     activePlayer: null,
     step: 'placing',
+    unlocked: null,
+    helpers: [],
     viewer: null,
 }
 
@@ -85,13 +108,17 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
     players: (players: number) => scenario({ ...recipe, players }),
     activePlayer: (activePlayer: number) => scenario({ ...recipe, activePlayer }),
     step: (step: ScenarioStep) => scenario({ ...recipe, step }),
+    unlocked: (unlocked: number) => scenario({ ...recipe, unlocked }),
+    misplace: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'misplace'] }),
+    missedSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'missedSteal'] }),
+    correctSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'correctSteal'] }),
     viewer: (viewer: number) => scenario({ ...recipe, viewer }),
     build: () => buildScenario(recipe),
 })
 
 /** Play the real game to the moment `recipe` describes. Throws a `ScenarioError` if it can't. */
 export function buildScenario(recipe: Recipe): Scenario {
-    const { seed, players, activePlayer, step, viewer } = recipe
+    const { seed, players, activePlayer, step, unlocked, helpers, viewer } = recipe
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         throw new ScenarioError('seed', 'a whole number from 0 to 4294967295')
     }
@@ -101,6 +128,26 @@ export function buildScenario(recipe: Recipe): Scenario {
     checkPlayerNumber('activePlayer', activePlayer, players)
     if (!scenarioSteps.includes(step)) {
         throw new ScenarioError('step', `one of ${scenarioSteps.join(', ')}`)
+    }
+    if (unlocked !== null && (!Number.isInteger(unlocked) || unlocked < 0)) {
+        throw new ScenarioError('unlocked', 'a whole number from 0')
+    }
+    if (step === 'deciding' && unlocked === 0) {
+        throw new ScenarioError(
+            'unlocked',
+            'at the lock-in choice the card just placed is unlocked',
+        )
+    }
+    if (step === 'stealing' && unlocked !== null && unlocked > 0) {
+        throw new ScenarioError(
+            'unlocked',
+            'a misplaced card loses the unlocked cards; stop at placing and misplace instead',
+        )
+    }
+    for (const helper of helpers) {
+        if (!helperSteps.includes(helper)) {
+            throw new ScenarioError('helpers', `one of ${helperSteps.join(', ')}, not ${helper}`)
+        }
     }
     checkPlayerNumber('viewer', viewer, players)
 
@@ -114,8 +161,8 @@ export function buildScenario(recipe: Recipe): Scenario {
         })),
         settings: { targetScore: defaultTargetScore, exactYear: false, cardLanguage: 'en' },
         seating: ids,
-        // Until Continue (#93) a turn has one draw, so waiting for a choice can take many turns:
-        // enough copies of the deck that it doesn't run dry first.
+        // Waiting for a choice can take many turns, since continuing until one comes would add
+        // unlocked cards: enough copies of the deck that it doesn't run dry first.
         cards: syntheticDeck(seed, 'en', 2 * players),
         seed,
         currentYear,
@@ -146,32 +193,117 @@ export function buildScenario(recipe: Recipe): Scenario {
         return next
     }
 
-    // Real turns, one card each, until it's the chosen player's, drawing the chosen choice. Each
-    // misplaces when it can, to leave the scores alone; a card that fits every gap scores, as
-    // it's placed and locked in.
+    /** Every stealer misses where they can; a card that fits every gap of theirs is stolen. */
+    const stealsPlayed = (field: keyof Recipe) => {
+        for (;;) {
+            const current = playing(state, field)
+            if (current.step !== 'stealing') return
+            const timeline = state.timelines[current.stealerId]
+            const date = state.cards[current.cardId].date
+            const slot = wrongSlot(timeline, date) ?? correctSlot(timeline, date)
+            play({ type: 'steal', by: current.stealerId, slot }, field)
+        }
+    }
+
+    /**
+     * The active player's turn ends with a card: misplaced where it can be, leaving the scores
+     * alone, and every steal missed. A card that fits every gap scores, as it's locked in.
+     */
+    const turnPlayed = (field: keyof Recipe) => {
+        const current = playing(state, field)
+        if (current.step !== 'deciding') {
+            const { activeId, cardId } = dealt(field)
+            const timeline = state.timelines[activeId]
+            const date = state.cards[cardId].date
+            const wrong = wrongSlot(timeline, date)
+            play({ type: 'place', by: activeId, slot: wrong ?? correctSlot(timeline, date) }, field)
+            if (wrong !== undefined) return stealsPlayed(field)
+        }
+        play({ type: 'lockIn', by: current.activeId }, field)
+    }
+
+    // Real turns until it's the chosen player's, with their unlocked cards played, drawing the
+    // chosen choice, or with a card they can misplace. A turn that doesn't get there is played
+    // out and the table goes round again.
     const choice = step === 'readersChoice' || step === 'freeChoice' ? step : null
     const target = activePlayer === null ? null : ids[activePlayer - 1]
     const field = choice === null ? 'activePlayer' : 'step'
+    // Correct plays before the one the recipe stops in; at the lock-in choice, that one counts.
+    const earlier = Math.max(0, (unlocked ?? 0) - (step === 'deciding' ? 1 : 0))
     for (;;) {
-        const { activeId, draw } = playing(state, field)
-        const theirTurn = target === null || activeId === target
-        const theirDraw = choice === null || draw.kind === choice
-        if (theirTurn && theirDraw) break
-        const { cardId } = dealt(field)
-        const timeline = state.timelines[activeId]
-        const date = state.cards[cardId].date
-        const wrong = wrongSlot(timeline, date)
-        const slot = wrong ?? correctSlot(timeline, date)
-        play({ type: 'place', by: activeId, slot }, field)
-        if (wrong === undefined) play({ type: 'lockIn', by: activeId }, field)
+        const { activeId } = playing(state, field)
+        if (target !== null && activeId !== target) {
+            turnPlayed(field)
+            continue
+        }
+        for (let i = 0; i < earlier; i++) {
+            const { cardId } = dealt('unlocked')
+            const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
+            play({ type: 'place', by: activeId, slot }, 'unlocked')
+            play({ type: 'continue', by: activeId }, 'unlocked')
+        }
+        if (choice !== null) {
+            if (playing(state, field).draw.kind === choice) break
+        } else if (step !== 'stealing') {
+            break
+        } else {
+            const { cardId } = dealt(field)
+            const wrong = wrongSlot(state.timelines[activeId], state.cards[cardId].date)
+            if (wrong !== undefined) {
+                play({ type: 'place', by: activeId, slot: wrong }, 'step')
+                break
+            }
+        }
+        turnPlayed(field)
     }
 
-    if (choice === null) {
+    if (step === 'placing' || step === 'deciding') {
         const { activeId, cardId } = dealt('step')
         if (step === 'deciding') {
             const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
             play({ type: 'place', by: activeId, slot }, 'step')
         }
+    }
+
+    for (const helper of helpers) {
+        const current = playing(state, 'helpers')
+        if (helper === 'misplace') {
+            if (current.step !== 'placing') {
+                throw new ScenarioError(
+                    'helpers',
+                    `misplace needs a card to place, not ${current.step}`,
+                )
+            }
+            const slot = wrongSlot(
+                state.timelines[current.activeId],
+                state.cards[current.cardId].date,
+            )
+            if (slot === undefined) {
+                throw new ScenarioError(
+                    'helpers',
+                    'misplace: the card fits every gap; try another seed',
+                )
+            }
+            play({ type: 'place', by: current.activeId, slot }, 'helpers')
+            continue
+        }
+        if (current.step !== 'stealing') {
+            throw new ScenarioError(
+                'helpers',
+                `${helper} needs a card being stolen, not ${current.step}`,
+            )
+        }
+        const timeline = state.timelines[current.stealerId]
+        const date = state.cards[current.cardId].date
+        const slot =
+            helper === 'correctSteal' ? correctSlot(timeline, date) : wrongSlot(timeline, date)
+        if (slot === undefined) {
+            throw new ScenarioError(
+                'helpers',
+                `${helper}: the card fits every gap; try another seed`,
+            )
+        }
+        play({ type: 'steal', by: current.stealerId, slot }, 'helpers')
     }
 
     const seat = viewer === null ? playing(state, 'viewer').activeId : ids[viewer - 1]

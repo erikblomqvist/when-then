@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
 import { invariantProblems } from './invariants'
 import { buildScenario, scenario, ScenarioError, type Recipe } from './scenario'
-import type { GameState } from './state'
+import { leftOf } from './seating'
+import { score, type GameState } from './state'
 import { syntheticCategories, syntheticDeck } from './synthetic-deck'
 
 const playOf = (state: GameState) => {
@@ -57,6 +58,8 @@ describe('building a two-player scenario', () => {
             players: 2,
             activePlayer: null,
             step: 'deciding',
+            unlocked: null,
+            helpers: [],
             viewer: 1,
         })
         expect(buildScenario(copy).state).toEqual(buildScenario(recipe).state)
@@ -150,6 +153,156 @@ describe("stopping at a Reader's or Free choice", () => {
     })
 })
 
+/** The active player's unlocked cards. */
+const unlockedOf = (state: GameState) =>
+    state.timelines[playOf(state).activeId].filter(
+        (entry) => entry.kind === 'card' && !entry.locked,
+    )
+
+describe('unlocked cards', () => {
+    it('are the turn’s earlier correct plays when a card waits to be placed', () => {
+        for (const players of [2, 4, 7]) {
+            for (const n of [0, 1, 3]) {
+                const { state } = scenario().players(players).activePlayer(2).unlocked(n).build()
+                const { activeId, step } = playOf(state)
+                expect(step).toBe('placing')
+                expect(activeId).toBe(state.seating[1])
+                const cardIds = unlockedOf(state).map((entry) =>
+                    entry.kind === 'card' ? entry.cardId : '',
+                )
+                expect(cardIds).toHaveLength(n)
+                // The log is in the order they were played; the timeline in date order.
+                expect(state.log).toHaveLength(n)
+                expect(state.log).toEqual(
+                    expect.arrayContaining(
+                        cardIds.map((cardId) => ({
+                            kind: 'play',
+                            playerId: activeId,
+                            cardId,
+                            correct: true,
+                        })),
+                    ),
+                )
+            }
+        }
+    })
+
+    it('include the card just placed at the lock-in choice, one by default', () => {
+        expect(unlockedOf(scenario().step('deciding').build().state)).toHaveLength(1)
+        for (const n of [1, 2, 4]) {
+            const { state } = scenario().players(3).step('deciding').unlocked(n).build()
+            expect(unlockedOf(state)).toHaveLength(n)
+            expect(unlockedOf(state)).toContainEqual(
+                expect.objectContaining({ cardId: dealtPlay(state).cardId }),
+            )
+        }
+    })
+
+    it("come before a Reader's or Free choice too", () => {
+        for (const step of ['readersChoice', 'freeChoice'] as const) {
+            const { state } = scenario().players(4).activePlayer(3).step(step).unlocked(2).build()
+            expect(playOf(state)).toMatchObject({
+                activeId: state.seating[2],
+                step: 'picking',
+                draw: { kind: step },
+            })
+            expect(unlockedOf(state)).toHaveLength(2)
+        }
+    })
+})
+
+describe('stopping at a steal', () => {
+    it('has the card misplaced and the player on the active player’s left stealing', () => {
+        for (const players of [2, 3, 5, 10]) {
+            for (let k = 1; k <= players; k++) {
+                const { state, view } = scenario()
+                    .players(players)
+                    .activePlayer(k)
+                    .step('stealing')
+                    .build()
+                const play = dealtPlay(state)
+                if (play.step !== 'stealing') throw new Error(`The play is ${play.step}.`)
+                expect(play.activeId).toBe(state.seating[k - 1])
+                expect(play.stealerId).toBe(leftOf(state.seating, play.activeId))
+                expect(unlockedOf(state)).toEqual([])
+                expect(state.log.at(-1)).toEqual({
+                    kind: 'play',
+                    playerId: play.activeId,
+                    cardId: play.cardId,
+                    correct: false,
+                })
+                expect(view.seat).toBe(play.activeId)
+            }
+        }
+    })
+})
+
+describe('helper steps', () => {
+    const stealerOf = (state: GameState) => {
+        const play = dealtPlay(state)
+        if (play.step !== 'stealing') throw new Error(`The play is ${play.step}.`)
+        return play.stealerId
+    }
+
+    it('misplace the card in play, losing the unlocked cards', () => {
+        const before = scenario().players(4).activePlayer(1).unlocked(2)
+        const { state } = before.misplace().build()
+        const { activeId, cardId } = dealtPlay(state)
+        expect(playOf(state).step).toBe('stealing')
+        expect(unlockedOf(state)).toEqual([])
+        expect(state.log).toEqual([
+            ...before.build().state.log,
+            { kind: 'play', playerId: activeId, cardId, correct: false },
+        ])
+    })
+
+    it('miss a steal, passing the card on, and steal it, locking it for a point', () => {
+        const misplaced = scenario().players(4).activePlayer(2).step('stealing')
+        const first = stealerOf(misplaced.build().state)
+        const missed = misplaced.missedSteal().build().state
+        const { activeId, cardId } = dealtPlay(missed)
+        expect(stealerOf(missed)).toBe(leftOf(missed.seating, first))
+        expect(missed.log.at(-1)).toEqual({
+            kind: 'steal',
+            playerId: first,
+            cardId,
+            correct: false,
+        })
+
+        const second = stealerOf(missed)
+        const stolen = misplaced.missedSteal().correctSteal().build().state
+        expect(stolen.timelines[second]).toContainEqual(
+            expect.objectContaining({ cardId, locked: true }),
+        )
+        expect(score(stolen, second)).toBe(score(missed, second) + 1)
+        expect(playOf(stolen).activeId).toBe(leftOf(stolen.seating, activeId))
+    })
+
+    it('play exactly the steps named, in order', () => {
+        const { state } = scenario()
+            .players(3)
+            .activePlayer(1)
+            .unlocked(1)
+            .misplace()
+            .missedSteal()
+            .build()
+        const [first, second, third] = state.seating
+        const { cardId } = dealtPlay(state)
+        expect(state.log).toEqual([
+            expect.objectContaining({ kind: 'play', playerId: first, correct: true }),
+            { kind: 'play', playerId: first, cardId, correct: false },
+            { kind: 'steal', playerId: second, cardId, correct: false },
+        ])
+        expect(stealerOf(state)).toBe(third)
+        // The reader misses too: the card is discarded and the second player is up.
+        const misplaced = scenario().players(3).activePlayer(1).misplace()
+        const discarded = misplaced.missedSteal().missedSteal().build().state
+        expect(discarded.discards.at(-1)).toBe(dealtPlay(misplaced.build().state).cardId)
+        expect(playOf(discarded).activeId).toBe(second)
+        expect(discarded.log).toEqual([])
+    })
+})
+
 describe('an impossible recipe', () => {
     const fieldOf = (build: () => unknown) => {
         try {
@@ -174,10 +327,32 @@ describe('an impossible recipe', () => {
         expect(
             fieldOf(() =>
                 scenario()
-                    .step('stealing' as never)
+                    .step('flying' as never)
                     .build(),
             ),
         ).toBe('step')
+    })
+
+    it('throws on unlocked cards the step can’t have, naming unlocked', () => {
+        expect(fieldOf(() => scenario().unlocked(-1).build())).toBe('unlocked')
+        expect(fieldOf(() => scenario().unlocked(1.5).build())).toBe('unlocked')
+        expect(fieldOf(() => scenario().step('deciding').unlocked(0).build())).toBe('unlocked')
+        expect(fieldOf(() => scenario().step('stealing').unlocked(1).build())).toBe('unlocked')
+    })
+
+    it('throws on a helper step the moment can’t take, naming helpers', () => {
+        expect(fieldOf(() => scenario().missedSteal().build())).toBe('helpers')
+        expect(fieldOf(() => scenario().correctSteal().build())).toBe('helpers')
+        expect(fieldOf(() => scenario().step('deciding').misplace().build())).toBe('helpers')
+        expect(fieldOf(() => scenario().step('stealing').misplace().build())).toBe('helpers')
+        expect(fieldOf(() => scenario().step('freeChoice').misplace().build())).toBe('helpers')
+        // With two players the reader is the only stealer; after their miss nobody is stealing.
+        expect(fieldOf(() => scenario().misplace().missedSteal().missedSteal().build())).toBe(
+            'helpers',
+        )
+        expect(
+            fieldOf(() => buildScenario({ ...scenario().recipe, helpers: ['skip' as never] })),
+        ).toBe('helpers')
     })
 
     it('says what is wrong in the message', () => {

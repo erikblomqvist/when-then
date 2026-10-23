@@ -41,6 +41,9 @@ const refusals = {
     not_placing: 'No card is waiting to be placed.',
     invalid_slot: 'That is not a gap on the timeline.',
     lock_in_unavailable: 'Lock in comes only after a correct play.',
+    continue_unavailable: 'Continue comes only after a correct play.',
+    not_stealing: 'No misplaced card is waiting to be stolen.',
+    not_your_steal: 'Only the current stealer can steal.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */

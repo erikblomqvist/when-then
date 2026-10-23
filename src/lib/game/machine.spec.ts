@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
 import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
-import { score, type DeckCard, type DrawOutcome, type GameState } from './state'
+import { leftOf } from './seating'
+import { fits, score, type DeckCard, type DrawOutcome, type GameState } from './state'
 import { redact } from './view'
 
 const astrid = { id: 'astrid', name: 'Astrid', icon: 'cat', host: true } as const
 const bjorn = { id: 'bjorn', name: 'Björn', icon: 'dog', host: false } as const
+const cecilia = { id: 'cecilia', name: 'Cecilia', icon: 'bird', host: false } as const
+const dag = { id: 'dag', name: 'Dag', icon: 'fish', host: false } as const
 
 /** A deck of one card per date, all in one category. */
 const deckOf = (dates: number[], category = 'events'): DeckCard[] =>
@@ -20,6 +23,19 @@ const twoPlayers = (overrides: Partial<CreateInput> = {}): CreateInput => ({
     currentYear: 2026,
     ...overrides,
 })
+
+const fourPlayers = (overrides: Partial<CreateInput> = {}): CreateInput =>
+    twoPlayers({
+        players: [astrid, bjorn, cecilia, dag],
+        seating: ['astrid', 'bjorn', 'cecilia', 'dag'],
+        ...overrides,
+    })
+
+/** The next state, failing the test on a refusal. */
+const ok = (result: ApplyResult) => {
+    if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+    return result.state
+}
 
 const anchors = (state: GameState) =>
     state.seating.map((id) => state.timelines[id].find((entry) => entry.kind === 'anchor')?.date)
@@ -154,12 +170,11 @@ describe('placing a card', () => {
 
     it('is wrong on the other side of a later anchor', () => {
         const state = gameWhere(at1950, (anchor) => anchor < 1950)
-        const { activeId, cardId } = dealtPlay(state)
+        const { activeId, readerId, cardId } = dealtPlay(state)
         const next = placed(state, 0)
-        // The turn is over: the card is gone from the game and the other player is up.
+        // The card stays off the timeline, and with two players the reader may steal it.
         expect(next.timelines[activeId]).toHaveLength(1)
-        expect(next.discards).toEqual([cardId])
-        expect(playOf(next).activeId).not.toBe(activeId)
+        expect(playOf(next)).toMatchObject({ step: 'stealing', stealerId: readerId, cardId })
     })
 
     it('counts an equal year on either side', () => {
@@ -180,7 +195,7 @@ describe('placing a card', () => {
             [1490].includes(anchor),
         )
         expect(playOf(placed(early, 0)).step).toBe('deciding')
-        expect(placed(early, 1).discards).toEqual([dealtPlay(early).cardId])
+        expect(playOf(placed(early, 1)).step).toBe('stealing')
     })
 
     it('refuses anyone but the active player', () => {
@@ -205,6 +220,25 @@ describe('placing a card', () => {
 
 const lockIn = (state: GameState, by = playOf(state).activeId) =>
     apply(state, { type: 'lockIn', by })
+
+/** Whoever is up places in the first gap: the active player, else the stealer. Locks in. */
+const move = (state: GameState) => {
+    const play = dealtPlay(state)
+    if (play.step === 'stealing') return steal(state, 0)
+    return play.step === 'placing' ? place(state, 0) : lockIn(state)
+}
+
+const continued = (state: GameState, by = playOf(state).activeId) =>
+    apply(state, { type: 'continue', by })
+
+/** A steal, by default by the current stealer (or the active player, when nobody is stealing). */
+const steal = (state: GameState, slot: number, by?: string) => {
+    if (by === undefined) {
+        const play = dealtPlay(state)
+        by = play.step === 'stealing' ? play.stealerId : play.activeId
+    }
+    return apply(state, { type: 'steal', by, slot })
+}
 
 describe('locking in', () => {
     const at1950 = deckOf(Array.from({ length: 10 }, () => 1950))
@@ -281,7 +315,7 @@ describe('the Category draw', () => {
                     expect(state.cards[play.cardId].category).toBe(play.draw.category)
                 }
                 seen.push(play.cardId)
-                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
+                const result = move(state)
                 if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
                 state = result.state
             }
@@ -297,6 +331,7 @@ describe('determinism', () => {
             state = dealt(state)
             const result = place(state, 1)
             state = result.ok ? result.state : state
+            while (playOf(state).step === 'stealing') state = ok(steal(state, 1))
             const locked = lockIn(state)
             state = locked.ok ? locked.state : state
         }
@@ -330,26 +365,11 @@ describe('loading a saved state', () => {
 })
 
 describe('seating', () => {
-    const cecilia = { id: 'cecilia', name: 'Cecilia', icon: 'bird', host: false } as const
-    const dag = { id: 'dag', name: 'Dag', icon: 'fish', host: false } as const
-
-    const fourPlayers = (overrides: Partial<CreateInput> = {}): CreateInput =>
-        twoPlayers({
-            players: [astrid, bjorn, cecilia, dag],
-            seating: ['astrid', 'bjorn', 'cecilia', 'dag'],
-            ...overrides,
-        })
-
     const setSeating = (state: GameState, seating: string[], by = 'astrid') =>
         apply(state, { type: 'setSeating', by, seating })
     const confirm = (state: GameState, by = 'astrid', currentYear = 2026) =>
         apply(state, { type: 'confirmSeating', by, currentYear })
 
-    /** The next state, failing the test on a refusal. */
-    const ok = (result: ApplyResult) => {
-        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
-        return result.state
-    }
     const confirmed = (state: GameState) => ok(confirm(state))
 
     it('is where a game of three or more starts, with no anchors yet', () => {
@@ -558,7 +578,7 @@ describe("Reader's choice and Free choice", () => {
                     continue
                 }
                 if (state.cards[play.cardId].category === 'places') placesDealt = true
-                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
+                const result = move(state)
                 if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
                 state = result.state
             }
@@ -578,7 +598,8 @@ describe("Reader's choice and Free choice", () => {
             let placesLeft = 2
             while (state.phase.name === 'playing') {
                 const play = playOf(state)
-                if (placesLeft === 0 && play.step !== 'deciding') {
+                // The play that dealt the last Places card may still be deciding or stealing.
+                if (placesLeft === 0 && play.step !== 'deciding' && play.step !== 'stealing') {
                     expect(play.draw).toEqual({ kind: 'category', category: 'events' })
                 }
                 if (play.step === 'picking') {
@@ -591,7 +612,7 @@ describe("Reader's choice and Free choice", () => {
                 if (play.step === 'placing' && state.cards[play.cardId].category === 'places') {
                     placesLeft--
                 }
-                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
+                const result = move(state)
                 if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
                 state = result.state
             }
@@ -623,5 +644,226 @@ describe("Reader's choice and Free choice", () => {
             expect(place(state, 0)).toEqual({ ok: false, refusal: 'not_placing' })
             expect(lockIn(state)).toEqual({ ok: false, refusal: 'lock_in_unavailable' })
         }
+    })
+})
+
+/** A gap on `playerId`'s timeline where the card in play fits, or doesn't. */
+const slotFor = (state: GameState, playerId: string, right: boolean) => {
+    const { date } = state.cards[dealtPlay(state).cardId]
+    const timeline = state.timelines[playerId]
+    for (let slot = 0; slot <= timeline.length; slot++) {
+        if (fits(timeline, slot, date) === right) return slot
+    }
+    throw new Error(`The card fits ${right ? 'no' : 'every'} gap on ${playerId}'s timeline.`)
+}
+
+/** The active player places the card in play rightly or wrongly. */
+const play = (state: GameState, right: boolean) =>
+    ok(place(state, slotFor(state, playOf(state).activeId, right)))
+
+/** The current stealer tries to steal, rightly or wrongly. */
+const stealing = (state: GameState, right: boolean) => {
+    const play = dealtPlay(state)
+    if (play.step !== 'stealing') throw new Error(`The play is ${play.step}.`)
+    return ok(steal(state, slotFor(state, play.stealerId, right)))
+}
+
+describe('continuing', () => {
+    const at1950 = deckOf(Array.from({ length: 10 }, () => 1950))
+    const afterCorrectPlay = () =>
+        placed(
+            gameWhere(at1950, (anchor) => anchor < 1950),
+            1,
+        )
+
+    it('starts a new play in the same turn, keeping the unlocked card', () => {
+        const state = afterCorrectPlay()
+        const { activeId, readerId, cardId } = dealtPlay(state)
+        const next = ok(continued(state))
+        const play = playOf(next)
+        expect(play).toMatchObject({ activeId, readerId })
+        expect(['placing', 'picking']).toContain(play.step)
+        expect(next.timelines[activeId]).toContainEqual({
+            kind: 'card',
+            cardId,
+            date: 1950,
+            locked: false,
+        })
+        expect(next.log).toEqual([{ kind: 'play', playerId: activeId, cardId, correct: true }])
+    })
+
+    it('builds a bigger turn: lock in then scores every correct play', () => {
+        const state = dealt(ok(continued(afterCorrectPlay())))
+        const { activeId } = playOf(state)
+        const next = ok(lockIn(play(state, true)))
+        expect(score(next, activeId)).toBe(2)
+        expect(playOf(next).activeId).not.toBe(activeId)
+    })
+
+    it('is offered only after a correct play', () => {
+        const state = dealt(create(twoPlayers()))
+        expect(continued(state)).toEqual({ ok: false, refusal: 'continue_unavailable' })
+        const misplaced = gameWhere(at1950, (anchor) => anchor < 1950)
+        expect(continued(placed(misplaced, 0))).toEqual({
+            ok: false,
+            refusal: 'continue_unavailable',
+        })
+        expect(continued(create(fourPlayers()), 'astrid')).toEqual({
+            ok: false,
+            refusal: 'continue_unavailable',
+        })
+    })
+
+    it('is offered only to the active player', () => {
+        const state = afterCorrectPlay()
+        expect(continued(state, playOf(state).readerId)).toEqual({
+            ok: false,
+            refusal: 'not_your_turn',
+        })
+    })
+})
+
+describe('misplacing a card, and the steals', () => {
+    const at1950 = deckOf(Array.from({ length: 20 }, () => 1950))
+
+    /**
+     * The first four-player game (by seed) with a card dealt where nobody's anchor is 1950, so
+     * every player can place the card in play rightly or wrongly.
+     */
+    const fourPlayerGame = () => {
+        for (const seed of seeds) {
+            const state = dealt(ok(apply(create(fourPlayers({ seed, cards: at1950 })), confirm)))
+            if (anchors(state).every((anchor) => anchor !== 1950)) return state
+        }
+        throw new Error('No seed keeps every anchor off 1950.')
+    }
+    const confirm = { type: 'confirmSeating', by: 'astrid', currentYear: 2026 } as const
+
+    /** The players after `activeId` in seating order, the reader last. */
+    const stealersAfter = (state: GameState, activeId: string) => {
+        const order = [leftOf(state.seating, activeId)]
+        while (order.length < state.seating.length - 1) {
+            order.push(leftOf(state.seating, order[order.length - 1]))
+        }
+        return order
+    }
+
+    it('ends the turn’s plays and loses every unlocked card', () => {
+        const state = dealt(ok(continued(play(fourPlayerGame(), true))))
+        const { activeId } = playOf(state)
+        const next = play(state, false)
+        expect(next.timelines[activeId]).toEqual([
+            { kind: 'anchor', date: anchorOf(next, activeId) },
+        ])
+        expect(score(next, activeId)).toBe(0)
+        expect(playOf(next)).toMatchObject({ activeId, step: 'stealing' })
+    })
+
+    it('passes the card round in seating order, the reader last', () => {
+        let state = play(fourPlayerGame(), false)
+        const { activeId, readerId } = playOf(state)
+        const stealers: string[] = []
+        while (playOf(state).activeId === activeId) {
+            const play = dealtPlay(state)
+            if (play.step !== 'stealing') break
+            stealers.push(play.stealerId)
+            state = stealing(state, false)
+        }
+        expect(stealers).toEqual(stealersAfter(state, activeId))
+        expect(stealers.at(-1)).toBe(readerId)
+    })
+
+    it('in a two-player game, gives the reader the only steal', () => {
+        const state = gameWhere(at1950, (anchor) => anchor < 1950)
+        const { activeId, readerId, cardId } = dealtPlay(state)
+        const misplaced = placed(state, 0)
+        expect(playOf(misplaced)).toMatchObject({ step: 'stealing', stealerId: readerId })
+        const missed = stealing(misplaced, false)
+        expect(missed.discards).toEqual([cardId])
+        expect(playOf(missed).activeId).toBe(readerId)
+        expect(score(missed, activeId)).toBe(0)
+    })
+
+    it('lets only the current stealer steal', () => {
+        const state = play(fourPlayerGame(), false)
+        const play_ = dealtPlay(state)
+        if (play_.step !== 'stealing') throw new Error('Not stealing.')
+        for (const other of state.seating.filter((id) => id !== play_.stealerId)) {
+            expect(steal(state, 0, other)).toEqual({ ok: false, refusal: 'not_your_steal' })
+        }
+        expect(steal(state, 0, 'stranger')).toEqual({ ok: false, refusal: 'no_seat' })
+        // Nor can the active player have another go.
+        expect(place(state, 0)).toEqual({ ok: false, refusal: 'not_placing' })
+        expect(lockIn(state)).toEqual({ ok: false, refusal: 'lock_in_unavailable' })
+    })
+
+    it('refuses a steal when no card is being stolen, or into a gap that is not there', () => {
+        const state = fourPlayerGame()
+        expect(steal(state, 0)).toEqual({ ok: false, refusal: 'not_stealing' })
+        expect(steal(create(fourPlayers()), 0, 'astrid')).toEqual({
+            ok: false,
+            refusal: 'not_stealing',
+        })
+        const misplaced = play(state, false)
+        expect(steal(misplaced, 2)).toEqual({ ok: false, refusal: 'invalid_slot' })
+        expect(steal(misplaced, -1)).toEqual({ ok: false, refusal: 'invalid_slot' })
+    })
+
+    it('locks a correct steal on the stealer’s timeline for one point', () => {
+        // The first stealer misses; the second steals it.
+        const state = stealing(play(fourPlayerGame(), false), false)
+        const play_ = dealtPlay(state)
+        if (play_.step !== 'stealing') throw new Error('Not stealing.')
+        const { activeId, stealerId, cardId } = play_
+        const next = stealing(state, true)
+        expect(next.timelines[stealerId]).toContainEqual({
+            kind: 'card',
+            cardId,
+            date: 1950,
+            locked: true,
+        })
+        expect(score(next, stealerId)).toBe(1)
+        // The steal doesn't change the turn order: the player after the active one is up.
+        expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
+        expect(playOf(next).activeId).not.toBe(leftOf(next.seating, stealerId))
+    })
+
+    it('costs nothing to miss', () => {
+        const state = play(fourPlayerGame(), false)
+        const play_ = dealtPlay(state)
+        if (play_.step !== 'stealing') throw new Error('Not stealing.')
+        const next = stealing(state, false)
+        expect(next.timelines[play_.stealerId]).toEqual(state.timelines[play_.stealerId])
+        expect(next.timelines).toEqual(state.timelines)
+    })
+
+    it('discards a card nobody places, never to be dealt again, and the next player is up', () => {
+        let state = play(fourPlayerGame(), false)
+        const { activeId, cardId } = dealtPlay(state)
+        for (let i = 0; i < 3; i++) state = stealing(state, false)
+        expect(state.discards).toEqual([cardId])
+        expect(Object.values(state.queues).flat()).not.toContain(cardId)
+        expect(playOf(state).activeId).toBe(leftOf(state.seating, activeId))
+        for (const id of state.seating) expect(score(state, id)).toBe(0)
+    })
+
+    it('keeps the turn’s outcomes in the log, and starts the next turn with it empty', () => {
+        let state = dealt(ok(continued(play(fourPlayerGame(), true))))
+        const { activeId } = playOf(state)
+        const first = state.log[0]
+        state = play(state, false)
+        const { cardId } = dealtPlay(state)
+        const stealers = stealersAfter(state, activeId)
+        state = stealing(stealing(state, false), false)
+        expect(state.log).toEqual([
+            first,
+            { kind: 'play', playerId: activeId, cardId, correct: false },
+            { kind: 'steal', playerId: stealers[0], cardId, correct: false },
+            { kind: 'steal', playerId: stealers[1], cardId, correct: false },
+        ])
+        expect(first).toMatchObject({ kind: 'play', playerId: activeId, correct: true })
+        const next = stealing(state, false)
+        expect(playOf(next).activeId).not.toBe(activeId)
+        expect(next.log).toEqual([])
     })
 })

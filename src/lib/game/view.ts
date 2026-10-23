@@ -1,8 +1,8 @@
 // What one seat may see of a game (ADR 0004, spec #89). `redact` is the only way from the full
 // state (`./state`) to a phone, and `SeatView` is its own type, so client code can't read a
 // hidden field at all: the seed, the dice's position, the queues and every card not yet dealt
-// are never in it, the card in play keeps its date until it's placed, and only the reader gets
-// its text.
+// are never in it, the card in play keeps its date until it's placed (through every steal), and
+// only the reader gets its text.
 
 import {
     categoriesLeft,
@@ -24,9 +24,12 @@ import {
 /** The card in play as a seat sees it: null for what that seat may not know yet. */
 export type CardInPlay = { category: string; text: string | null; date: GameDate | null }
 
+/** A play with its card dealt, the card as a seat sees it. */
+type DealtView<P> = P extends { cardId: string } ? Omit<P, 'cardId'> & { card: CardInPlay } : never
+
 /**
  * The play in progress as a seat sees it. On a Reader's or Free choice, everyone sees who picks
- * and which categories they can pick from.
+ * and which categories they can pick from; during the steals, everyone sees who is stealing.
  */
 export type PlayView =
     | {
@@ -36,12 +39,7 @@ export type PlayView =
           pickerId: string
           categories: string[]
       }
-    | {
-          step: Exclude<Play['step'], 'picking'>
-          readerId: string
-          draw: DrawOutcome
-          card: CardInPlay
-      }
+    | DealtView<Play>
 
 /** The phase as a seat sees it: only a play has anything to hide. */
 export type PhaseView =
@@ -61,7 +59,10 @@ export type SeatView = {
     scores: Record<string, number>
     log: LogEntry[]
     discards: string[]
-    /** Every card that has come out, on a timeline or discarded, with its text and date. */
+    /**
+     * Every card that has come out, with its text and date: on a timeline, discarded, or lost
+     * this turn. Not the card in play until it's placed.
+     */
     cards: Record<string, DeckCard>
 }
 
@@ -71,6 +72,9 @@ export function redact(state: GameState, seat: string): SeatView {
     for (const timeline of Object.values(state.timelines)) {
         for (const entry of timeline) if (entry.kind === 'card') shown.add(entry.cardId)
     }
+    // The turn's correct plays, still unlocked or lost to a misplacement since.
+    for (const entry of state.log)
+        if (entry.kind === 'play' && entry.correct) shown.add(entry.cardId)
     return {
         seat,
         players: state.players,
@@ -102,16 +106,15 @@ function phaseView(state: GameState, seat: string, shown: Set<string>): PhaseVie
             },
         }
     }
-    const card = state.cards[play.cardId]
+    const { cardId, ...rest } = play
+    const card = state.cards[cardId]
     // Once placed, the card is on a timeline for all to see; until then only the reader reads it.
     const revealed = shown.has(card.id)
     return {
         name: 'playing',
         activeId,
         play: {
-            step: play.step,
-            readerId: play.readerId,
-            draw: play.draw,
+            ...rest,
             card: {
                 category: card.category,
                 text: revealed || seat === play.readerId ? card.text : null,

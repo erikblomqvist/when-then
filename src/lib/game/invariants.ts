@@ -74,7 +74,17 @@ export function invariantProblems(state: GameState): string[] {
             if (play.step === 'deciding' && !onTimeline) {
                 problems.push('deciding without the card unlocked on the timeline')
             }
-            if (play.step === 'placing') put(play.cardId)
+            if (play.step === 'placing' || play.step === 'stealing') put(play.cardId)
+            if (play.step === 'stealing') {
+                if (!state.seating.includes(play.stealerId))
+                    problems.push('the stealer is not seated')
+                if (play.stealerId === activeId)
+                    problems.push('the active player steals their own card')
+                const unlocked = state.timelines[activeId]?.some(
+                    (entry) => entry.kind === 'card' && !entry.locked,
+                )
+                if (unlocked) problems.push('stealing while the active player keeps unlocked cards')
+            }
         }
     }
 

@@ -48,20 +48,31 @@ export type DrawOutcome = { kind: 'category'; category: string } | ChoiceDraw
 
 /**
  * The play in progress: a Reader's or Free choice waits for its category, the card is dealt and
- * waits to be placed, or it sits unlocked on the active player's timeline while they decide
- * whether to lock in.
+ * waits to be placed, it sits unlocked on the active player's timeline while they decide whether
+ * to lock in or continue, or, misplaced, it waits for `stealerId` to try to steal it.
  */
 export type Play =
     | { step: 'picking'; readerId: string; draw: ChoiceDraw }
     | { step: 'placing' | 'deciding'; readerId: string; draw: DrawOutcome; cardId: string }
+    | {
+          step: 'stealing'
+          readerId: string
+          draw: DrawOutcome
+          cardId: string
+          stealerId: string
+      }
 
 /** Who picks the category on a choice: the reader on Reader's choice, else the active player. */
 export const pickerOf = (draw: ChoiceDraw, activeId: string, readerId: string) =>
     draw.kind === 'readersChoice' ? readerId : activeId
 
-/** Something that happened this turn, for a phone that reloads mid-turn. */
+/**
+ * Something that happened this turn, for a phone that reloads mid-turn. A play that isn't
+ * correct is the misplaced card, which lost the turn's correct plays before it.
+ */
 export type LogEntry =
     | { kind: 'play'; playerId: string; cardId: string; correct: boolean }
+    | { kind: 'steal'; playerId: string; cardId: string; correct: boolean }
     | { kind: 'discard'; cardId: string }
 
 /** Where the game is; `ended` is ended early and `abandoned` timed out, both with no winner. */

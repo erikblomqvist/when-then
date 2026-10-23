@@ -30,6 +30,9 @@ export type GameRefusalCode =
     | 'not_placing'
     | 'invalid_slot'
     | 'lock_in_unavailable'
+    | 'continue_unavailable'
+    | 'not_stealing'
+    | 'not_your_steal'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -56,6 +59,9 @@ const words: Record<GameRefusalCode, () => string> = {
     not_placing: m.refusal_not_placing,
     invalid_slot: m.refusal_invalid_slot,
     lock_in_unavailable: m.refusal_lock_in_unavailable,
+    continue_unavailable: m.refusal_continue_unavailable,
+    not_stealing: m.refusal_not_stealing,
+    not_your_steal: m.refusal_not_your_steal,
 }
 
 /** The message for a refusal, in the current locale. */
