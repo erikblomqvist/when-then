@@ -7,6 +7,7 @@
     out from a tinted row (`ContextMenu`).
 -->
 <script lang="ts">
+    import CornerDownLeftIcon from '@lucide/svelte/icons/corner-down-left'
     import type { ShortcutKey } from './shortcut.js'
 
     type Props = { keys: readonly ShortcutKey[]; look?: 'tinted' | 'raised' }
@@ -23,8 +24,9 @@
         mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
     })
 
-    const label = (key: ShortcutKey) =>
-        key === 'mod' ? (mac ? '⌘' : 'Ctrl') : key === 's' ? 'S' : '↵'
+    // Enter is an icon: the ↵ character sits high in the font, above the caps' middle.
+    const label = (key: Exclude<ShortcutKey, 'enter'>) =>
+        key === 'mod' ? (mac ? '⌘' : 'Ctrl') : 'S'
 </script>
 
 {#if mac !== null}
@@ -36,10 +38,19 @@
         {#each keys as key (key)}
             <kbd
                 class={[
-                    'inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border px-1 pb-0.5 font-sans text-[11px] leading-none font-medium',
+                    'inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border px-1 font-sans text-[11px] leading-none font-medium',
+                    // Lifts the letters to look centred; the icon is centred by its box.
+                    key !== 'enter' && 'pb-0.5',
                     looks[look],
                 ]}>
-                {label(key)}
+                {#if key === 'enter'}
+                    <!-- Sized and weighted to match the ⌘ beside it. -->
+                    <CornerDownLeftIcon
+                        class="size-2.5"
+                        strokeWidth={2.75} />
+                {:else}
+                    {label(key)}
+                {/if}
             </kbd>
         {/each}
     </span>
