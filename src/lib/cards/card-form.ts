@@ -5,7 +5,7 @@
 // `machine_text_<locale>` (the text a machine translation filled in); see
 // `#lib/cards/translation.js` for how they become a status.
 //
-// Later tickets add fields (difficulty, tags) by extending `CardFormValues`, `parseCardForm`
+// Later tickets add fields (tags) by extending `CardFormValues`, `parseCardForm`
 // and `cardFormValues` together.
 
 import type { CardFields, CardInput, CardLocale, TranslationInput } from './card'
@@ -43,6 +43,8 @@ export type CardFormValues = {
     day: string
     source_url: string
     source_quote: string
+    /** '' (not set) or '1' (most people know it) to '4' (obscure). */
+    difficulty: string
 } & TranslationFields<'sv'> &
     TranslationFields<'nb'>
 
@@ -52,6 +54,9 @@ export type ParsedCardForm = { ok: true; card: CardInput } | { ok: false; errors
 
 export const cardTextMaxLength = 500
 export const sourceQuoteMaxLength = 500
+
+/** A card's difficulty levels, from 1 (most people know it) to 4 (obscure). */
+export const cardDifficulties = [1, 2, 3, 4]
 
 function translationFields<L extends TranslationLocale>(
     locale: L,
@@ -156,6 +161,7 @@ export const emptyCardFormValues: CardFormValues = {
     day: '',
     source_url: '',
     source_quote: '',
+    difficulty: '',
     ...translationFields('sv', draftFromTranslation(undefined)),
     ...translationFields('nb', draftFromTranslation(undefined)),
 }
@@ -253,6 +259,12 @@ export function parseCardForm(form: FormData): ParsedCardForm {
         errors.source_quote = `Keep the quote under ${sourceQuoteMaxLength} characters.`
     }
 
+    // Not posted at all (a form from before the field): left out, so the save keeps it.
+    const difficulty = form.has('difficulty') ? wholeNumber(field(form, 'difficulty')) : undefined
+    if (difficulty !== undefined && difficulty !== null && !cardDifficulties.includes(difficulty)) {
+        errors.difficulty = 'Difficulty is 1 to 4.'
+    }
+
     const translations: Partial<Record<TranslationLocale, TranslationInput | null>> = {}
     for (const locale of translationLocales) {
         // A form without the tab (an older page) leaves the translation alone.
@@ -281,6 +293,7 @@ export function parseCardForm(form: FormData): ParsedCardForm {
             date,
             sourceUrl: sourceUrl || null,
             sourceQuote: sourceQuote || null,
+            ...(difficulty !== undefined && { difficulty }),
             translations: { en: { text }, ...translations },
             // Set by the editor when a verified date changed and the editor chose to clear it.
             ...(form.get('clear_verification') === 'true' && { clearVerification: true }),
@@ -306,6 +319,7 @@ const numberField = (value: number | null) => (value === null ? '' : String(valu
 /** The fields the editor shows for a saved card: the inverse of `parseCardForm`. */
 export function cardFormValues(
     card: CardFields & {
+        difficulty?: number | null
         translations: Partial<Record<CardLocale, { text: string; note?: string | null }>>
     },
 ): CardFormValues {
@@ -321,6 +335,7 @@ export function cardFormValues(
         day: numberField(day),
         source_url: card.sourceUrl ?? '',
         source_quote: card.sourceQuote ?? '',
+        difficulty: numberField(card.difficulty ?? null),
         ...translationFields('sv', draftFromTranslation(card.translations.sv)),
         ...translationFields('nb', draftFromTranslation(card.translations.nb)),
     }

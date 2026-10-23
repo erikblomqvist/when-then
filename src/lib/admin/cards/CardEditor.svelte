@@ -17,6 +17,7 @@
       History goes there.
     - Category: with `canCreateCategory`, the select's "New category…" opens
       `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).
+    - Difficulty: optional, 1 (most people know it) to 4 (obscure), as "Add from photo" sets it.
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -31,6 +32,7 @@
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
+        cardDifficulties,
         cardFormErrors,
         parseCardFormValues,
         cardFormValues,
@@ -132,6 +134,9 @@
     let baseline = $state(JSON.stringify(initial))
     let saving = $state(false)
     const dirty = $derived(JSON.stringify(values) !== baseline)
+
+    // The ends of the difficulty scale, said in words (as the AI reading a photo is told).
+    const difficultyHint: Record<number, string> = { 1: 'Most people know it', 4: 'Obscure' }
 
     const months = [
         'January',
@@ -411,6 +416,27 @@
                 </p>
             {/if}
             {@render error('category_id')}
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <Label for="difficulty">Difficulty (optional)</Label>
+            <NativeSelect.Root
+                id="difficulty"
+                name="difficulty"
+                bind:value={values.difficulty}
+                aria-invalid={shown.difficulty ? 'true' : undefined}
+                aria-describedby={describedBy('difficulty')}>
+                <NativeSelect.Option value="">Not set</NativeSelect.Option>
+                {#each cardDifficulties as level (level)}
+                    <NativeSelect.Option value={String(level)}>
+                        {level}{difficultyHint[level] ? ` · ${difficultyHint[level]}` : ''}
+                    </NativeSelect.Option>
+                {/each}
+            </NativeSelect.Root>
+            <p class="text-sm text-muted-foreground">
+                How hard the card is to place: 1, most people know it, to 4, obscure.
+            </p>
+            {@render error('difficulty')}
         </div>
 
         <fieldset class="flex flex-col gap-3">

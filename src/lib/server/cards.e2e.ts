@@ -346,3 +346,18 @@ test('the ids of every card matching a filter, beyond one page', async () => {
 
     expect((await matchingCardIds(db, { search: token })).toSorted()).toEqual(saved.toSorted())
 })
+
+test('the editor sets and clears a difficulty; a save without one keeps it', async () => {
+    const actor = (await newPerson()).id
+    const events = await eventsCategory()
+    const input = card(events.id, `A made-up kite flies ${randomUUID()}`)
+    const id = await saveCard(db, actor, { ...input, difficulty: 3 })
+    expect((await getCard(db, id))?.difficulty).toBe(3)
+
+    // Left out (an import, or a form from before the field): kept.
+    await saveCard(db, actor, { ...input, sourceQuote: 'still July 1969' }, id)
+    expect((await getCard(db, id))?.difficulty).toBe(3)
+
+    await saveCard(db, actor, { ...input, difficulty: null }, id)
+    expect((await getCard(db, id))?.difficulty).toBeNull()
+})

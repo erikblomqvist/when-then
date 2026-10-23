@@ -246,3 +246,16 @@ test('marking the date verified, then changing the date asks to clear it', async
         'update',
     ])
 })
+
+test('the editor sets a card’s difficulty, kept when the card is opened again', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'editor')
+    const id = await draft(userId, unique('A made-up lighthouse is lit'), year1969)
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    const difficulty = page.getByLabel('Difficulty (optional)')
+    await expect(difficulty).toHaveValue('')
+    await difficulty.selectOption({ label: '4 · Obscure' })
+    await saveAndReopen(page)
+    await expect(difficulty).toHaveValue('4')
+})
