@@ -1,6 +1,14 @@
+<script lang="ts">
+    import AdminHome from '#lib/admin/home/AdminHome.svelte'
+    import type { PageProps } from './$types'
+
+    let { data }: PageProps = $props()
+</script>
+
 <svelte:head>
     <title>Admin · When Then?</title>
 </svelte:head>
 
-<h1 class="text-2xl font-semibold tracking-tight">Admin</h1>
-<p class="mt-2 text-muted-foreground">Card and category management is on its way.</p>
+<AdminHome
+    home={data.home}
+    role={data.role} />

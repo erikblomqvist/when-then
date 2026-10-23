@@ -72,7 +72,7 @@ for (const role of ['editor', 'admin'] as const) {
 
         await gotoHydrated(page, '/admin')
 
-        await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible()
+        await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible()
         await expect(page.getByTestId('signed-in-as')).toHaveText(`${email} · ${role}`)
 
         await page.getByRole('button', { name: 'Sign out' }).click()
