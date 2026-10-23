@@ -32,7 +32,10 @@ test('an invited email gets its role at the first Google sign-in', async ({
 }) => {
     await signInAs(page, 'admin')
     await gotoHydrated(page, '/admin')
-    await page.getByRole('link', { name: 'People' }).click()
+    await page
+        .getByRole('navigation', { name: 'Admin' })
+        .getByRole('link', { name: 'People' })
+        .click()
     await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible()
 
     const email = `invitee-${randomUUID()}@example.com`
