@@ -50,9 +50,13 @@ jobs:
             - uses: actions/checkout@v7
             # E2E signs in against a local Supabase stack: Postgres, Auth, PostgREST, and
             # Realtime for the game's nudges. Everything else is left out to keep the start quick.
-            - uses: supabase/setup-cli@v3
-              with:
-                  version: 2.121.0
+            # The Supabase CLI's release binary, pinned. Not supabase/setup-cli: v1 runs on Node 20,
+            # and v3 installs through npm, which refuses this pnpm project (devEngines).
+            - name: Install the Supabase CLI 2.121.0
+              run: |
+                  curl -fsSL "https://github.com/supabase/cli/releases/download/v2.121.0/supabase_linux_amd64.tar.gz" \
+                      | sudo tar -xz -C /usr/local/bin supabase
+                  supabase --version
             # The native runtime's service archives, downloaded on its first start.
             - uses: actions/cache@v6
               with:

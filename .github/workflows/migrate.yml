@@ -23,8 +23,12 @@ jobs:
             SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         steps:
             - uses: actions/checkout@v7
-            - uses: supabase/setup-cli@v3
-              with:
-                  version: 2.109.1
+            # The Supabase CLI's release binary, pinned. Not supabase/setup-cli: v1 runs on Node 20,
+            # and v3 installs through npm, which refuses this pnpm project (devEngines).
+            - name: Install the Supabase CLI 2.109.1
+              run: |
+                  curl -fsSL "https://github.com/supabase/cli/releases/download/v2.109.1/supabase_linux_amd64.tar.gz" \
+                      | sudo tar -xz -C /usr/local/bin supabase
+                  supabase --version
             - run: supabase link --project-ref ${{ vars.SUPABASE_PROJECT_REF }}
             - run: supabase db push
