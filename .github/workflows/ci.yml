@@ -48,8 +48,8 @@ jobs:
             SUPABASE_EXPERIMENTAL_STACK: 1
         steps:
             - uses: actions/checkout@v5
-            # E2E signs in against a local Supabase stack: Postgres, Auth and PostgREST.
-            # Everything else is left out to keep the start quick.
+            # E2E signs in against a local Supabase stack: Postgres, Auth, PostgREST, and
+            # Realtime for the game's nudges. Everything else is left out to keep the start quick.
             - uses: supabase/setup-cli@v1
               with:
                   version: 2.121.0
@@ -63,7 +63,7 @@ jobs:
             - name: Start Supabase in the background
               run: |
                   (
-                      supabase start --runtime native --eager --exclude realtime,storage,functions,studio,mail,analytics,pooler
+                      supabase start --runtime native --eager --exclude storage,functions,studio,mail,analytics,pooler
                       echo $? > "$RUNNER_TEMP/supabase-start.exit"
                   ) > "$RUNNER_TEMP/supabase-start.log" 2>&1 &
               env:
