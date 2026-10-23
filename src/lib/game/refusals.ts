@@ -21,6 +21,8 @@ export type GameRefusalCode =
     | 'removed'
     | 'invalid_target_score'
     | 'invalid_card_language'
+    | 'not_seating'
+    | 'invalid_seating'
     | 'not_your_turn'
     | 'not_placing'
     | 'invalid_slot'
@@ -42,6 +44,8 @@ const words: Record<GameRefusalCode, () => string> = {
     invalid_target_score: () =>
         m.refusal_invalid_target_score({ min: minTargetScore, max: maxTargetScore }),
     invalid_card_language: m.refusal_invalid_card_language,
+    not_seating: m.refusal_not_seating,
+    invalid_seating: m.refusal_invalid_seating,
     not_your_turn: m.refusal_not_your_turn,
     not_placing: m.refusal_not_placing,
     invalid_slot: m.refusal_invalid_slot,

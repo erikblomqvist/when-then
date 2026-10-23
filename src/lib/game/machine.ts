@@ -5,7 +5,7 @@
 
 import type { GameRefusalCode } from './refusals'
 import { roll, type Dice } from './random'
-import { leftOf, rightOf, type Seating } from './seating'
+import { leftOf, rightOf, samePlayers, type Seating } from './seating'
 import { defaultTargetScore } from './settings'
 import {
     currentSchema,
@@ -33,14 +33,19 @@ export type CreateInput = {
 }
 
 /** A command, with `by` the player the server resolved from the session. */
-export type Command = { type: 'place'; by: string; slot: number } | { type: 'lockIn'; by: string }
+export type Command =
+    | { type: 'setSeating'; by: string; seating: Seating }
+    /** `currentYear` caps the anchors, which confirming deals. */
+    | { type: 'confirmSeating'; by: string; currentYear: number }
+    | { type: 'place'; by: string; slot: number }
+    | { type: 'lockIn'; by: string }
 
 /** The next state, or the code for why the command was refused. */
 export type ApplyResult = { ok: true; state: GameState } | { ok: false; refusal: GameRefusalCode }
 
 /**
  * A new game. With two players there is nothing to seat, so it gives out the anchor years and
- * starts the first play; with more it waits in seating for the host (#91).
+ * starts the first play; with more it waits in seating until the host confirms it.
  */
 export function create(input: CreateInput): GameState {
     if (input.players.length < 2) throw new Error('A game needs at least two players.')
@@ -185,6 +190,20 @@ export function apply(state: GameState, command: Command): ApplyResult {
     const player = state.players.find((candidate) => candidate.id === command.by)
     if (!player) return refuse('no_seat')
     if (player.removed) return refuse('removed')
+
+    switch (command.type) {
+        case 'setSeating':
+        case 'confirmSeating': {
+            if (!player.host) return refuse('not_host')
+            if (state.phase.name !== 'seating') return refuse('not_seating')
+            if (command.type === 'confirmSeating') {
+                return succeed(beginPlaying(state, command.currentYear))
+            }
+            if (!samePlayers(state.seating, command.seating)) return refuse('invalid_seating')
+            return succeed({ ...state, seating: [...command.seating] })
+        }
+    }
+
     if (state.phase.name !== 'playing') {
         return refuse(command.type === 'lockIn' ? 'lock_in_unavailable' : 'not_placing')
     }

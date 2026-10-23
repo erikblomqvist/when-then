@@ -45,8 +45,58 @@ describe('building a two-player scenario', () => {
     it('is a flat recipe that survives JSON', () => {
         const { recipe } = scenario().seed(9).step('deciding').viewer(1)
         const copy: Recipe = JSON.parse(JSON.stringify(recipe))
-        expect(copy).toEqual({ seed: 9, players: 2, step: 'deciding', viewer: 1 })
+        expect(copy).toEqual({
+            seed: 9,
+            players: 2,
+            activePlayer: null,
+            step: 'deciding',
+            viewer: 1,
+        })
         expect(buildScenario(copy).state).toEqual(buildScenario(recipe).state)
+    })
+})
+
+describe('building a scenario for 3 to 10 players', () => {
+    const counts = Array.from({ length: 9 }, (_, i) => i + 2)
+
+    it('confirms the seating and starts play for every number of players', () => {
+        for (const players of counts) {
+            const { state } = scenario().players(players).build()
+            expect(state.seating).toHaveLength(players)
+            expect(Object.keys(state.timelines)).toHaveLength(players)
+            expect(playOf(state).step).toBe('placing')
+        }
+    })
+
+    it('reaches every active player, read by the player on their right', () => {
+        for (const players of counts) {
+            for (let k = 1; k <= players; k++) {
+                for (const step of ['placing', 'deciding'] as const) {
+                    const { state, view } = scenario()
+                        .players(players)
+                        .activePlayer(k)
+                        .step(step)
+                        .build()
+                    const { activeId, readerId } = playOf(state)
+                    expect(activeId).toBe(state.seating[k - 1])
+                    expect(readerId).toBe(state.seating[(k - 2 + players) % players])
+                    expect(playOf(state).step).toBe(step)
+                    expect(view.seat).toBe(activeId)
+                }
+            }
+        }
+    })
+
+    it('gets there by playing real turns, in seating order', () => {
+        const { state } = scenario().seed(3).players(5).build()
+        const start = state.seating.indexOf(playOf(state).activeId)
+        const twoTurnsOn = ((start + 2) % 5) + 1
+        const { state: reached } = scenario().seed(3).players(5).activePlayer(twoTurnsOn).build()
+        expect(reached.startingPlayerId).toBe(state.startingPlayerId)
+        // Two turns played, a card each, and the third card in play.
+        const dealt =
+            Object.keys(reached.cards).length - Object.values(reached.queues).flat().length
+        expect(dealt).toBe(3)
     })
 })
 
@@ -64,7 +114,9 @@ describe('an impossible recipe', () => {
     it('throws, naming the field at fault', () => {
         expect(fieldOf(() => scenario().players(1).build())).toBe('players')
         expect(fieldOf(() => scenario().players(11).build())).toBe('players')
-        expect(fieldOf(() => scenario().players(3).build())).toBe('players')
+        expect(fieldOf(() => scenario().players(4).activePlayer(0).build())).toBe('activePlayer')
+        expect(fieldOf(() => scenario().players(4).activePlayer(5).build())).toBe('activePlayer')
+        expect(fieldOf(() => scenario().activePlayer(1.5).build())).toBe('activePlayer')
         expect(fieldOf(() => scenario().viewer(3).build())).toBe('viewer')
         expect(fieldOf(() => scenario().viewer(0).build())).toBe('viewer')
         expect(fieldOf(() => scenario().seed(-1).build())).toBe('seed')

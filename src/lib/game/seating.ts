@@ -24,6 +24,11 @@ export function sameSeating(a: Seating, b: Seating): boolean {
     return start !== -1 && b.every((id, i) => a[(start + i) % a.length] === id)
 }
 
+/** Whether `b` seats exactly the players of `a`, each once, in any order. */
+export function samePlayers(a: Seating, b: Seating): boolean {
+    return a.length === b.length && new Set(b).size === b.length && b.every((id) => a.includes(id))
+}
+
 /** The player on `id`'s left: the next player in turn order. */
 export function leftOf(seating: Seating, id: string): string {
     return seating[(seating.indexOf(id) + 1) % seating.length]

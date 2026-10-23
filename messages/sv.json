@@ -57,6 +57,8 @@
     "card_language_nb": "Norska",
     "refusal_invalid_target_score": "Välj målpoäng från {min} till {max}.",
     "refusal_invalid_card_language": "Välj engelska, svenska eller norska.",
+    "refusal_not_seating": "Placeringen kan inte ändras just nu.",
+    "refusal_invalid_seating": "Placera varje spelare exakt en gång.",
     "refusal_not_your_turn": "Det är inte din tur.",
     "refusal_not_placing": "Det finns inget kort att placera just nu.",
     "refusal_invalid_slot": "Välj en lucka på din tidslinje.",

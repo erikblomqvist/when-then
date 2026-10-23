@@ -31,6 +31,8 @@ const refusals = {
     removed: 'The host removed you from the game.',
     invalid_target_score: `The target score is ${minTargetScore} to ${maxTargetScore}.`,
     invalid_card_language: 'Cards come in English, Swedish or Norwegian.',
+    not_seating: 'The game is not in seating.',
+    invalid_seating: 'A seating has every seated player exactly once.',
     not_your_turn: 'Only the active player can do that.',
     not_placing: 'No card is waiting to be placed.',
     invalid_slot: 'That is not a gap on the timeline.',

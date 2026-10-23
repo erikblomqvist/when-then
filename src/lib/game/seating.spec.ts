@@ -4,6 +4,7 @@ import {
     moveToLeftOf,
     reversed,
     rightOf,
+    samePlayers,
     sameSeating,
     seatPoint,
     seatTargetAt,
@@ -23,6 +24,13 @@ describe('seating', () => {
         expect(sameSeating(table, ['dag', 'astrid', 'bjorn', 'cecilia'])).toBe(true)
         expect(sameSeating(table, ['astrid', 'dag', 'cecilia', 'bjorn'])).toBe(false)
         expect(sameSeating(table, ['astrid', 'bjorn', 'cecilia'])).toBe(false)
+    })
+
+    it('tells a reseating of the same players from a different table', () => {
+        expect(samePlayers(table, ['dag', 'bjorn', 'astrid', 'cecilia'])).toBe(true)
+        expect(samePlayers(table, ['astrid', 'bjorn', 'cecilia'])).toBe(false)
+        expect(samePlayers(table, ['astrid', 'bjorn', 'cecilia', 'cecilia'])).toBe(false)
+        expect(samePlayers(table, ['astrid', 'bjorn', 'cecilia', 'erik'])).toBe(false)
     })
 
     it('puts the next player in turn order on your left and your reader on your right', () => {

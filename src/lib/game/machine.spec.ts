@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
-import { apply, create, load, type CreateInput } from './machine'
+import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
 import { score, type DeckCard, type GameState } from './state'
 
 const astrid = { id: 'astrid', name: 'Astrid', icon: 'cat', host: true } as const
@@ -295,5 +295,125 @@ describe('loading a saved state', () => {
             expect(loaded.schema).toBe(1)
             expect(lockIn(loaded, 'astrid').ok).toBe(false)
         }
+    })
+})
+
+describe('seating', () => {
+    const cecilia = { id: 'cecilia', name: 'Cecilia', icon: 'bird', host: false } as const
+    const dag = { id: 'dag', name: 'Dag', icon: 'fish', host: false } as const
+
+    const fourPlayers = (overrides: Partial<CreateInput> = {}): CreateInput =>
+        twoPlayers({
+            players: [astrid, bjorn, cecilia, dag],
+            seating: ['astrid', 'bjorn', 'cecilia', 'dag'],
+            ...overrides,
+        })
+
+    const setSeating = (state: GameState, seating: string[], by = 'astrid') =>
+        apply(state, { type: 'setSeating', by, seating })
+    const confirm = (state: GameState, by = 'astrid', currentYear = 2026) =>
+        apply(state, { type: 'confirmSeating', by, currentYear })
+
+    /** The next state, failing the test on a refusal. */
+    const ok = (result: ApplyResult) => {
+        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+        return result.state
+    }
+    const confirmed = (state: GameState) => ok(confirm(state))
+
+    it('is where a game of three or more starts, with no anchors yet', () => {
+        for (const players of [3, 4]) {
+            const state = create(
+                fourPlayers({
+                    players: [astrid, bjorn, cecilia, dag].slice(0, players),
+                    seating: ['astrid', 'bjorn', 'cecilia', 'dag'].slice(0, players),
+                }),
+            )
+            expect(state.phase).toEqual({ name: 'seating' })
+            expect(state.timelines).toEqual({})
+            expect(state.startingPlayerId).toBeNull()
+        }
+    })
+
+    it('takes the host’s seating straight away', () => {
+        const result = setSeating(create(fourPlayers()), ['dag', 'bjorn', 'astrid', 'cecilia'])
+        expect(result.ok).toBe(true)
+        if (!result.ok) return
+        expect(result.state.seating).toEqual(['dag', 'bjorn', 'astrid', 'cecilia'])
+        expect(result.state.phase).toEqual({ name: 'seating' })
+    })
+
+    it('refuses anyone but the host', () => {
+        const state = create(fourPlayers())
+        expect(setSeating(state, ['dag', 'bjorn', 'astrid', 'cecilia'], 'bjorn')).toEqual({
+            ok: false,
+            refusal: 'not_host',
+        })
+        expect(confirm(state, 'cecilia')).toEqual({ ok: false, refusal: 'not_host' })
+    })
+
+    it('refuses a seating that does not seat every player exactly once', () => {
+        const state = create(fourPlayers())
+        for (const seating of [
+            ['astrid', 'bjorn', 'cecilia'],
+            ['astrid', 'bjorn', 'cecilia', 'cecilia'],
+            ['astrid', 'bjorn', 'cecilia', 'dag', 'erik'],
+            ['astrid', 'bjorn', 'cecilia', 'erik'],
+        ]) {
+            expect(setSeating(state, seating)).toEqual({ ok: false, refusal: 'invalid_seating' })
+        }
+    })
+
+    it('can’t be changed or confirmed once play has started', () => {
+        const started = confirmed(create(fourPlayers()))
+        expect(setSeating(started, ['dag', 'bjorn', 'astrid', 'cecilia'])).toEqual({
+            ok: false,
+            refusal: 'not_seating',
+        })
+        expect(confirm(started)).toEqual({ ok: false, refusal: 'not_seating' })
+        // A two-player game never seats.
+        expect(confirm(create(twoPlayers()))).toEqual({ ok: false, refusal: 'not_seating' })
+    })
+
+    it('refuses playing a card before the seating is confirmed', () => {
+        expect(place(create(fourPlayers()), 0, 'astrid')).toEqual({
+            ok: false,
+            refusal: 'not_placing',
+        })
+    })
+
+    it('on confirm, deals distinct anchors and starts the first play', () => {
+        for (const seed of seeds) {
+            const state = confirmed(create(fourPlayers({ seed })))
+            const dates = anchors(state)
+            expect(new Set(dates).size).toBe(4)
+            for (const id of state.seating) expect(state.timelines[id]).toHaveLength(1)
+            const { activeId, step } = playOf(state)
+            expect(step).toBe('placing')
+            expect(state.startingPlayerId).toBe(activeId)
+        }
+    })
+
+    it('deals anchors no later than the year the confirm comes with', () => {
+        const cards = deckOf([2020, 2022, 2024, 2025, 2026])
+        for (const seed of seeds) {
+            const state = ok(confirm(create(fourPlayers({ seed, cards })), 'astrid', 2024))
+            for (const anchor of anchors(state)) expect(anchor).toBeLessThanOrEqual(2024)
+        }
+    })
+
+    it('picks the starting player from the seed', () => {
+        const starter = (seed: number) => confirmed(create(fourPlayers({ seed }))).startingPlayerId
+        expect(starter(3)).toBe(starter(3))
+        expect(new Set(seeds.map(starter))).toEqual(new Set(['astrid', 'bjorn', 'cecilia', 'dag']))
+    })
+
+    it('plays in the seating the host set, read by the player on the active player’s right', () => {
+        const state = confirmed(
+            ok(setSeating(create(fourPlayers()), ['astrid', 'cecilia', 'bjorn', 'dag'])),
+        )
+        const right = { astrid: 'dag', cecilia: 'astrid', bjorn: 'cecilia', dag: 'bjorn' }
+        const { activeId, readerId } = playOf(state)
+        expect(readerId).toBe(right[activeId as keyof typeof right])
     })
 })

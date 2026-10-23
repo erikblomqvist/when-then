@@ -57,6 +57,8 @@
     "card_language_nb": "Norwegian",
     "refusal_invalid_target_score": "Pick a target score from {min} to {max}.",
     "refusal_invalid_card_language": "Pick English, Swedish or Norwegian.",
+    "refusal_not_seating": "The seating can't be changed right now.",
+    "refusal_invalid_seating": "Seat every player exactly once.",
     "refusal_not_your_turn": "It's not your turn.",
     "refusal_not_placing": "There's no card to place right now.",
     "refusal_invalid_slot": "Pick a gap on your timeline.",
