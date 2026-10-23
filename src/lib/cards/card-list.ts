@@ -3,12 +3,15 @@
 // the server turns the same typed filter into its query (`matchingCards` in
 // `#lib/server/cards.js`, backed by `public.cards_matching`).
 //
+// The review mode (`review`) doesn't narrow the list: it shows one locale's translations next
+// to a reference language, for reading through and marking them reviewed in bulk.
+//
 // Adding a filter: a field on `CardFilter`, its URL key in `parseFilter` / `filterParams`,
 // its key in the server's `filterArgs`, and its clause in `public.cards_matching`.
 // Unknown or malformed URL values are dropped, never errors: a stale link shows more cards.
 
 import { Constants } from '../database.types'
-import type { CardStatus } from './card'
+import { cardLocales, type CardLocale, type CardStatus } from './card'
 import {
     translationLocales,
     translationStateLabel,
@@ -65,7 +68,16 @@ export const cardSortLabel: Record<CardSort, string> = {
 }
 export const defaultCardSort: CardSort = '-updated'
 
-export type CardListView = { filter: CardFilter; sort: CardSort; page: number }
+/** Review mode: a locale's translations next to a reference language (English unless set). */
+export type CardReview = { locale: TranslationLocale; reference: CardLocale }
+
+export type CardListView = {
+    filter: CardFilter
+    sort: CardSort
+    page: number
+    /** Absent: the plain list. */
+    review?: CardReview
+}
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 
@@ -99,13 +111,23 @@ export function parseFilter(params: URLSearchParams): CardFilter {
     return filter
 }
 
+/** Review mode in a URL: `review=<locale>`, and `ref=<locale>` unless the reference is English. */
+export function parseReview(params: URLSearchParams): CardReview | undefined {
+    const locale = oneOf(translationLocales, params.get('review'))
+    if (!locale) return undefined
+    const reference = oneOf(cardLocales, params.get('ref'))
+    return { locale, reference: reference && reference !== locale ? reference : 'en' }
+}
+
 /** The list view in a URL (`/admin/cards?…`). */
 export function parseCardListView(params: URLSearchParams): CardListView {
     const page = Math.floor(Number(params.get('page')))
+    const review = parseReview(params)
     return {
         filter: parseFilter(params),
         sort: oneOf(cardSorts, params.get('sort')) ?? defaultCardSort,
         page: Number.isFinite(page) && page > 1 ? page : 1,
+        ...(review && { review }),
     }
 }
 
@@ -136,8 +158,13 @@ export function cardListHref({
     filter = {},
     sort = defaultCardSort,
     page = 1,
+    review,
 }: Partial<CardListView>) {
     const params = filterParams(filter)
+    if (review) {
+        params.set('review', review.locale)
+        if (review.reference !== 'en') params.set('ref', review.reference)
+    }
     if (sort !== defaultCardSort) params.set('sort', sort)
     if (page > 1) params.set('page', String(page))
     const query = params.toString()
@@ -149,6 +176,12 @@ export function cardListHref({
 export const isFiltered = (filter: CardFilter) =>
     filterParams({ ...filter, archived: undefined }).size > 0
 
-/** The review queue for a locale: cards whose translation there is machine or stale. */
+/**
+ * The review queue for a locale: cards whose translation there is machine or stale, in review
+ * mode next to English.
+ */
 export const reviewQueueHref = (locale: TranslationLocale) =>
-    cardListHref({ filter: { translations: { [locale]: 'needs-review' } } })
+    cardListHref({
+        filter: { translations: { [locale]: 'needs-review' } },
+        review: { locale, reference: 'en' },
+    })

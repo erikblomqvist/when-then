@@ -5,11 +5,13 @@
 
 import { fail, type RequestEvent } from '@sveltejs/kit'
 import { readCardSelection } from '../cards/card-selection'
+import { localeName, translationLocales } from '../cards/translation'
 import {
     archiveCards,
     deleteCards,
     moveCards,
     publishCards,
+    reviewTranslations,
     type BulkResult,
     type SkippedCard,
 } from './card-bulk'
@@ -95,5 +97,19 @@ export const cardBulkActions = {
             selected.ids,
         )
         return report(result, (count) => `Machine-translated ${count}.`)
+    },
+    /** Marks the selected cards' translation in the posted `locale` reviewed (review mode). */
+    review: async (event: RequestEvent) => {
+        const selected = await selectedCardIds(event)
+        if ('failure' in selected) return selected.failure
+        const locale = translationLocales.find((one) => one === selected.form.get('locale'))
+        if (!locale) return fail(400, { bulkError: 'Choose the language to mark reviewed.' })
+        const result = await reviewTranslations(
+            supabaseService(),
+            selected.user.id,
+            selected.ids,
+            locale,
+        )
+        return report(result, (count) => `Marked ${localeName[locale]} reviewed on ${count}.`)
     },
 }

@@ -19,7 +19,7 @@
     import CategoryBadge from '#lib/admin/categories/CategoryBadge.svelte'
     import { actionLabel, entityHref, entityLabel, formatTime } from '#lib/audit/display.js'
     import { relativeTime } from '#lib/audit/history-summary.js'
-    import { cardListHref, type CardFilter } from '#lib/cards/card-list.js'
+    import { cardListHref, reviewQueueHref, type CardFilter } from '#lib/cards/card-list.js'
     import {
         localeName,
         translationLocales,
@@ -184,7 +184,7 @@
                                     aria-hidden="true">·</span
                                 >{/if}
                             <a
-                                href={cards({ translations: { [locale]: 'needs-review' } })}
+                                href={reviewQueueHref(locale)}
                                 class="hover:underline"
                                 aria-label="{n(home.toReview[locale])} {localeName[
                                     locale

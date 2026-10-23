@@ -10,7 +10,7 @@
     import AddFromPhoto from '#lib/admin/cards/AddFromPhoto.svelte'
     import ExportCards from '#lib/admin/cards/ExportCards.svelte'
     import TranslationBadge from '#lib/admin/cards/TranslationBadge.svelte'
-    import { cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
+    import { cardLocales, cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
     import {
         cardEraLabel,
         cardListHref,
@@ -21,6 +21,7 @@
         translationFilterLabel,
         translationFilters,
         type CardEra,
+        type CardReview,
         type CardSort,
     } from '#lib/cards/card-list.js'
     import { localeName, translationLocales } from '#lib/cards/translation.js'
@@ -51,6 +52,8 @@
 
     const filter = $derived(data.view.filter)
     const filtered = $derived(isFiltered(filter))
+    // Review mode: one locale's translations next to a reference language, kept on every link.
+    const review = $derived(data.view.review)
 
     // Drafts just added from a photo (#60) come back as `?new=<id>`, highlighted in the list.
     const addedCards = $derived(new Set(page.url.searchParams.getAll('new')))
@@ -63,8 +66,8 @@
         for (const [name, value] of new FormData(event.currentTarget as HTMLFormElement)) {
             if (typeof value === 'string') fields.set(name, value)
         }
-        const { filter, sort } = parseCardListView(fields)
-        void goto(cardListHref({ filter, sort }), { reset: false })
+        const { filter, sort, review } = parseCardListView(fields)
+        void goto(cardListHref({ filter, sort, review }), { reset: false })
     }
 
     const submit = () => form?.requestSubmit()
@@ -158,7 +161,7 @@
     function withoutFilter(name: string) {
         const params = filterParams(filter)
         params.delete(name)
-        return cardListHref({ filter: parseFilter(params), sort: data.view.sort })
+        return cardListHref({ filter: parseFilter(params), sort: data.view.sort, review })
     }
 
     // Sorting by a column header: the first click picks the column's usual direction (oldest
@@ -183,7 +186,7 @@
         const current = sortState(column)
         const sort =
             current === undefined ? first : current === 'ascending' ? descending : ascending
-        return cardListHref({ filter, sort })
+        return cardListHref({ filter, sort, review })
     }
 
     // Row selection for the bulk actions; kept across pages, cleared when the filter changes.
@@ -246,6 +249,7 @@
             href={cardListHref({
                 filter: { ...filter, status: undefined, archived: tab.archived },
                 sort: data.view.sort,
+                review,
             })}
             aria-current={filter.archived === tab.archived ? 'page' : undefined}
             class={[
@@ -260,18 +264,74 @@
     {/each}
 </nav>
 
-<nav
-    aria-label="Review queues"
-    class="mt-4 flex flex-wrap gap-4 text-sm">
-    {#each translationLocales as locale (locale)}
-        <a
-            class="underline-offset-4 hover:underline"
-            href={reviewQueueHref(locale)}>
-            {localeName[locale]} review queue
-        </a>
-        <span class="-ml-3 text-muted-foreground">({data.reviewQueues[locale]})</span>
-    {/each}
-</nav>
+<!-- A segment of the review mode switch: a link keeping the filter and sort. -->
+{#snippet segment(label: string, to: CardReview | undefined, current: boolean)}
+    <a
+        href={cardListHref({ filter, sort: data.view.sort, review: to })}
+        aria-current={current ? 'true' : undefined}
+        class={[
+            'rounded-[5px] px-2.5 py-1',
+            current
+                ? 'bg-background font-medium shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+        ]}>{label}</a>
+{/snippet}
+
+<div class="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-sm">
+    <nav
+        aria-label="Review queues"
+        class="flex flex-wrap gap-4">
+        {#each translationLocales as locale (locale)}
+            <span class="whitespace-nowrap">
+                <a
+                    class="underline-offset-4 hover:underline"
+                    href={reviewQueueHref(locale)}>
+                    {localeName[locale]} review queue
+                </a>
+                <span class="text-muted-foreground">({data.reviewQueues[locale]})</span>
+            </span>
+        {/each}
+    </nav>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div
+            role="group"
+            aria-label="Review translations"
+            class="flex items-center gap-2">
+            <span class="text-muted-foreground">Review</span>
+            <span class="flex rounded-md bg-muted p-0.5">
+                {@render segment('Off', undefined, !review)}
+                {#each translationLocales as locale (locale)}
+                    {@render segment(
+                        localeName[locale],
+                        {
+                            locale,
+                            reference:
+                                review?.reference === locale ? 'en' : (review?.reference ?? 'en'),
+                        },
+                        review?.locale === locale,
+                    )}
+                {/each}
+            </span>
+        </div>
+        {#if review}
+            <div
+                role="group"
+                aria-label="Next to"
+                class="flex items-center gap-2">
+                <span class="text-muted-foreground">next to</span>
+                <span class="flex rounded-md bg-muted p-0.5">
+                    {#each cardLocales.filter((locale) => locale !== review.locale) as locale (locale)}
+                        {@render segment(
+                            localeName[locale],
+                            { locale: review.locale, reference: locale },
+                            review.reference === locale,
+                        )}
+                    {/each}
+                </span>
+            </div>
+        {/if}
+    </div>
+</div>
 
 <form
     bind:this={form}
@@ -286,6 +346,16 @@
             type="hidden"
             name="tab"
             value="archived" />
+    {/if}
+    {#if review}
+        <input
+            type="hidden"
+            name="review"
+            value={review.locale} />
+        <input
+            type="hidden"
+            name="ref"
+            value={review.reference} />
     {/if}
     <div class="flex flex-wrap items-center gap-2">
         <Label
@@ -388,7 +458,11 @@
         {#if filtered || added.length > 0}
             <a
                 class="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                href={cardListHref({ filter: { archived: filter.archived }, sort: data.view.sort })}
+                href={cardListHref({
+                    filter: { archived: filter.archived },
+                    sort: data.view.sort,
+                    review,
+                })}
                 onclick={() => (added = [])}>
                 Clear filters
             </a>
@@ -407,11 +481,25 @@
     error={result?.bulkError}
     canDelete={data.role === 'admin'}
     archivedTab={filter.archived}>
-    {#snippet actions({ busy })}
+    {#snippet actions({ busy, action })}
+        {#if review}
+            <input
+                type="hidden"
+                name="locale"
+                value={review.locale} />
+            <Button
+                type="submit"
+                variant="outline"
+                formaction={action('review')}
+                disabled={busy}>
+                <CheckIcon />
+                Mark {localeName[review.locale]} reviewed
+            </Button>
+        {/if}
         <Button
             type="submit"
             variant="outline"
-            formaction="?/translate"
+            formaction={action('translate')}
             disabled={busy}>
             Machine-translate missing
         </Button>
@@ -451,13 +539,20 @@
                     }}
                     onchange={() => selected.togglePage()} />
             </Table.Head>
-            <Table.Head>Card</Table.Head>
-            {@render sortableHead('date', 'Date')}
-            <Table.Head>Category</Table.Head>
-            <Table.Head>Status</Table.Head>
-            <Table.Head>Translations</Table.Head>
-            <Table.Head>Verified</Table.Head>
-            {@render sortableHead('updated', 'Updated')}
+            {#if review}
+                <Table.Head
+                    >{localeName[review.reference]} and {localeName[review.locale]}</Table.Head>
+                {@render sortableHead('date', 'Date')}
+                <Table.Head>Category</Table.Head>
+            {:else}
+                <Table.Head>Card</Table.Head>
+                {@render sortableHead('date', 'Date')}
+                <Table.Head>Category</Table.Head>
+                <Table.Head>Status</Table.Head>
+                <Table.Head>Translations</Table.Head>
+                <Table.Head>Verified</Table.Head>
+                {@render sortableHead('updated', 'Updated')}
+            {/if}
         </Table.Row>
     </Table.Header>
     <Table.Body>
@@ -466,7 +561,7 @@
                 data-state={selected.has(card.id) ? 'selected' : undefined}
                 data-added={addedCards.has(card.id) ? '' : undefined}
                 class="data-added:bg-amber-50 dark:data-added:bg-amber-950/40">
-                <Table.Cell>
+                <Table.Cell class={review && 'align-top'}>
                     <input
                         type="checkbox"
                         class="size-4 align-middle accent-primary"
@@ -474,70 +569,124 @@
                         checked={selected.has(card.id)}
                         onchange={() => selected.toggle(card.id)} />
                 </Table.Cell>
-                <Table.Cell class="max-w-md whitespace-normal">
-                    <a
-                        class="font-medium hover:underline"
-                        href="/admin/cards/{card.id}">
-                        {card.text ?? 'No English text'}
-                    </a>
-                </Table.Cell>
-                <Table.Cell>{formatCardDate(card.date)}</Table.Cell>
-                <Table.Cell>{card.category.name}</Table.Cell>
-                <Table.Cell>
-                    <span class="inline-flex items-center gap-1.5 text-sm">
-                        <span
-                            class={[
-                                'size-1.5 rounded-full',
-                                card.status === 'published'
-                                    ? 'bg-emerald-500'
-                                    : 'bg-muted-foreground/50',
-                            ]}
-                            aria-hidden="true"></span>
-                        <span class={card.status === 'published' ? '' : 'text-muted-foreground'}>
-                            {cardStatusLabel[card.status]}
-                        </span>
-                    </span>
-                </Table.Cell>
-                <Table.Cell>
-                    <div class="flex flex-col items-start gap-1">
-                        {#each translationLocales as locale (locale)}
-                            <span
-                                class="flex items-center gap-1"
-                                data-testid="translation-{locale}">
+                {#if review}
+                    {@const reference = card.texts[review.reference]}
+                    {@const translation = card.texts[review.locale]}
+                    {@const state = card.translations[review.locale] ?? 'missing'}
+                    <!-- One above the other: either text can be long. -->
+                    <Table.Cell class="max-w-2xl align-top whitespace-normal">
+                        <div class="flex flex-col gap-1.5">
+                            <div
+                                class="flex gap-2"
+                                data-testid="reference">
                                 <abbr
-                                    class="w-5 text-xs text-muted-foreground uppercase no-underline"
-                                    title={localeName[locale]}>
-                                    {locale}
-                                </abbr>
-                                <!-- Only what still needs work gets a badge. -->
-                                {#if card.translations[locale] === 'reviewed'}
-                                    <CheckIcon
-                                        class="size-3.5 text-muted-foreground"
-                                        aria-hidden="true" />
-                                    <span class="sr-only">Reviewed</span>
-                                {:else}
-                                    <TranslationBadge
-                                        state={card.translations[locale] ?? 'missing'} />
-                                {/if}
+                                    class="w-5 shrink-0 pt-0.5 text-xs text-muted-foreground uppercase no-underline"
+                                    title={localeName[review.reference]}>{review.reference}</abbr>
+                                <a
+                                    class={[
+                                        'hover:underline',
+                                        reference
+                                            ? 'text-muted-foreground'
+                                            : 'italic text-muted-foreground',
+                                    ]}
+                                    href="/admin/cards/{card.id}">
+                                    {reference ?? `No ${localeName[review.reference]} text`}
+                                </a>
+                            </div>
+                            <div
+                                class="flex gap-2"
+                                data-testid="translation">
+                                <abbr
+                                    class="w-5 shrink-0 pt-0.5 text-xs text-muted-foreground uppercase no-underline"
+                                    title={localeName[review.locale]}>{review.locale}</abbr>
+                                <div class="flex flex-col items-start gap-1.5">
+                                    {#if translation}
+                                        <span class="font-medium">{translation}</span>
+                                    {/if}
+                                    {#if state === 'reviewed'}
+                                        <span
+                                            class="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                            <CheckIcon
+                                                class="size-3.5"
+                                                aria-hidden="true" />
+                                            Reviewed
+                                        </span>
+                                    {:else}
+                                        <TranslationBadge {state} />
+                                    {/if}
+                                </div>
+                            </div>
+                        </div>
+                    </Table.Cell>
+                    <Table.Cell class="align-top">{formatCardDate(card.date)}</Table.Cell>
+                    <Table.Cell class="align-top">{card.category.name}</Table.Cell>
+                {:else}
+                    <Table.Cell class="max-w-md whitespace-normal">
+                        <a
+                            class="font-medium hover:underline"
+                            href="/admin/cards/{card.id}">
+                            {card.text ?? 'No English text'}
+                        </a>
+                    </Table.Cell>
+                    <Table.Cell>{formatCardDate(card.date)}</Table.Cell>
+                    <Table.Cell>{card.category.name}</Table.Cell>
+                    <Table.Cell>
+                        <span class="inline-flex items-center gap-1.5 text-sm">
+                            <span
+                                class={[
+                                    'size-1.5 rounded-full',
+                                    card.status === 'published'
+                                        ? 'bg-emerald-500'
+                                        : 'bg-muted-foreground/50',
+                                ]}
+                                aria-hidden="true"></span>
+                            <span
+                                class={card.status === 'published' ? '' : 'text-muted-foreground'}>
+                                {cardStatusLabel[card.status]}
                             </span>
-                        {/each}
-                    </div>
-                </Table.Cell>
-                <Table.Cell>
-                    {#if card.verified}
-                        Verified
-                    {:else}
-                        <span class="text-muted-foreground">No</span>
-                    {/if}
-                </Table.Cell>
-                <Table.Cell class="text-muted-foreground">
-                    {updated.format(new Date(card.updatedAt))}
-                </Table.Cell>
+                        </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                        <div class="flex flex-col items-start gap-1">
+                            {#each translationLocales as locale (locale)}
+                                <span
+                                    class="flex items-center gap-1"
+                                    data-testid="translation-{locale}">
+                                    <abbr
+                                        class="w-5 text-xs text-muted-foreground uppercase no-underline"
+                                        title={localeName[locale]}>
+                                        {locale}
+                                    </abbr>
+                                    <!-- Only what still needs work gets a badge. -->
+                                    {#if card.translations[locale] === 'reviewed'}
+                                        <CheckIcon
+                                            class="size-3.5 text-muted-foreground"
+                                            aria-hidden="true" />
+                                        <span class="sr-only">Reviewed</span>
+                                    {:else}
+                                        <TranslationBadge
+                                            state={card.translations[locale] ?? 'missing'} />
+                                    {/if}
+                                </span>
+                            {/each}
+                        </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                        {#if card.verified}
+                            Verified
+                        {:else}
+                            <span class="text-muted-foreground">No</span>
+                        {/if}
+                    </Table.Cell>
+                    <Table.Cell class="text-muted-foreground">
+                        {updated.format(new Date(card.updatedAt))}
+                    </Table.Cell>
+                {/if}
             </Table.Row>
         {:else}
             <Table.Row>
                 <Table.Cell
-                    colspan={8}
+                    colspan={review ? 4 : 8}
                     class="py-8 text-center text-muted-foreground">
                     {#if data.total > 0}
                         No cards on this page.

@@ -25,7 +25,7 @@ test('an admin sees the numbers, every section and recent activity', async ({ pa
     )
     await expect(glance.getByRole('link', { name: /Swedish to review/ })).toHaveAttribute(
         'href',
-        '/admin/cards?sv=needs-review',
+        '/admin/cards?sv=needs-review&review=sv',
     )
 
     const sections = page.getByRole('region', { name: 'Sections' })

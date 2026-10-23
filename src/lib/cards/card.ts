@@ -96,6 +96,8 @@ export type CardSummary = {
     category: CardCategory
     /** Per-locale translation status, for the list's badges. A missing locale has no entry. */
     translations: Partial<Record<CardLocale, TranslationStatus>>
+    /** Per-locale text, for the list's review mode. A missing locale has no entry. */
+    texts: Partial<Record<CardLocale, string>>
     verified: boolean
     updatedAt: string
 }

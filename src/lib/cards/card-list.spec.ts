@@ -117,7 +117,30 @@ describe('translation filters', () => {
         expect(isFiltered({ translations: {} })).toBe(false)
     })
 
-    it('links the review queue for a locale: machine or stale there', () => {
-        expect(reviewQueueHref('sv')).toBe('/admin/cards?sv=needs-review')
+    it('links the review queue for a locale: machine or stale there, in review mode', () => {
+        expect(reviewQueueHref('sv')).toBe('/admin/cards?sv=needs-review&review=sv')
+    })
+
+    it('round-trips review mode, English as the reference unless another is given', () => {
+        expect(parseCardListView(params('review=nb')).review).toEqual({
+            locale: 'nb',
+            reference: 'en',
+        })
+        const sv = { locale: 'sv' as const, reference: 'nb' as const }
+        expect(cardListHref({ review: sv })).toBe('/admin/cards?review=sv&ref=nb')
+        expect(parseCardListView(params('review=sv&ref=nb')).review).toEqual(sv)
+        expect(cardListHref({ review: { locale: 'sv', reference: 'en' } })).toBe(
+            '/admin/cards?review=sv',
+        )
+    })
+
+    it('drops a review mode that is not one: English, an unknown locale, itself as reference', () => {
+        expect(parseCardListView(params('review=en')).review).toBeUndefined()
+        expect(parseCardListView(params('review=fi')).review).toBeUndefined()
+        expect(parseCardListView(params('')).review).toBeUndefined()
+        expect(parseCardListView(params('review=sv&ref=sv')).review).toEqual({
+            locale: 'sv',
+            reference: 'en',
+        })
     })
 })

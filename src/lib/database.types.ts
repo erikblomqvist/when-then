@@ -609,6 +609,19 @@ export type Database = {
                 Returns: undefined
             }
             require_publishable: { Args: { card_id: string }; Returns: undefined }
+            review_translations: {
+                Args: {
+                    actor: string
+                    card_ids: string[]
+                    locale: Database['public']['Enums']['card_locale']
+                }
+                Returns: {
+                    card_id: string
+                    card_text: string
+                    done: boolean
+                    reason: string
+                }[]
+            }
             save_card: {
                 Args: {
                     actor: string

@@ -1,9 +1,9 @@
 // Translating a card by hand: the sv and nb tabs, staleness after an English edit, the list's
-// badges and the review queue.
+// badges, the review queue, and the list's review mode (read and mark reviewed in bulk).
 
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
-import { saveCard } from '../../../../../lib/server/cards'
+import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
@@ -113,7 +113,8 @@ test('the review queue lists machine translations until someone reviews them', a
 
     await gotoHydrated(page, '/admin/cards')
     await page.getByRole('link', { name: 'Swedish review queue' }).click()
-    await expect(page).toHaveURL(/\/admin\/cards\?sv=needs-review$/)
+    // The queue opens in review mode, the Swedish next to the English.
+    await expect(page).toHaveURL(/\/admin\/cards\?sv=needs-review&review=sv$/)
     await expect(page.getByLabel('Swedish', { exact: true })).toHaveValue('needs-review')
     await page.getByRole('searchbox', { name: 'Search' }).fill(text)
     await page.getByRole('searchbox', { name: 'Search' }).press('Enter')
@@ -130,4 +131,81 @@ test('the review queue lists machine translations until someone reviews them', a
     await page.getByLabel('Swedish', { exact: true }).selectOption({ label: 'Reviewed' })
     await expect(page).toHaveURL(/sv=reviewed/)
     await expect(page.getByRole('row').filter({ hasText: text })).toHaveCount(1)
+})
+
+test('review mode shows a language next to a reference, and marks the selected cards reviewed', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'editor')
+    const db = localServiceClient()
+    const [category] = await listCategories(db)
+    const tag = randomUUID().slice(0, 8)
+    type Translated = { text: string; status: 'machine' | 'reviewed' }
+    const card = (en: string, more: { sv?: Translated; nb?: Translated } = {}) =>
+        saveCard(db, userId, {
+            categoryId: category.id,
+            date: { decade: 1890, year: 1895, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: { en: { text: `${en} ${tag}` }, ...more },
+        })
+    const kite = await card('A made-up kite flies', {
+        sv: { text: 'En påhittad drake flyger', status: 'machine' },
+        nb: { text: 'En oppdiktet drage flyr', status: 'machine' },
+    })
+    await card('A made-up raft floats', {
+        sv: { text: 'En påhittad flotte flyter', status: 'machine' },
+    })
+    const untranslated = await card('A made-up canoe sinks')
+
+    await gotoHydrated(page, `/admin/cards?q=${tag}`)
+    const switcher = page.getByRole('group', { name: 'Review translations' })
+    await expect(switcher.getByRole('link', { name: 'Off' })).toHaveAttribute(
+        'aria-current',
+        'true',
+    )
+    await switcher.getByRole('link', { name: 'Swedish' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+
+    // The English with the Swedish under it, to read through.
+    await expect(page.getByRole('columnheader', { name: 'English and Swedish' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Translations' })).toHaveCount(0)
+    const row = (text: string) => page.getByRole('row').filter({ hasText: text })
+    const kiteRow = row(`A made-up kite flies ${tag}`)
+    await expect(kiteRow.getByTestId('reference')).toHaveText(`en A made-up kite flies ${tag}`)
+    await expect(kiteRow.getByTestId('translation')).toContainText('En påhittad drake flyger')
+    await expect(kiteRow.getByTestId('translation')).toContainText('Machine')
+    await expect(row(`A made-up canoe sinks ${tag}`).getByTestId('translation')).toContainText(
+        'Missing',
+    )
+
+    // Another reference language: Norwegian next to the Swedish; the search stays.
+    const reference = page.getByRole('group', { name: 'Next to' })
+    await reference.getByRole('link', { name: 'Norwegian' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv&ref=nb`)
+    await expect(page.getByRole('columnheader', { name: 'Norwegian and Swedish' })).toBeVisible()
+    await expect(row('En påhittad drake flyger').getByTestId('reference')).toHaveText(
+        'nb En oppdiktet drage flyr',
+    )
+    await reference.getByRole('link', { name: 'English' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+
+    // Select them all and mark the Swedish reviewed; the untranslated one is skipped.
+    await page.getByLabel('Select all cards on this page').check()
+    const bar = page.getByRole('region', { name: 'Bulk actions' })
+    await bar.getByRole('button', { name: 'Mark Swedish reviewed' }).click()
+    await expect(page.getByRole('status')).toContainText('Marked Swedish reviewed on 2 cards.')
+    await expect(page.getByRole('status')).toContainText('There is no translation to review.')
+    await expect(kiteRow.getByTestId('translation')).toContainText('Reviewed')
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+
+    const saved = await getCard(db, kite)
+    expect(saved?.translations.sv?.status).toBe('reviewed')
+    expect(saved?.translations.nb?.status).toBe('machine')
+    expect((await getCard(db, untranslated))?.translations.sv).toBeUndefined()
+
+    // Off: the usual columns again.
+    await switcher.getByRole('link', { name: 'Off' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}`)
+    await expect(page.getByRole('columnheader', { name: 'Translations' })).toBeVisible()
 })

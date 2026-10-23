@@ -1,4 +1,4 @@
-// Bulk publish, archive, move and delete against the local database (run through with-db.sh / CI's
+// Bulk publish, archive, move, delete and translation review against the local database (run through with-db.sh / CI's
 // stack): each card goes through the same rule as one at a time, refused cards are skipped
 // with the reason, and every affected card gets its own audit row.
 
@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { DateParts } from '../cards/date-parts'
 import { localServiceClient, newPerson } from '../testing/e2e-auth'
-import { archiveCards, deleteCards, moveCards, publishCards } from './card-bulk'
+import { archiveCards, deleteCards, moveCards, publishCards, reviewTranslations } from './card-bulk'
 import { publishCard } from './card-lifecycle'
 import { resolveCardSelection } from './card-selection'
 import { getCard, saveCard } from './cards'
@@ -169,4 +169,89 @@ test('a selection resolves to the picked cards or to every card matching the fil
     expect(
         (await resolveCardSelection(db, { kind: 'matching', filter: { search: word } })).sort(),
     ).toEqual([first, second].sort())
+})
+
+test('bulk review marks machine and stale translations reviewed, skipping the rest', async () => {
+    const actor = (await newPerson()).id
+    const categoryId = (await listCategories(db))[0].id
+    const card = (text: string, sv?: { text: string; status: 'machine' | 'reviewed' }) =>
+        saveCard(db, actor, {
+            categoryId,
+            date: year1969,
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: { en: { text }, ...(sv && { sv }) },
+        })
+    const machine = await card(`A made-up kite ${randomUUID()}`, {
+        text: 'En påhittad drake',
+        status: 'machine',
+    })
+    const staleText = `A made-up raft ${randomUUID()}`
+    const stale = await card(staleText, { text: 'En påhittad flotte', status: 'reviewed' })
+    // A new English text makes the reviewed Swedish stale.
+    await saveCard(
+        db,
+        actor,
+        {
+            categoryId,
+            date: year1969,
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: { en: { text: `${staleText}, again` } },
+        },
+        stale,
+    )
+    const reviewedText = `A made-up canoe ${randomUUID()}`
+    const reviewed = await card(reviewedText, { text: 'En påhittad kanot', status: 'reviewed' })
+    const noneText = `A made-up glider ${randomUUID()}`
+    const none = await card(noneText)
+    expect((await getCard(db, stale))?.translations.sv?.status).toBe('stale')
+    const { data: last } = await db
+        .from('audit_log')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single()
+
+    const result = await reviewTranslations(db, actor, [machine, reviewed, stale, none], 'sv')
+
+    expect(result.done).toEqual([machine, stale])
+    expect(result.skipped).toEqual([
+        { id: reviewed, text: reviewedText, reason: 'Reviewed already.' },
+        { id: none, text: noneText, reason: 'There is no translation to review.' },
+    ])
+    expect((await getCard(db, machine))?.translations.sv).toMatchObject({
+        text: 'En påhittad drake',
+        status: 'reviewed',
+    })
+    expect((await getCard(db, stale))?.translations.sv?.status).toBe('reviewed')
+    // Norwegian is left alone, and each change is audited under the actor.
+    expect((await getCard(db, machine))?.translations.nb).toBeUndefined()
+    const { data: audited } = await db
+        .from('audit_log')
+        .select('entity_id, actor_id, before, after')
+        .eq('entity', 'card_translation')
+        .gt('id', last!.id)
+        .in('entity_id', [machine, stale, reviewed, none])
+        .order('id')
+    const statusOf = (row: unknown) => row as { locale: string; status: string } | null
+    expect(
+        audited?.map((row) => [
+            row.entity_id,
+            row.actor_id,
+            statusOf(row.before)?.status,
+            statusOf(row.after)?.status,
+        ]),
+    ).toEqual([
+        [machine, actor, 'machine', 'reviewed'],
+        [stale, actor, 'stale', 'reviewed'],
+    ])
+})
+
+test("bulk review refuses English, the card's own text", async () => {
+    const actor = (await newPerson()).id
+    const card = await newCard(actor, `A made-up kite ${randomUUID()}`)
+    await expect(reviewTranslations(db, actor, [card], 'en' as 'sv')).rejects.toThrow(
+        "English is the card's own text, not a translation.",
+    )
 })

@@ -132,6 +132,9 @@ export async function listCards(
                     translation.status,
                 ]),
             ) as Partial<Record<CardLocale, TranslationStatus>>,
+            texts: Object.fromEntries(
+                row.card_translations.map((translation) => [translation.locale, translation.text]),
+            ) as Partial<Record<CardLocale, string>>,
             verified: row.verified_at !== null,
             updatedAt: row.updated_at,
         }
