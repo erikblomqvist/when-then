@@ -76,6 +76,7 @@
     "refusal_continue_unavailable": "You can continue once you've placed a card correctly.",
     "refusal_not_stealing": "There's no card to steal right now.",
     "refusal_not_your_steal": "Someone else is stealing right now.",
+    "refusal_game_over": "The game is over.",
     "player_icon_cat": "Cat",
     "player_icon_dog": "Dog",
     "player_icon_bird": "Bird",

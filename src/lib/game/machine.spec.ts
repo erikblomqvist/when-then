@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
 import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
-import { leftOf } from './seating'
+import { leftOf, startingFrom } from './seating'
 import { fits, score, type DeckCard, type DrawOutcome, type GameState } from './state'
 import { redact } from './view'
 
@@ -865,5 +865,186 @@ describe('misplacing a card, and the steals', () => {
         const next = stealing(state, false)
         expect(playOf(next).activeId).not.toBe(activeId)
         expect(next.log).toEqual([])
+    })
+})
+
+describe('rounds and winning', () => {
+    const at1950 = deckOf(Array.from({ length: 80 }, () => 1950))
+    const threePlayers = (overrides: Partial<CreateInput> = {}) =>
+        twoPlayers({
+            players: [astrid, bjorn, cecilia],
+            seating: ['astrid', 'bjorn', 'cecilia'],
+            ...overrides,
+        })
+    const confirm = { type: 'confirmSeating', by: 'astrid', currentYear: 2026 } as const
+
+    /**
+     * The first three-player game (by seed) with a target of 3 where nobody's anchor is 1950, so
+     * every player can place every card rightly or wrongly.
+     */
+    const threePlayerGame = (targetScore = 3) => {
+        for (const seed of seeds) {
+            const settings = { targetScore, exactYear: false, cardLanguage: 'en' } as const
+            const state = ok(
+                apply(create(threePlayers({ seed, cards: at1950, settings })), confirm),
+            )
+            if (anchors(state).every((anchor) => anchor !== 1950)) return state
+        }
+        throw new Error('No seed keeps every anchor off 1950.')
+    }
+
+    /** The active player's turn: `points` correct plays locked in, or with none, a misplaced card nobody steals. */
+    const turn = (state: GameState, points: number) => {
+        state = dealt(state)
+        if (points === 0) {
+            state = play(state, false)
+            while (state.phase.name === 'playing' && playOf(state).step === 'stealing') {
+                state = stealing(state, false)
+            }
+            return state
+        }
+        for (let i = 1; i < points; i++) state = dealt(ok(continued(play(state, true))))
+        return ok(lockIn(play(state, true)))
+    }
+
+    /** Turns scoring `points` each, from whoever is active. */
+    const turns = (state: GameState, ...points: number[]) =>
+        points.reduce((next, n) => turn(next, n), state)
+
+    /** The seated players from the starting player round, the order of every round. */
+    const roundOrder = (state: GameState) => startingFrom(state.seating, state.startingPlayerId!)
+
+    const setReseat = (state: GameState, reseat: boolean, by = 'astrid') =>
+        apply(state, { type: 'setReseat', by, reseat })
+
+    it('is one turn per player in seating order, and every round opens with the starting player', () => {
+        let state = threePlayerGame()
+        const active: string[] = []
+        for (let i = 0; i < 6; i++) {
+            active.push(playOf(state).activeId)
+            state = turn(state, 0)
+        }
+        expect(active).toEqual([...roundOrder(state), ...roundOrder(state)])
+    })
+
+    it('doesn’t end the game when the target is reached mid-round', () => {
+        const state = turn(threePlayerGame(), 3)
+        const [first, second] = roundOrder(state)
+        expect(score(state, first)).toBe(3)
+        expect(playOf(state).activeId).toBe(second)
+        expect(playOf(turn(state, 0)).activeId).not.toBe(first)
+    })
+
+    it('ends the game when the round ends, the highest score at or above the target winning', () => {
+        const state = turns(threePlayerGame(), 3, 4, 0)
+        const [, second] = roundOrder(state)
+        expect(state.phase).toEqual({ name: 'finished', winners: [second] })
+    })
+
+    it('shares the win between equal top scores', () => {
+        const state = turns(threePlayerGame(), 3, 0, 3)
+        const [first, , third] = roundOrder(state)
+        expect(state.phase).toEqual({
+            name: 'finished',
+            winners: state.seating.filter((id) => id === first || id === third),
+        })
+    })
+
+    it('lets a player push past the target', () => {
+        const state = turns(threePlayerGame(), 5, 0, 0)
+        const [first] = roundOrder(state)
+        expect(score(state, first)).toBe(5)
+        expect(state.phase).toEqual({ name: 'finished', winners: [first] })
+    })
+
+    it('plays another round while nobody is at the target', () => {
+        const state = turns(threePlayerGame(), 2, 2, 2)
+        expect(state.phase.name).toBe('playing')
+        expect(playOf(state).activeId).toBe(state.startingPlayerId)
+    })
+
+    it('counts only locked cards: unlocked cards lost at the end of the round never win', () => {
+        let state = turns(threePlayerGame(), 0, 0)
+        const [, , last] = roundOrder(state)
+        // The last player of the round has the target unlocked, then misplaces.
+        for (let i = 0; i < 3; i++) state = dealt(ok(continued(play(dealt(state), true))))
+        state = play(state, false)
+        while (playOf(state).step === 'stealing') state = stealing(state, false)
+        expect(score(state, last)).toBe(0)
+        expect(state.phase.name).toBe('playing')
+        // Nor does an anchor count.
+        for (const id of state.seating) expect(score(state, id)).toBe(0)
+    })
+
+    it('locks in the turn and ends the game when every category runs dry, the highest score winning', () => {
+        // One card in all: the first player places it and presses on into an empty deck.
+        const cards = deckOf([1950])
+        for (const seed of seeds) {
+            const state = dealt(create(twoPlayers({ seed, cards })))
+            const { activeId } = playOf(state)
+            if (anchorOf(state, activeId) === 1950) continue
+            const next = ok(continued(play(state, true)))
+            expect(next.phase).toEqual({ name: 'finished', winners: [activeId] })
+            expect(next.timelines[activeId]).toContainEqual(
+                expect.objectContaining({ kind: 'card', locked: true }),
+            )
+            expect(score(next, activeId)).toBe(1)
+            return
+        }
+        throw new Error('No seed keeps the anchor off 1950.')
+    })
+
+    it('lets only the host flag or clear the reseat', () => {
+        const state = threePlayerGame()
+        expect(setReseat(state, true, 'bjorn')).toEqual({ ok: false, refusal: 'not_host' })
+        const flagged = ok(setReseat(state, true))
+        expect(flagged.reseat).toBe(true)
+        expect(ok(setReseat(flagged, false)).reseat).toBe(false)
+        // At any time: in the middle of a play too.
+        expect(ok(setReseat(play(dealt(state), true), true)).reseat).toBe(true)
+    })
+
+    it('goes into seating at the end of a flagged round, and Confirm seating resumes play', () => {
+        let state = ok(setReseat(turn(threePlayerGame(), 1), true))
+        state = turns(state, 1, 1)
+        expect(state.phase).toEqual({ name: 'seating' })
+        expect(state.reseat).toBe(false)
+        const timelines = state.timelines
+        expect(place(state, 0, 'astrid')).toEqual({ ok: false, refusal: 'not_placing' })
+
+        const [first, second, third] = roundOrder(state)
+        // The host turns the table round; the next round still opens with the starting player.
+        state = ok(
+            apply(state, { type: 'setSeating', by: 'astrid', seating: [first, third, second] }),
+        )
+        state = ok(apply(state, confirm))
+        expect(state.timelines).toEqual(timelines)
+        expect(playOf(state)).toMatchObject({ activeId: first, readerId: second })
+        expect(state.log).toEqual([])
+        state = turn(state, 0)
+        expect(playOf(state).activeId).toBe(third)
+    })
+
+    it('doesn’t reseat a round that was cleared, or one with a winner', () => {
+        const cleared = ok(setReseat(ok(setReseat(threePlayerGame(), true)), false))
+        expect(turns(cleared, 0, 0, 0).phase.name).toBe('playing')
+        const won = turns(ok(setReseat(threePlayerGame(), true)), 3, 0, 0)
+        expect(won.phase.name).toBe('finished')
+    })
+
+    it('never seats a two-player game', () => {
+        for (const seed of seeds) {
+            let state = create(twoPlayers({ seed, cards: at1950 }))
+            if (anchors(state).includes(1950)) continue
+            state = turns(ok(setReseat(state, true)), 0, 0)
+            expect(state.phase.name).toBe('playing')
+            expect(state.reseat).toBe(false)
+            return
+        }
+    })
+
+    it('refuses the reseat once the game is over', () => {
+        const won = turns(threePlayerGame(), 3, 0, 0)
+        expect(setReseat(won, true)).toEqual({ ok: false, refusal: 'game_over' })
     })
 })

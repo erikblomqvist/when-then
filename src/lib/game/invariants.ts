@@ -2,7 +2,7 @@
 // machine (`./machine`); this is only a safety net that the scenario builder (`./scenario`)
 // runs after every step, so a rules bug shows up next to the move that caused it (ADR 0004).
 
-import { categoriesLeft, type GameState } from './state'
+import { categoriesLeft, leaders, type GameState } from './state'
 
 /** Everything wrong with `state`, in words; empty when it's sound. */
 export function invariantProblems(state: GameState): string[] {
@@ -85,6 +85,17 @@ export function invariantProblems(state: GameState): string[] {
                 )
                 if (unlocked) problems.push('stealing while the active player keeps unlocked cards')
             }
+        }
+    }
+
+    if (state.phase.name === 'finished') {
+        const { top, ids } = leaders(state)
+        const { winners } = state.phase
+        if (winners.length !== ids.length || !ids.every((id) => winners.includes(id))) {
+            problems.push('the winners are not the players with the top score')
+        }
+        if (top < state.settings.targetScore && categoriesLeft(state).length > 0) {
+            problems.push('won below the target with cards left')
         }
     }
 

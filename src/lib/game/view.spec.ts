@@ -316,3 +316,13 @@ describe('what a seat sees during the steals', () => {
         }
     })
 })
+
+describe('what a seat sees of the reseat flag', () => {
+    it('shows every seat whether the host asked to reseat after this round', () => {
+        const state = game()
+        expect(redact(state, 'bjorn').reseat).toBe(false)
+        const result = apply(state, { type: 'setReseat', by: 'astrid', reseat: true })
+        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+        for (const seat of ['astrid', 'bjorn']) expect(redact(result.state, seat).reseat).toBe(true)
+    })
+})

@@ -10,7 +10,6 @@ import {
     score,
     type ChoiceDraw,
     type DeckCard,
-    type DrawOutcome,
     type GameDate,
     type GamePlayer,
     type GameSettings,
@@ -54,6 +53,8 @@ export type SeatView = {
     settings: GameSettings
     seating: readonly string[]
     startingPlayerId: string | null
+    /** The host asked to reseat after this round. */
+    reseat: boolean
     phase: PhaseView
     timelines: Record<string, TimelineEntry[]>
     scores: Record<string, number>
@@ -81,6 +82,7 @@ export function redact(state: GameState, seat: string): SeatView {
         settings: state.settings,
         seating: state.seating,
         startingPlayerId: state.startingPlayerId,
+        reseat: state.reseat,
         phase: phaseView(state, seat, shown),
         timelines: state.timelines,
         scores: Object.fromEntries(state.seating.map((id) => [id, score(state, id)])),

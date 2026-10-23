@@ -33,6 +33,7 @@ export type GameRefusalCode =
     | 'continue_unavailable'
     | 'not_stealing'
     | 'not_your_steal'
+    | 'game_over'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -62,6 +63,7 @@ const words: Record<GameRefusalCode, () => string> = {
     continue_unavailable: m.refusal_continue_unavailable,
     not_stealing: m.refusal_not_stealing,
     not_your_steal: m.refusal_not_your_steal,
+    game_over: m.refusal_game_over,
 }
 
 /** The message for a refusal, in the current locale. */

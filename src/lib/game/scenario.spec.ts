@@ -59,6 +59,8 @@ describe('building a two-player scenario', () => {
             activePlayer: null,
             step: 'deciding',
             unlocked: null,
+            target: 10,
+            scores: null,
             helpers: [],
             viewer: 1,
         })
@@ -304,6 +306,101 @@ describe('helper steps', () => {
     })
 })
 
+describe('target and scores', () => {
+    const scoresOf = (state: GameState) => state.seating.map((id) => score(state, id))
+
+    /** Player numbers in the order of a round: the starting player first. */
+    const roundOf = (seed: number, players: number) => {
+        const { state } = scenario().seed(seed).players(players).build()
+        const start = state.seating.indexOf(state.startingPlayerId!)
+        return Array.from({ length: players }, (_, i) => ((start + i) % players) + 1)
+    }
+
+    /** `scores` given by round position, as the recipe's list by player number. */
+    const byPlayer = (round: number[], scores: number[]) =>
+        round.map((_, n) => scores[round.indexOf(n + 1)])
+
+    it('sets the target score', () => {
+        expect(scenario().build().state.settings.targetScore).toBe(10)
+        expect(scenario().target(3).build().state.settings.targetScore).toBe(3)
+        expect(scenario().target(30).build().view.settings.targetScore).toBe(30)
+    })
+
+    it('reaches scores below the target for every player count and active player', () => {
+        for (const players of [2, 4, 10]) {
+            const scores = Array.from({ length: players }, (_, i) => (i * 3) % 10)
+            for (const k of [1, players]) {
+                for (const step of ['placing', 'deciding', 'stealing', 'freeChoice'] as const) {
+                    const { state } = scenario()
+                        .players(players)
+                        .activePlayer(k)
+                        .step(step)
+                        .scores(scores)
+                        .build()
+                    expect(scoresOf(state)).toEqual(scores)
+                    expect(playOf(state).activeId).toBe(state.seating[k - 1])
+                    expect(state.phase.name).toBe('playing')
+                }
+            }
+        }
+    })
+
+    it('reaches scores at and past the target for players who have had their turn this round', () => {
+        const round = roundOf(4, 4)
+        // The first two of the round have played: one at the target, one past it.
+        const scores = byPlayer(round, [10, 14, 9, 2])
+        const { state } = scenario()
+            .seed(4)
+            .players(4)
+            .activePlayer(round[2])
+            .unlocked(2)
+            .scores(scores)
+            .build()
+        expect(scoresOf(state)).toEqual(scores)
+        expect(state.phase.name).toBe('playing')
+        expect(unlockedOf(state)).toHaveLength(2)
+    })
+
+    it('reaches them at a choice or a steal too, however long the wait', () => {
+        for (const seed of [1, 2, 3, 4, 5]) {
+            const round = roundOf(seed, 3)
+            const scores = byPlayer(round, [12, 0, 9])
+            for (const step of ['readersChoice', 'freeChoice', 'stealing'] as const) {
+                const { state } = scenario()
+                    .seed(seed)
+                    .players(3)
+                    .activePlayer(round[2])
+                    .step(step)
+                    .scores(scores)
+                    .build()
+                expect(scoresOf(state)).toEqual(scores)
+                expect(playOf(state)).toMatchObject({ activeId: state.seating[round[2] - 1] })
+            }
+        }
+    })
+
+    it('reaches the target for a player still to play by a steal in an earlier turn', () => {
+        const round = roundOf(4, 4)
+        const scores = byPlayer(round, [3, 0, 7, 10])
+        const { state } = scenario()
+            .seed(4)
+            .players(4)
+            .activePlayer(round[2])
+            .scores(scores)
+            .build()
+        expect(scoresOf(state)).toEqual(scores)
+    })
+
+    it('counts the scores before the helper steps', () => {
+        const round = roundOf(1, 3)
+        const scores = byPlayer(round, [4, 5, 6])
+        const misplaced = scenario().players(3).activePlayer(round[0]).scores(scores).misplace()
+        const { state } = misplaced.correctSteal().build()
+        const stealer = round[1]
+        expect(scoresOf(state)).toEqual(scores.map((n, i) => (i === stealer - 1 ? n + 1 : n)))
+    })
+})
+
 describe('an impossible recipe', () => {
     const fieldOf = (build: () => unknown) => {
         try {
@@ -354,6 +451,41 @@ describe('an impossible recipe', () => {
         expect(
             fieldOf(() => buildScenario({ ...scenario().recipe, helpers: ['skip' as never] })),
         ).toBe('helpers')
+    })
+
+    it('throws on a target out of range, naming target', () => {
+        for (const target of [2, 31, 9.5]) {
+            expect(fieldOf(() => scenario().target(target).build())).toBe('target')
+        }
+    })
+
+    it('throws on scores the rules can’t reach, naming scores', () => {
+        expect(fieldOf(() => scenario().scores([1]).build())).toBe('scores')
+        expect(fieldOf(() => scenario().scores([1, 2, 3]).build())).toBe('scores')
+        expect(fieldOf(() => scenario().scores([1, -1]).build())).toBe('scores')
+        expect(fieldOf(() => scenario().scores([1, 1.5]).build())).toBe('scores')
+        // Nobody is at the target when a round opens: the last round would have been won.
+        const { state } = scenario().players(3).build()
+        const opener = state.seating.indexOf(state.startingPlayerId!) + 1
+        const atTarget = [3, 3, 3].map((n, i) => (i === opener - 1 ? 0 : n))
+        expect(
+            fieldOf(() =>
+                scenario().players(3).target(3).activePlayer(opener).scores(atTarget).build(),
+            ),
+        ).toBe('scores')
+        // Nor by default, when the opener is active.
+        expect(fieldOf(() => scenario().players(3).target(3).scores([3, 0, 0]).build())).toBe(
+            'scores',
+        )
+        // A player still to play gets one steal per earlier turn with nothing else to score.
+        const round = Array.from({ length: 3 }, (_, i) => ((opener - 1 + i) % 3) + 1)
+        const twoSteals = [0, 0, 0]
+        twoSteals[round[2] - 1] = 4
+        expect(
+            fieldOf(() =>
+                scenario().players(3).target(3).activePlayer(round[1]).scores(twoSteals).build(),
+            ),
+        ).toBe('scores')
     })
 
     it('says what is wrong in the message', () => {

@@ -11,6 +11,7 @@ import {
     categoriesLeft,
     currentSchema,
     fits,
+    leaders,
     pickerOf,
     standardDate,
     type DeckCard,
@@ -38,8 +39,10 @@ export type CreateInput = {
 /** A command, with `by` the player the server resolved from the session. */
 export type Command =
     | { type: 'setSeating'; by: string; seating: Seating }
-    /** `currentYear` caps the anchors, which confirming deals. */
+    /** `currentYear` caps the anchors, which confirming deals the first time. */
     | { type: 'confirmSeating'; by: string; currentYear: number }
+    /** Flag or clear "reseat after this round". */
+    | { type: 'setReseat'; by: string; reseat: boolean }
     /** On a Reader's or Free choice, the category to deal from. */
     | { type: 'pickCategory'; by: string; category: string }
     | { type: 'place'; by: string; slot: number }
@@ -71,6 +74,7 @@ export function create(input: CreateInput): GameState {
         settings: input.settings,
         seating: [...input.seating],
         startingPlayerId: null,
+        reseat: false,
         phase: { name: 'seating' },
         timelines: {},
         log: [],
@@ -131,19 +135,38 @@ function startTurn(state: GameState, activeId: string): GameState {
     return startPlay({ ...state, log: [] }, activeId)
 }
 
-/** The active player's turn is over; the player on their left is next. */
-const endTurn = (state: GameState, activeId: string) =>
-    startTurn(state, leftOf(state.seating, activeId))
+/**
+ * The active player's turn is over and the player on their left is next, unless that's the
+ * starting player and the round is over. Then the highest score at or above the target wins,
+ * equal top scores sharing the win; without a winner, a flagged round goes into seating (with
+ * more than two players, who can only sit one way round) and the next round waits for Confirm.
+ */
+function endTurn(state: GameState, activeId: string): GameState {
+    const next = leftOf(state.seating, activeId)
+    if (next !== state.startingPlayerId) return startTurn(state, next)
+    const { top, ids } = leaders(state)
+    if (top >= state.settings.targetScore) {
+        return { ...state, phase: { name: 'finished', winners: ids } }
+    }
+    if (state.reseat && state.seating.length > 2) {
+        return { ...state, reseat: false, phase: { name: 'seating' } }
+    }
+    return startTurn({ ...state, reseat: false }, next)
+}
 
 /**
  * The Category draw: each category with cards left, Reader's choice and Free choice are equally
  * likely, though with one category left there is nothing to choose and only it is drawn. A
  * category is dealt from at once; a choice waits for its category to be picked. With every
- * category empty the turn locks in and the game stops; who wins then comes with rounds (#94).
+ * category empty the turn locks in and the game is over: the highest score wins, at or below
+ * the target, and equal top scores share the win.
  */
 function startPlay(state: GameState, activeId: string): GameState {
     const categories = categoriesLeft(state)
-    if (categories.length === 0) return { ...lockedIn(state, activeId), phase: { name: 'ended' } }
+    if (categories.length === 0) {
+        const final = lockedIn(state, activeId)
+        return { ...final, phase: { name: 'finished', winners: leaders(final).ids } }
+    }
     const dice = roll(state.rng)
     const choices: DrawOutcome[] =
         categories.length > 1 ? [{ kind: 'readersChoice' }, { kind: 'freeChoice' }] : []
@@ -206,6 +229,7 @@ export function load(saved: unknown): GameState {
         },
         seating: [],
         startingPlayerId: null,
+        reseat: false,
         phase: { name: 'ended' },
         timelines: {},
         log: [],
@@ -228,10 +252,20 @@ export function apply(state: GameState, command: Command): ApplyResult {
             if (!player.host) return refuse('not_host')
             if (state.phase.name !== 'seating') return refuse('not_seating')
             if (command.type === 'confirmSeating') {
+                // Between rounds the anchors are out already: the next round just opens.
+                const { startingPlayerId } = state
+                if (startingPlayerId !== null) return succeed(startTurn(state, startingPlayerId))
                 return succeed(beginPlaying(state, command.currentYear))
             }
             if (!samePlayers(state.seating, command.seating)) return refuse('invalid_seating')
             return succeed({ ...state, seating: [...command.seating] })
+        }
+        case 'setReseat': {
+            if (!player.host) return refuse('not_host')
+            if (state.phase.name !== 'seating' && state.phase.name !== 'playing') {
+                return refuse('game_over')
+            }
+            return succeed({ ...state, reseat: command.reseat })
         }
     }
 

@@ -91,6 +91,8 @@ export type GameState = {
     seating: Seating
     /** Who opens every round; chosen when play starts. */
     startingPlayerId: string | null
+    /** The host asked to reseat: the game goes into seating when this round ends unwon. */
+    reseat: boolean
     phase: Phase
     /** Per seated player, in date order. */
     timelines: Record<string, TimelineEntry[]>
@@ -121,3 +123,9 @@ export const categoriesLeft = (state: GameState) =>
 export const score = (state: GameState, playerId: string): number =>
     (state.timelines[playerId] ?? []).filter((entry) => entry.kind === 'card' && entry.locked)
         .length
+
+/** The seated players with the highest score, in seating order, and that score. */
+export function leaders(state: GameState) {
+    const top = Math.max(0, ...state.seating.map((id) => score(state, id)))
+    return { top, ids: state.seating.filter((id) => score(state, id) === top) }
+}

@@ -76,6 +76,7 @@
     "refusal_continue_unavailable": "Du kan fortsätta när du har placerat ett kort rätt.",
     "refusal_not_stealing": "Det finns inget kort att stjäla just nu.",
     "refusal_not_your_steal": "Någon annan stjäl just nu.",
+    "refusal_game_over": "Spelet är slut.",
     "player_icon_cat": "Katt",
     "player_icon_dog": "Hund",
     "player_icon_bird": "Fågel",

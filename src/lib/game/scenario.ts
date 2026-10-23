@@ -2,16 +2,18 @@
 // reached by playing the real machine against the synthetic deck, choosing slots on purpose. A
 // recipe the rules can't reach throws, naming the field at fault; it's never clamped.
 //
-//     scenario().players(4).activePlayer(2).unlocked(2).misplace().missedSteal().viewer(1).build()
+//     scenario().players(4).activePlayer(2).unlocked(2).scores([7, 9, 10, 3]).misplace().build()
 
 import { apply, create, type Command } from './machine'
 import { invariantProblems } from './invariants'
 import { maxPlayers, playerIcons } from './player'
-import { defaultTargetScore } from './settings'
+import { startingFrom } from './seating'
+import { defaultTargetScore, isTargetScore, maxTargetScore, minTargetScore } from './settings'
 import {
     categoriesLeft,
     fits,
     pickerOf,
+    score,
     type GameDate,
     type GameState,
     type TimelineEntry,
@@ -55,6 +57,14 @@ export type Recipe = {
      * choice the card just placed. Null for the fewest the step allows: none, or that one card.
      */
     unlocked: number | null
+    /** The target score. */
+    target: number
+    /**
+     * Each player's score once the step is reached, before the helper steps; null for whatever
+     * the turns on the way leave, mostly none. Any score takes a scoring round first, so the
+     * moment is in the second round or later.
+     */
+    scores: number[] | null
     /** Played after the step is reached, in order. */
     helpers: HelperStep[]
     /** The player whose phone the view is for; null for the active player. */
@@ -67,6 +77,8 @@ export const defaultRecipe: Recipe = {
     activePlayer: null,
     step: 'placing',
     unlocked: null,
+    target: defaultTargetScore,
+    scores: null,
     helpers: [],
     viewer: null,
 }
@@ -109,6 +121,8 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
     activePlayer: (activePlayer: number) => scenario({ ...recipe, activePlayer }),
     step: (step: ScenarioStep) => scenario({ ...recipe, step }),
     unlocked: (unlocked: number) => scenario({ ...recipe, unlocked }),
+    target: (target: number) => scenario({ ...recipe, target }),
+    scores: (scores: number[]) => scenario({ ...recipe, scores }),
     misplace: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'misplace'] }),
     missedSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'missedSteal'] }),
     correctSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'correctSteal'] }),
@@ -118,7 +132,7 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
 
 /** Play the real game to the moment `recipe` describes. Throws a `ScenarioError` if it can't. */
 export function buildScenario(recipe: Recipe): Scenario {
-    const { seed, players, activePlayer, step, unlocked, helpers, viewer } = recipe
+    const { seed, players, activePlayer, step, unlocked, target, scores, helpers, viewer } = recipe
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         throw new ScenarioError('seed', 'a whole number from 0 to 4294967295')
     }
@@ -144,6 +158,18 @@ export function buildScenario(recipe: Recipe): Scenario {
             'a misplaced card loses the unlocked cards; stop at placing and misplace instead',
         )
     }
+    if (!isTargetScore(target)) {
+        throw new ScenarioError(
+            'target',
+            `a whole number from ${minTargetScore} to ${maxTargetScore}`,
+        )
+    }
+    if (
+        scores !== null &&
+        (scores.length !== players || !scores.every((n) => Number.isInteger(n) && n >= 0))
+    ) {
+        throw new ScenarioError('scores', `${players} whole numbers from 0, one per player`)
+    }
     for (const helper of helpers) {
         if (!helperSteps.includes(helper)) {
             throw new ScenarioError('helpers', `one of ${helperSteps.join(', ')}, not ${helper}`)
@@ -159,11 +185,20 @@ export function buildScenario(recipe: Recipe): Scenario {
             icon: playerIcons[i],
             host: i === 0,
         })),
-        settings: { targetScore: defaultTargetScore, exactYear: false, cardLanguage: 'en' },
+        settings: { targetScore: target, exactYear: false, cardLanguage: 'en' },
         seating: ids,
         // Waiting for a choice can take many turns, since continuing until one comes would add
-        // unlocked cards: enough copies of the deck that it doesn't run dry first.
-        cards: syntheticDeck(seed, 'en', 2 * players),
+        // unlocked cards: enough copies of the deck that it doesn't run dry first, and more for
+        // the scores.
+        cards: syntheticDeck(
+            seed,
+            'en',
+            2 * players +
+                Math.ceil(
+                    (scores ?? []).reduce((sum, n) => sum + n, 0) /
+                        syntheticDeck(seed, 'en').length,
+                ),
+        ),
         seed,
         currentYear,
     })
@@ -222,24 +257,108 @@ export function buildScenario(recipe: Recipe): Scenario {
         play({ type: 'lockIn', by: current.activeId }, field)
     }
 
+    /** The active player places the card in play correctly, as a choice picks the first category. */
+    const correctPlay = (field: keyof Recipe) => {
+        const { activeId, cardId } = dealt(field)
+        const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
+        play({ type: 'place', by: activeId, slot }, field)
+    }
+
+    /** The active player's turn: `points` correct plays, locked in. */
+    const scoringTurn = (points: number) => {
+        const { activeId } = playing(state, 'scores')
+        for (let i = 0; i < points; i++) {
+            if (i > 0) play({ type: 'continue', by: activeId }, 'scores')
+            correctPlay('scores')
+        }
+        play({ type: 'lockIn', by: activeId }, 'scores')
+    }
+
+    /** The active player's turn: a misplaced card, missed by every stealer before `stealer`. */
+    const stolenTurn = (stealer: string) => {
+        const { activeId, cardId } = dealt('scores')
+        const date = state.cards[cardId].date
+        const noSlot = () => new ScenarioError('seed', 'a card fits every gap; try another seed')
+        const slot = wrongSlot(state.timelines[activeId], date)
+        if (slot === undefined) throw noSlot()
+        play({ type: 'place', by: activeId, slot }, 'scores')
+        for (;;) {
+            const current = playing(state, 'scores')
+            if (current.step !== 'stealing') throw new Error('The misplaced card is not stolen.')
+            const timeline = state.timelines[current.stealerId]
+            const slot =
+                current.stealerId === stealer
+                    ? correctSlot(timeline, date)
+                    : wrongSlot(timeline, date)
+            if (slot === undefined) throw noSlot()
+            play({ type: 'steal', by: current.stealerId, slot }, 'scores')
+            if (current.stealerId === stealer) return
+        }
+    }
+
+    const choice = step === 'readersChoice' || step === 'freeChoice' ? step : null
+    const chosen = activePlayer === null ? null : ids[activePlayer - 1]
+
+    // Scores come from real turns. A first round gives each player theirs up to one below the
+    // target, since a round can't end with anyone at it; the round the moment is in gives the
+    // rest. A player who has had their turn in it scores the rest in that turn. One still to
+    // play can only get there by stealing: a point from each earlier turn of a player with
+    // nothing more to score, who misplaces their card.
+    const turns = new Map<string, () => void>()
+    if (scores !== null) {
+        const round = startingFrom(state.seating, state.startingPlayerId!)
+        const base = scores.map((n) => Math.min(n, target - 1))
+        if (base.some((n) => n > 0)) {
+            for (const id of round) {
+                const points = base[ids.indexOf(id)]
+                if (points > 0) scoringTurn(points)
+                else turnPlayed('scores')
+            }
+        }
+        const pointsThisRound = (id: string) => scores[ids.indexOf(id)] - base[ids.indexOf(id)]
+        if (ids.some((id) => pointsThisRound(id) > 0) && chosen === null) {
+            throw new ScenarioError(
+                'scores',
+                'nobody is at the target when a round opens; name an active player later in it',
+            )
+        }
+        const played = chosen === null ? [] : round.slice(0, round.indexOf(chosen))
+        const stealers = round
+            .filter((id) => !played.includes(id))
+            .flatMap((id) => Array.from({ length: pointsThisRound(id) }, () => id))
+        const stolenFrom = played.filter((id) => pointsThisRound(id) === 0)
+        if (stealers.length > stolenFrom.length) {
+            throw new ScenarioError(
+                'scores',
+                `players still to play this round need ${stealers.length} steals to be at or above ` +
+                    `the target, and the turns before theirs from the starting player give ` +
+                    `${stolenFrom.length}`,
+            )
+        }
+        for (const id of played) {
+            if (pointsThisRound(id) > 0) turns.set(id, () => scoringTurn(pointsThisRound(id)))
+        }
+        stealers.forEach((stealer, i) => turns.set(stolenFrom[i], () => stolenTurn(stealer)))
+    }
+
     // Real turns until it's the chosen player's, with their unlocked cards played, drawing the
     // chosen choice, or with a card they can misplace. A turn that doesn't get there is played
-    // out and the table goes round again.
-    const choice = step === 'readersChoice' || step === 'freeChoice' ? step : null
-    const target = activePlayer === null ? null : ids[activePlayer - 1]
+    // out and the table goes round again; with turns that score on the way, the round is played
+    // again from its start a round later, so they still come in the round the moment is in.
     const field = choice === null ? 'activePlayer' : 'step'
     // Correct plays before the one the recipe stops in; at the lock-in choice, that one counts.
     const earlier = Math.max(0, (unlocked ?? 0) - (step === 'deciding' ? 1 : 0))
+    let roundStart = state
     for (;;) {
         const { activeId } = playing(state, field)
-        if (target !== null && activeId !== target) {
-            turnPlayed(field)
+        if (chosen !== null && activeId !== chosen) {
+            const turn = turns.get(activeId)
+            if (turn) turn()
+            else turnPlayed(field)
             continue
         }
         for (let i = 0; i < earlier; i++) {
-            const { cardId } = dealt('unlocked')
-            const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
-            play({ type: 'place', by: activeId, slot }, 'unlocked')
+            correctPlay('unlocked')
             play({ type: 'continue', by: activeId }, 'unlocked')
         }
         if (choice !== null) {
@@ -254,7 +373,13 @@ export function buildScenario(recipe: Recipe): Scenario {
                 break
             }
         }
-        turnPlayed(field)
+        if (turns.size === 0) {
+            turnPlayed(field)
+            continue
+        }
+        state = roundStart
+        for (let i = 0; i < players; i++) turnPlayed(field)
+        roundStart = state
     }
 
     if (step === 'placing' || step === 'deciding') {
@@ -263,6 +388,17 @@ export function buildScenario(recipe: Recipe): Scenario {
             const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
             play({ type: 'place', by: activeId, slot }, 'step')
         }
+    }
+
+    if (scores !== null) {
+        ids.forEach((id, i) => {
+            if (score(state, id) !== scores[i]) {
+                throw new ScenarioError(
+                    'seed',
+                    `player ${i + 1} has ${score(state, id)}, not ${scores[i]}; try another seed`,
+                )
+            }
+        })
     }
 
     for (const helper of helpers) {

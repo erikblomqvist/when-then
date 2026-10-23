@@ -45,6 +45,7 @@ const refusals = {
     continue_unavailable: 'Continue comes only after a correct play.',
     not_stealing: 'No misplaced card is waiting to be stolen.',
     not_your_steal: 'Only the current stealer can steal.',
+    game_over: 'The game is over.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */
