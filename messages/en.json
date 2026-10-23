@@ -31,7 +31,7 @@
     "back_home": "Back to the start",
     "refusal_not_host": "Only the host can do that.",
     "refusal_no_player": "That player has already left.",
-    "refusal_host_cannot_leave": "The host can't leave the lobby.",
+    "refusal_host_cannot_leave": "The host can't leave or be removed.",
     "refusal_removed": "The host removed you from this game.",
     "removed_join_again": "Join again if that was a mistake.",
     "change_player": "Change name or icon",

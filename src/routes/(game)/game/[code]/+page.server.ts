@@ -69,11 +69,11 @@ export const actions: Actions = {
         redirect(303, '/')
     },
 
-    // Host removes from lobby: the player named in the form.
+    // Host removes from lobby: the player in the form's seat.
     remove: async ({ request, locals, params }) => {
-        const name = field(await request.formData(), 'name')
+        const seatId = field(await request.formData(), 'seat')
         return asPlayer(locals, (userId) =>
-            removePlayer(supabaseService(), { userId, code: params.code, name }),
+            removePlayer(supabaseService(), { userId, code: params.code, seatId }),
         )
     },
 }

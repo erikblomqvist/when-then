@@ -250,6 +250,7 @@ export type Database = {
                     is_host: boolean
                     joined_at: string
                     name: string
+                    seat_id: string
                     user_id: string
                 }
                 Insert: {
@@ -258,6 +259,7 @@ export type Database = {
                     is_host?: boolean
                     joined_at?: string
                     name: string
+                    seat_id?: string
                     user_id: string
                 }
                 Update: {
@@ -266,6 +268,7 @@ export type Database = {
                     is_host?: boolean
                     joined_at?: string
                     name?: string
+                    seat_id?: string
                     user_id?: string
                 }
                 Relationships: [
@@ -587,10 +590,10 @@ export type Database = {
                 Returns: number
             }
             remove_player: {
-                Args: { code: string; host: string; player_name: string }
+                Args: { code: string; host: string; seat: string }
                 Returns: {
                     game_version: number
-                    removed_from_game: string
+                    removed_game: string
                 }[]
             }
             reorder_categories: {

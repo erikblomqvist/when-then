@@ -77,7 +77,7 @@ select throws_ok(
     'a player cannot call leave_game'
 );
 select throws_ok(
-    $$ select public.remove_player('00000000-0000-0000-0000-0000000064a1', 'QQQQ', 'Bo') $$,
+    $$ select public.remove_player('00000000-0000-0000-0000-0000000064a1', 'QQQQ', gen_random_uuid()) $$,
     '42501',
     null,
     'a player cannot call remove_player'

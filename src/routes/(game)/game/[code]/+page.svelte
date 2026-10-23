@@ -78,6 +78,9 @@
             !(form.refusal === 'name_taken' && nameTaken) &&
             refusalMessage(form.refusal),
     )
+    // Only the change form sends values back: its refusals show in the form, the rest below
+    // the list.
+    const changeRefused = $derived(form?.values !== undefined)
 
     let busy = $state(false)
     const submitting: SubmitFunction = ({ action }) => {
@@ -125,7 +128,7 @@
         <Notepad
             title={m.players()}
             meta={m.players_count({ count: lobby.players.length, max: maxPlayers })}>
-            {#each lobby.players as player, i (player.name)}
+            {#each lobby.players as player, i (player.seatId)}
                 <PlayerRow
                     number={i + 1}
                     name={player.name}
@@ -139,8 +142,8 @@
                                 use:enhance={submitting}>
                                 <input
                                     type="hidden"
-                                    name="name"
-                                    value={player.name} />
+                                    name="seat"
+                                    value={player.seatId} />
                                 <IconButton
                                     type="submit"
                                     label={m.remove_player({ name: player.name })}
@@ -154,7 +157,7 @@
             {/each}
         </Notepad>
 
-        {#if error && !editing}
+        {#if error && !(editing && changeRefused)}
             <p
                 class="error on-table"
                 role="alert">
@@ -196,7 +199,7 @@
                         labels={playerIconLabels()}
                         taken={others.map((player) => player.icon)}
                         bind:value={icon} />
-                    {#if error}
+                    {#if error && changeRefused}
                         <p
                             class="error"
                             role="alert">

@@ -3,6 +3,12 @@
 -- until they do, their phone is told they were removed. Each command locks the game row, like
 -- `join_game`, and bumps the version for the nudge that follows.
 
+-- Names a seat to the phones without giving away its user. Removing goes by seat, not by name:
+-- names change, so a host looking at a stale list could otherwise remove someone else. Joining
+-- again makes a new seat.
+alter table public.game_players
+    add column seat_id uuid not null default gen_random_uuid() unique;
+
 -- Players the host removed from a game's lobby. Joining again clears the row; leaving never
 -- writes one, so the phone can tell a removal from a leave.
 create table public.game_removals (
@@ -114,7 +120,7 @@ begin
         raise exception 'no_seat' using detail = 'You have no seat in that game.';
     end if;
     if seat.is_host then
-        raise exception 'host_cannot_leave' using detail = 'The host can''t leave the lobby.';
+        raise exception 'host_cannot_leave' using detail = 'The host can''t leave or be removed.';
     end if;
 
     delete from public.game_players p where p.game_id = game.id and p.user_id = player;
@@ -129,12 +135,12 @@ $$;
 revoke execute on function public.leave_game(uuid, text) from public, anon, authenticated;
 grant execute on function public.leave_game(uuid, text) to service_role;
 
--- Remove player: the host `host` takes the player named `player_name` (ignoring case) out of
--- the lobby of the game with `code`, records the removal, and returns the game and its new
--- version. Refuses with `not_found`, `game_started`, `not_host`, `no_player` or
--- `host_cannot_leave` (the host naming themselves).
-create function public.remove_player(host uuid, code text, player_name text)
-returns table (removed_from_game uuid, game_version integer)
+-- Remove player: the host `host` takes the player in `seat` out of the lobby of the game with
+-- `code`, records the removal, and returns the game and its new version. Refuses with
+-- `not_found`, `game_started`, `not_host`, `no_player` (the seat is gone) or
+-- `host_cannot_leave` (the host's own seat).
+create function public.remove_player(host uuid, code text, seat uuid)
+returns table (removed_game uuid, game_version integer)
 language plpgsql
 security definer
 set search_path = ''
@@ -152,12 +158,12 @@ begin
 
     select * into removed
     from public.game_players p
-    where p.game_id = game.id and lower(p.name) = lower(player_name);
+    where p.game_id = game.id and p.seat_id = seat;
     if not found then
-        raise exception 'no_player' using detail = 'No player in the game has that name.';
+        raise exception 'no_player' using detail = 'That player has already left.';
     end if;
     if removed.is_host then
-        raise exception 'host_cannot_leave' using detail = 'The host can''t leave the lobby.';
+        raise exception 'host_cannot_leave' using detail = 'The host can''t leave or be removed.';
     end if;
 
     delete from public.game_players p
@@ -173,9 +179,9 @@ begin
 end;
 $$;
 
-revoke execute on function public.remove_player(uuid, text, text)
+revoke execute on function public.remove_player(uuid, text, uuid)
     from public, anon, authenticated;
-grant execute on function public.remove_player(uuid, text, text) to service_role;
+grant execute on function public.remove_player(uuid, text, uuid) to service_role;
 
 -- Join game, as in `20261023006500_join_game.sql`, now also clearing a removal: a removed
 -- player who joins again is simply a player.

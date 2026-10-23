@@ -31,7 +31,7 @@
     "back_home": "Tilbake til start",
     "refusal_not_host": "Bare verten kan gjøre det.",
     "refusal_no_player": "Den spilleren har allerede gått.",
-    "refusal_host_cannot_leave": "Verten kan ikke forlate lobbyen.",
+    "refusal_host_cannot_leave": "Verten kan ikke forlate eller fjernes.",
     "refusal_removed": "Verten fjernet deg fra spillet.",
     "removed_join_again": "Bli med igjen hvis det var en feil.",
     "change_player": "Bytt navn eller ikon",

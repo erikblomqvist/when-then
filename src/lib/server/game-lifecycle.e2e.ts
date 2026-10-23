@@ -55,7 +55,9 @@ test('creating a game seats the host in its lobby with their name and icon', asy
         targetScore: 10,
         exactYear: false,
         cardLanguage: 'sv',
-        players: [{ name: 'Astrid', icon: 'cat', isHost: true, isYou: true }],
+        players: [
+            { seatId: expect.any(String), name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
+        ],
     })
 })
 
@@ -161,7 +163,7 @@ test('a code is unique only among games that have not ended', async () => {
     )
     expect(again.code).toBe(code)
     expect((await getLobby(db, b, code)).players).toEqual([
-        { name: 'B', icon: 'sun', isHost: true, isYou: true },
+        { seatId: expect.any(String), name: 'B', icon: 'sun', isHost: true, isYou: true },
     ])
 })
 
@@ -180,8 +182,8 @@ test('a player joins by code in any case and everyone sees them in the lobby', a
 
     expect(joined).toEqual({ code })
     expect((await getLobby(db, host, code)).players).toEqual([
-        { name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
-        { name: 'Bo', icon: 'dog', isHost: false, isYou: false },
+        { seatId: expect.any(String), name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
+        { seatId: expect.any(String), name: 'Bo', icon: 'dog', isHost: false, isYou: false },
     ])
     expect((await getLobby(db, bo, code)).players[1]).toMatchObject({ name: 'Bo', isYou: true })
 })
@@ -400,8 +402,8 @@ test('a player changes their name and icon, and everyone sees it in a new versio
 
     const after = await getLobby(db, host, code)
     expect(after.players).toEqual([
-        { name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
-        { name: 'Bosse', icon: 'fish', isHost: false, isYou: false },
+        { seatId: expect.any(String), name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
+        { seatId: expect.any(String), name: 'Bosse', icon: 'fish', isHost: false, isYou: false },
     ])
     expect(after.version).toBeGreaterThan(before.version)
 })
@@ -467,11 +469,19 @@ test('the host can’t leave the lobby, nor can anyone once the game has started
     })
 })
 
+/** The seat of the player called `name`, as the host's lobby shows it. */
+const seatOf = async (host: string, code: string, name: string) =>
+    (await getLobby(db, host, code)).players.find((player) => player.name === name)!.seatId
+
 test('the host removes a player, whose phone is told, and who can join again', async () => {
     const { host, bo, code } = await lobbyWithBo()
     const before = await getLobby(db, host, code)
 
-    await removePlayer(db, { userId: host, code: code.toLowerCase(), name: 'bo' })
+    await removePlayer(db, {
+        userId: host,
+        code: code.toLowerCase(),
+        seatId: await seatOf(host, code, 'Bo'),
+    })
 
     const after = await getLobby(db, host, code)
     expect(after.players.map((player) => player.name)).toEqual(['Astrid'])
@@ -488,20 +498,36 @@ test('the host removes a player, whose phone is told, and who can join again', a
 test('only the host can remove a player, and not themselves', async () => {
     const { host, bo, code } = await lobbyWithBo()
     await joinGame(db, { userId: await newPlayer(), code, name: 'Caro', icon: 'fish' })
-    const remove = (userId: string, name: string) => removePlayer(db, { userId, code, name })
+    const caro = await seatOf(host, code, 'Caro')
+    const remove = (userId: string, seatId: string) => removePlayer(db, { userId, code, seatId })
 
-    await expect(remove(bo, 'Caro')).rejects.toMatchObject({ code: 'not_host' })
-    await expect(remove(await newPlayer(), 'Caro')).rejects.toMatchObject({ code: 'not_host' })
-    await expect(remove(host, 'Astrid')).rejects.toMatchObject({ code: 'host_cannot_leave' })
-    await expect(remove(host, 'Dag')).rejects.toMatchObject({ code: 'no_player' })
+    await expect(remove(bo, caro)).rejects.toMatchObject({ code: 'not_host' })
+    await expect(remove(await newPlayer(), caro)).rejects.toMatchObject({ code: 'not_host' })
+    await expect(remove(host, await seatOf(host, code, 'Astrid'))).rejects.toMatchObject({
+        code: 'host_cannot_leave',
+    })
+    await expect(remove(host, 'not-a-seat')).rejects.toMatchObject({ code: 'no_player' })
     expect((await getLobby(db, host, code)).players).toHaveLength(3)
+})
+
+test('a removal from a stale list never takes out whoever has the name now', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    const staleSeat = await seatOf(host, code, 'Bo')
+    await leaveGame(db, { userId: bo, code })
+    await joinGame(db, { userId: await newPlayer(), code, name: 'Bo', icon: 'fish' })
+
+    await expect(removePlayer(db, { userId: host, code, seatId: staleSeat })).rejects.toMatchObject(
+        { code: 'no_player' },
+    )
+    expect((await getLobby(db, host, code)).players[1]).toMatchObject({ name: 'Bo', icon: 'fish' })
 })
 
 test('nobody is removed from the lobby once the game has started', async () => {
     const { host, code } = await lobbyWithBo()
+    const seatId = await seatOf(host, code, 'Bo')
     await markStarted(code)
 
-    await expect(removePlayer(db, { userId: host, code, name: 'Bo' })).rejects.toMatchObject({
+    await expect(removePlayer(db, { userId: host, code, seatId })).rejects.toMatchObject({
         code: 'game_started',
     })
 })
