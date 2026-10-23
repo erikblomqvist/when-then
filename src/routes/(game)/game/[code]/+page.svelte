@@ -1,4 +1,6 @@
 <script lang="ts">
+    import MinusIcon from '@lucide/svelte/icons/minus'
+    import PlusIcon from '@lucide/svelte/icons/plus'
     import XIcon from '@lucide/svelte/icons/x'
     import { tick } from 'svelte'
     import { enhance, type SubmitFunction } from '$app/forms'
@@ -98,6 +100,14 @@
     async function saveSettings() {
         await tick()
         settingsForm?.requestSubmit()
+    }
+    // The stepper: one up or down, kept in range, saved once the taps pause.
+    let stepTimer: ReturnType<typeof setTimeout> | undefined
+    function stepScore(by: number) {
+        const current = Number.isFinite(targetScore) ? Number(targetScore) : lobby.targetScore
+        targetScore = Math.min(maxTargetScore, Math.max(minTargetScore, current + by))
+        clearTimeout(stepTimer)
+        stepTimer = setTimeout(() => void saveSettings(), 400)
     }
     const savingSettings: SubmitFunction = () => {
         return async ({ result, update }) => {
@@ -203,18 +213,34 @@
                         <label
                             class="ui-caption"
                             for="target-score">{m.target_score()}</label>
-                        <Input
-                            id="target-score"
-                            class="score"
-                            type="number"
-                            name="targetScore"
-                            inputmode="numeric"
-                            min={minTargetScore}
-                            max={maxTargetScore}
-                            step="1"
-                            required
-                            aria-describedby="target-score-hint"
-                            bind:value={targetScore} />
+                        <div class="stepper">
+                            <IconButton
+                                label={m.target_score_down()}
+                                aria-controls="target-score"
+                                disabled={targetScore <= minTargetScore}
+                                onclick={() => stepScore(-1)}>
+                                <MinusIcon />
+                            </IconButton>
+                            <Input
+                                id="target-score"
+                                class="score"
+                                type="number"
+                                name="targetScore"
+                                inputmode="numeric"
+                                min={minTargetScore}
+                                max={maxTargetScore}
+                                step="1"
+                                required
+                                aria-describedby="target-score-hint"
+                                bind:value={targetScore} />
+                            <IconButton
+                                label={m.target_score_up()}
+                                aria-controls="target-score"
+                                disabled={targetScore >= maxTargetScore}
+                                onclick={() => stepScore(1)}>
+                                <PlusIcon />
+                            </IconButton>
+                        </div>
                         <span
                             id="target-score-hint"
                             class="ui-caption"
@@ -400,6 +426,11 @@
     }
     .settings-form :global(.ui-tabs) {
         justify-self: start;
+    }
+    .stepper {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
     }
     .settings-form :global(.score) {
         width: 6ch;

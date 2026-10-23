@@ -131,12 +131,22 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     const boSetting = (name: string) =>
         bo.locator('.settings-list > div').filter({ has: bo.locator('dt', { hasText: name }) })
     await expect(boSetting('Target score')).toContainText('10')
-    await expect(bo.getByLabel('Target score')).toHaveCount(0)
+    await expect(bo.getByLabel('Target score', { exact: true })).toHaveCount(0)
     await expect(bo.getByRole('tab')).toHaveCount(0)
     await expect(bo.getByText('Only the host can change these.')).toBeVisible()
 
-    await host.getByLabel('Target score').fill('15')
-    await host.getByLabel('Target score').press('Tab')
+    await host.getByLabel('Target score', { exact: true }).fill('15')
+    await host.getByLabel('Target score', { exact: true }).press('Tab')
+    await expect(boSetting('Target score')).toContainText('15')
+    // The stepper: + and − change it by one, saved once the taps pause.
+    const up = host.getByRole('button', { name: 'Raise the target score' })
+    const down = host.getByRole('button', { name: 'Lower the target score' })
+    await up.click()
+    await up.click()
+    await expect(host.getByLabel('Target score', { exact: true })).toHaveValue('17')
+    await expect(boSetting('Target score')).toContainText('17')
+    await down.click()
+    await down.click()
     await expect(boSetting('Target score')).toContainText('15')
     await host
         .getByRole('tablist', { name: 'Exact-year house rule' })
@@ -147,15 +157,15 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await expect(boSetting('Card language')).toContainText('Swedish')
     await expect(caro.locator('.settings-list')).toContainText('15')
     // A target score outside 3–30 is refused, and the field goes back to the saved one.
-    await host.getByLabel('Target score').fill('31')
-    await host.getByLabel('Target score').press('Tab')
+    await host.getByLabel('Target score', { exact: true }).fill('31')
+    await host.getByLabel('Target score', { exact: true }).press('Tab')
     await expect(host.getByText('Pick a target score from 3 to 30.')).toBeVisible()
-    await expect(host.getByLabel('Target score')).toHaveValue('15')
+    await expect(host.getByLabel('Target score', { exact: true })).toHaveValue('15')
     await expect(boSetting('Target score')).toContainText('15')
 
     // The settings stay after a reload.
     await reloadHydrated(host)
-    await expect(host.getByLabel('Target score')).toHaveValue('15')
+    await expect(host.getByLabel('Target score', { exact: true })).toHaveValue('15')
     await expect(hostLanguage.getByRole('tab', { name: 'Swedish' })).toHaveAttribute(
         'aria-selected',
         'true',

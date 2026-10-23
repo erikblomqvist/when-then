@@ -45,6 +45,8 @@
     "settings": "Inställningar",
     "settings_host_only": "Bara värden kan ändra dem.",
     "target_score": "Målpoäng",
+    "target_score_down": "Sänk målpoängen",
+    "target_score_up": "Höj målpoängen",
     "target_score_hint": "Den som når dit först vinner ({min}–{max}).",
     "exact_year_rule": "Husregel: exakt år",
     "setting_off": "Av",
