@@ -11,7 +11,7 @@
       card or a draft, posts to the page's `?/saveAndPublish` (it saves and publishes); it goes
       back to the card list.
     - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
-      actions (Publish, Archive, Delete draft) can be forms of their own; it gets `dirty` so
+      actions (Publish, Archive, Delete card) can be forms of their own; it gets `dirty` so
       they can hold off while there are unsaved changes. History goes there too.
     - Category: with `canCreateCategory`, the select's "New category…" opens
       `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).

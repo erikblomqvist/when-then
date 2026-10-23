@@ -451,7 +451,7 @@ export type Database = {
                 Args: { actor: string; category_id: string }
                 Returns: undefined
             }
-            delete_draft: {
+            delete_card: {
                 Args: { actor: string; card_id: string }
                 Returns: undefined
             }

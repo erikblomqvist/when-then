@@ -36,7 +36,7 @@ test('the right column’s buttons are not stretched to its width', async ({ pag
     await gotoHydrated(page, `/admin/cards/${id}`)
     const sidebar = page.getByRole('complementary', { name: 'Card' })
     const width = (await sidebar.boundingBox())?.width ?? 0
-    for (const name of ['Save', 'Publish', 'Delete draft', 'Mark date verified']) {
+    for (const name of ['Save', 'Publish', 'Delete card', 'Mark date verified']) {
         const button = sidebar.getByRole('button', { name, exact: true })
         expect((await button.boundingBox())?.width ?? width).toBeLessThan(width - 1)
     }

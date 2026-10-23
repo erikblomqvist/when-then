@@ -111,10 +111,10 @@
         </div>
     {/if}
 
-    {#if card.status === 'draft' && role === 'admin'}
-        {@render action('deleteDraft', 'Delete draft', {
+    {#if role === 'admin'}
+        {@render action('deleteCard', 'Delete card', {
             variant: 'destructive',
-            confirm: 'Delete this draft for good? This cannot be undone.',
+            confirm: 'Delete this card for good? This cannot be undone.',
         })}
     {/if}
 

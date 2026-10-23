@@ -8,7 +8,7 @@ import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import {
     archiveCard,
     clearVerification,
-    deleteDraft,
+    deleteCard,
     markVerified,
     publishCard,
     unarchiveCard,
@@ -99,11 +99,11 @@ test('only the listed transitions are allowed', async () => {
     })
 })
 
-test('an admin deletes a never-published draft, and the deletion is audited', async () => {
+test('an admin deletes a card, and the deletion is audited', async () => {
     const admin = (await newPerson('admin')).id
     const id = await newCard(admin)
 
-    await deleteDraft(db, admin, id)
+    await deleteCard(db, admin, id)
 
     expect(await getCard(db, id)).toBeNull()
     const history = await cardHistory(db, id)
@@ -114,18 +114,23 @@ test('an admin deletes a never-published draft, and the deletion is audited', as
     expect(deleted).toContainEqual(['card_translation', admin])
 })
 
-test('editors cannot delete drafts, and nobody deletes a card once published', async () => {
+test('editors cannot delete cards; admins delete published and archived ones too', async () => {
     const editor = (await newPerson('editor')).id
     const admin = (await newPerson('admin')).id
     const draft = await newCard(editor)
-    await expect(deleteDraft(db, editor, draft)).rejects.toMatchObject({ code: 'not_admin' })
+    await expect(deleteCard(db, editor, draft)).rejects.toMatchObject({ code: 'not_admin' })
+    expect(await getCard(db, draft)).not.toBeNull()
 
     const published = await newCard(editor)
     await publishCard(db, editor, published)
-    await expect(deleteDraft(db, admin, published)).rejects.toMatchObject({ code: 'not_draft' })
-    await archiveCard(db, editor, published)
-    await expect(deleteDraft(db, admin, published)).rejects.toMatchObject({ code: 'not_draft' })
-    expect(await getCard(db, published)).not.toBeNull()
+    await deleteCard(db, admin, published)
+    expect(await getCard(db, published)).toBeNull()
+
+    const archived = await newCard(editor)
+    await publishCard(db, editor, archived)
+    await archiveCard(db, editor, archived)
+    await deleteCard(db, admin, archived)
+    expect(await getCard(db, archived)).toBeNull()
 })
 
 test('marking the date verified records who and when; clearing it is audited too', async () => {
