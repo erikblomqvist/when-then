@@ -48,8 +48,11 @@ export type PhotoCandidate = {
 /** The most candidates one photo gives, so the review list stays manageable. */
 export const photoCandidateLimit = 15
 
-/** The most photos read at once (each is its own AI request, all in one upload). */
-export const photoLimit = 5
+/**
+ * The most photos read at once (each is its own AI request, all in one upload). Even, so the
+ * two sides of five double-sided cards fit.
+ */
+export const photoLimit = 10
 
 /** The most drafts saved at once: a few readings' worth. */
 export const photoDraftLimit = 100

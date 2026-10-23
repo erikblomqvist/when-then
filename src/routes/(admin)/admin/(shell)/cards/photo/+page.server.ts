@@ -16,7 +16,7 @@ import { findNearbyCards, importPhotoCards, PhotoImportError } from '#lib/server
 import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
 
-// "Add from photo" (#60), admin only like CSV import. Read sends up to five photos to the AI,
+// "Add from photo" (#60), admin only like CSV import. Read sends up to ten photos to the AI,
 // one request each side by side, and returns their candidate cards (nothing saved, the photos
 // not kept); the page edits them and Save posts the ticked ones back as JSON, checked again
 // here before they are created as drafts. A photo that can't be read is reported while the

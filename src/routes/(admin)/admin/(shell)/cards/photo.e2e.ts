@@ -156,6 +156,25 @@ test.describe('on a computer', () => {
     })
 })
 
+test('ten photos can be read at once, the two sides of five cards', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/photo')
+    const photos = Array.from({ length: 11 }, (_, index) => photo(`side-${index + 1}.png`))
+    await page.getByLabel('Take photo').setInputFiles(photos.slice(0, 1))
+    for (const one of photos.slice(1)) await page.getByLabel('Add more photos').setInputFiles(one)
+
+    // The eleventh is left out, and the camera can't add more until these are read.
+    await expect(page.getByRole('list', { name: 'Photos to read' }).getByRole('img')).toHaveCount(
+        10,
+    )
+    await expect(page.getByText('10 photos is the most at a time.')).toBeVisible()
+    await expect(page.getByLabel('Add more photos')).toBeDisabled()
+
+    await page.getByRole('button', { name: 'Read 10 photos' }).click()
+    await expect(page.getByTestId('candidate')).toHaveCount(30)
+    await expect(page.getByTestId('photo-summary')).toContainText('Found 30 cards in 10 photos')
+})
+
 test('an unticked card is left out', async ({ page }) => {
     await signInAs(page, 'admin')
     await gotoHydrated(page, '/admin/cards/photo')

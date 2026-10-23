@@ -28,7 +28,7 @@
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import NewCategoryDialog from '#lib/admin/categories/NewCategoryDialog.svelte'
     import { takeHandedPhotos, usesCamera } from '#lib/admin/cards/photo-handoff.js'
-    import { shrinkPhoto } from '#lib/admin/cards/shrink-photo.js'
+    import { shrinkPhotos } from '#lib/admin/cards/shrink-photo.js'
     import { cardLocales, type CardLocale } from '#lib/cards/card.js'
     import { decadeLabel, decadeOf, formatCardDate, monthNames } from '#lib/cards/date-parts.js'
     import {
@@ -158,7 +158,8 @@
         tickedDrafts.map(photoDraftErrors).findIndex((errors) => errors.length > 0),
     )
 
-    // Photos wait as thumbnails until "Read"; then they are shrunk and sent together.
+    // Photos wait as thumbnails until "Read"; then they are shrunk to fit one upload and sent
+    // together.
     type Waiting = { id: number; file: File; url: string }
     let waiting: Waiting[] = $state([])
     let nextPhoto = 0
@@ -199,7 +200,7 @@
         if (sent.length === 0) return cancel()
         reading = sent.length
         formData.delete('photo')
-        for (const photo of await Promise.all(sent.map(({ file }) => shrinkPhoto(file)))) {
+        for (const photo of await shrinkPhotos(sent.map(({ file }) => file))) {
             formData.append('photo', photo)
         }
         return async ({ result, update }) => {
