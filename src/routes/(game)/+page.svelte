@@ -1,6 +1,9 @@
 <script lang="ts">
     import { Button, Card, CodeInput, sampleCategories, Surface, Text } from '#lib'
     import { m } from '#lib/paraglide/messages.js'
+    import type { PageProps } from './$types'
+
+    let { data }: PageProps = $props()
 </script>
 
 <Surface
@@ -20,8 +23,15 @@
             text="Columbus reaches America"
             state="locked" />
     </div>
+    <!-- Find my seat: the way back while the phone's seat is in a game that hasn't finished. -->
+    {#if data.seat}
+        <Button
+            size="lg"
+            href="/game/{data.seat.code}">{m.back_to_game({ code: data.seat.code })}</Button>
+    {/if}
     <Button
         size="lg"
+        variant={data.seat ? 'ghost' : 'primary'}
         href="/new">{m.create_game()}</Button>
     <!-- A plain GET form, so a typed code joins even before the page hydrates. -->
     <form

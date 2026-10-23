@@ -1,6 +1,6 @@
 // The game lifecycle service against the local database (run through with-db.sh / CI's
 // stack): creating and joining a game and opening its lobby, changing a name or icon, leaving
-// and removing, the host's settings, the code rules and the refusals.
+// and removing, the host's settings, finding your seat again, the code rules and the refusals.
 
 import { expect, test } from '@playwright/test'
 import { isGameCode, randomGameCode } from '../game/game-code'
@@ -10,6 +10,7 @@ import { localPublicClient, localServiceClient, newPerson } from '../testing/e2e
 import {
     changePlayer,
     createGame,
+    findMySeat,
     getJoinStep,
     getLobby,
     joinGame,
@@ -590,4 +591,61 @@ test('only the host changes the settings, and only before the game starts', asyn
     await markStarted(code)
     await expect(update(host)).rejects.toMatchObject({ code: 'game_started' })
     expect((await getLobby(db, host, code)).targetScore).toBe(10)
+})
+
+// Find my seat ---------------------------------------------------------------------------
+
+test('a player finds their seat again on every reload, before and after Start', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    const { gameId } = await getLobby(db, host, code)
+    const hostSeat = { gameId, code, seatId: await seatOf(host, code, 'Astrid') }
+    const boSeat = { gameId, code, seatId: await seatOf(host, code, 'Bo') }
+
+    expect(await findMySeat(db, host)).toEqual(hostSeat)
+    expect(await findMySeat(db, bo)).toEqual(boSeat)
+    expect(await findMySeat(db, bo)).toEqual(boSeat)
+
+    await markStarted(code)
+    expect(await findMySeat(db, bo)).toEqual(boSeat)
+})
+
+test('find my seat returns nothing without a seat in a game that hasn’t finished', async () => {
+    const { bo, code } = await lobbyWithBo()
+
+    expect(await findMySeat(db, await newPlayer())).toBeNull()
+
+    const ended = await db
+        .from('games')
+        .update({ ended_at: new Date().toISOString() })
+        .eq('code', code)
+        .is('ended_at', null)
+    expect(ended.error).toBeNull()
+    expect(await findMySeat(db, bo)).toBeNull()
+})
+
+test('find my seat returns nothing once the player has left the lobby', async () => {
+    const { bo, code } = await lobbyWithBo()
+
+    await leaveGame(db, { userId: bo, code })
+
+    expect(await findMySeat(db, bo)).toBeNull()
+})
+
+test('find my seat returns nothing for a player the host removed, until they join again', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+
+    await removePlayer(db, { userId: host, code, seatId: await seatOf(host, code, 'Bo') })
+    expect(await findMySeat(db, bo)).toBeNull()
+
+    await joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })
+    expect(await findMySeat(db, bo)).toMatchObject({ code })
+})
+
+test('a player seated in two games that haven’t finished finds the one they joined last', async () => {
+    const { bo } = await lobbyWithBo()
+    const { code } = await newLobby()
+
+    await joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })
+
+    expect(await findMySeat(db, bo)).toMatchObject({ code })
 })

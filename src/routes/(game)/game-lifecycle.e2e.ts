@@ -1,8 +1,10 @@
 // The game lifecycle, played through on phones (spec #59, seam 3): one flow that grows with
 // each lifecycle ticket. So far: the host creates a game and lands in its lobby, one player
 // joins by link and another by the code typed on the home page, and every lobby updates live.
-// The host changes the settings, which the others see live. In the lobby a player changes their
-// name and icon, another leaves, and the host removes a player, who joins again.
+// The host changes the settings, which the others see live. A player finds their seat again from
+// the home page, the join link and a switch of app language, with no install prompt meanwhile.
+// In the lobby a player changes their name and icon, another leaves, and the host removes a
+// player, who joins again.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -159,6 +161,45 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
         'true',
     )
 
+    // Find my seat: from the home page Bo gets back to the game, and the join link goes straight
+    // to the seat. A phone without a seat sees no way back.
+    await gotoHydrated(bo, '/')
+    await bo.getByRole('link', { name: `Back to game ${code}` }).click()
+    await bo.waitForURL(new RegExp(`/game/${code}$`))
+    await gotoHydrated(bo, joinUrl)
+    expect(new URL(bo.url()).pathname).toBe(`/game/${code}`)
+    await expect(boPlayers.nth(1)).toContainText('You')
+    await gotoHydrated(stranger, '/')
+    await expect(stranger.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
+
+    // No install prompt while the phone has a seat; without one the browser may offer it.
+    const installPromptHeldBack = (page: typeof bo) =>
+        page.evaluate(() => {
+            const prompt = new Event('beforeinstallprompt', { cancelable: true })
+            window.dispatchEvent(prompt)
+            return prompt.defaultPrevented
+        })
+    expect(await installPromptHeldBack(bo)).toBe(true)
+    expect(await installPromptHeldBack(stranger)).toBe(false)
+
+    // Bo switches the app language from the corner menu, and the reload lands in the same seat.
+    await bo.getByRole('button', { name: 'Menu' }).click()
+    await bo.getByRole('button', { name: 'Svenska' }).click()
+    await expect(bo.locator('html')).toHaveAttribute('lang', 'sv')
+    await waitForHydration(bo)
+    expect(new URL(bo.url()).pathname).toBe(`/game/${code}`)
+    await expect(boPlayers.nth(1)).toContainText('Du')
+    await expect(bo.getByText('Spelare', { exact: true })).toBeVisible()
+    await bo.getByRole('button', { name: 'Meny' }).click()
+    await expect(bo.getByRole('button', { name: 'Svenska' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+    )
+    await bo.getByRole('button', { name: 'English' }).click()
+    await expect(bo.locator('html')).toHaveAttribute('lang', 'en')
+    await waitForHydration(bo)
+    await expect(boPlayers.nth(1)).toContainText('You')
+
     // Bo changes name and icon; a name someone else has is flagged, ignoring case.
     await expect(bo.getByRole('button', { name: /^Remove / })).toHaveCount(0)
     await bo.getByRole('button', { name: 'Change name or icon' }).click()
@@ -177,6 +218,7 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     // Caro leaves and lands on the home page; the others see Caro go.
     await caro.getByRole('button', { name: 'Leave game' }).click()
     await caro.waitForURL((url) => url.pathname === '/')
+    await expect(caro.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
     await expect(players).toHaveCount(2)
     await expect(boPlayers).toHaveCount(2)
 
@@ -186,7 +228,11 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await expect(players).toHaveCount(1)
     await bo.waitForURL(new RegExp(`/join/${code}$`))
     await expect(bo.getByText('The host removed you from this game.')).toBeVisible()
-    await waitForHydration(bo)
+    // Removed, Bo has no seat to find from the home page.
+    await gotoHydrated(bo, '/')
+    await expect(bo.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
+    await gotoHydrated(bo, joinUrl)
+    await expect(bo.getByText('The host removed you from this game.')).toBeVisible()
     await bo.getByLabel('Your name').fill('Bo')
     await bo.getByRole('radio', { name: 'Dog' }).check()
     await bo.getByRole('button', { name: 'Join game' }).click()
