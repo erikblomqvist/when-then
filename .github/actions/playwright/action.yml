@@ -14,7 +14,7 @@ runs:
           run: echo "playwright=$(vp exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
         # Both test runners launch Chromium headless, which only needs the smaller headless shell.
         - id: cache
-          uses: actions/cache@v4
+          uses: actions/cache@v6
           with:
               path: ~/.cache/ms-playwright
               key: playwright-${{ runner.os }}-${{ steps.version.outputs.playwright }}-chromium-shell

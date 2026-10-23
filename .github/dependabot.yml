@@ -1,0 +1,13 @@
+# Keeps the GitHub Actions in the workflows current, so an action built on a Node version
+# GitHub is retiring (as actions/cache@v4 and supabase/setup-cli@v1 were on Node 20) gets a
+# pull request to upgrade it instead of a warning in every run. Only the actions; npm
+# updates stay manual.
+version: 2
+updates:
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: monthly
+      groups:
+          actions:
+              patterns: ['*']

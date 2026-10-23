@@ -50,11 +50,11 @@ jobs:
             - uses: actions/checkout@v5
             # E2E signs in against a local Supabase stack: Postgres, Auth, PostgREST, and
             # Realtime for the game's nudges. Everything else is left out to keep the start quick.
-            - uses: supabase/setup-cli@v1
+            - uses: supabase/setup-cli@v3
               with:
                   version: 2.121.0
             # The native runtime's service archives, downloaded on its first start.
-            - uses: actions/cache@v4
+            - uses: actions/cache@v6
               with:
                   path: ~/.supabase/cache/stack
                   key: supabase-stack-${{ runner.os }}-2.121.0
