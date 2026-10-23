@@ -31,6 +31,10 @@ const refusals = {
     removed: 'The host removed you from the game.',
     invalid_target_score: `The target score is ${minTargetScore} to ${maxTargetScore}.`,
     invalid_card_language: 'Cards come in English, Swedish or Norwegian.',
+    not_your_turn: 'Only the active player can do that.',
+    not_placing: 'No card is waiting to be placed.',
+    invalid_slot: 'That is not a gap on the timeline.',
+    lock_in_unavailable: 'Lock in comes only after a correct play.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */

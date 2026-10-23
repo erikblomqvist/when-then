@@ -2,6 +2,8 @@
 // house rule and the card language. The database checks the same limits
 // (`20261023006400_lobby.sql`).
 
+/** The target score a new game starts with, as the database's column default. */
+export const defaultTargetScore = 10
 export const minTargetScore = 3
 export const maxTargetScore = 30
 

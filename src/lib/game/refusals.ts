@@ -1,5 +1,5 @@
-// Why the lifecycle service (`#lib/server/game-lifecycle.js`) refused a command, and the words
-// the phone shows for each reason, in the player's language.
+// Why the lifecycle service (`#lib/server/game-lifecycle.js`) or the game machine (`./machine`)
+// refused a command, and the words the phone shows for each reason, in the player's language.
 
 import { m } from '#lib/paraglide/messages.js'
 import { maxPlayers } from './player'
@@ -21,6 +21,10 @@ export type GameRefusalCode =
     | 'removed'
     | 'invalid_target_score'
     | 'invalid_card_language'
+    | 'not_your_turn'
+    | 'not_placing'
+    | 'invalid_slot'
+    | 'lock_in_unavailable'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -38,6 +42,10 @@ const words: Record<GameRefusalCode, () => string> = {
     invalid_target_score: () =>
         m.refusal_invalid_target_score({ min: minTargetScore, max: maxTargetScore }),
     invalid_card_language: m.refusal_invalid_card_language,
+    not_your_turn: m.refusal_not_your_turn,
+    not_placing: m.refusal_not_placing,
+    invalid_slot: m.refusal_invalid_slot,
+    lock_in_unavailable: m.refusal_lock_in_unavailable,
 }
 
 /** The message for a refusal, in the current locale. */
