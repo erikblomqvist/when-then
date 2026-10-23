@@ -58,6 +58,8 @@ export type Card = CardFields & {
     /** When and by whom the date was checked against a source; null when it wasn't. */
     verifiedAt: string | null
     verifiedBy: string | null
+    /** What an archived card was before (where unarchiving returns it); null unless archived. */
+    archivedFrom: CardStatus | null
     createdAt: string
     updatedAt: string
 }

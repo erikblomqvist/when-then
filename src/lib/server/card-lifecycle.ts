@@ -42,11 +42,14 @@ async function step(db: Db, rpc: Rpc, args: Record<string, unknown>): Promise<vo
 export const publishCard = (db: Db, actorId: string, cardId: string) =>
     step(db, 'publish_card', { actor: actorId, card_id: cardId })
 
-/** Published → Archived: kept, but no longer dealt. */
+/** Draft or Published → Archived: kept, but not dealt (a draft never is). */
 export const archiveCard = (db: Db, actorId: string, cardId: string) =>
     step(db, 'archive_card', { actor: actorId, card_id: cardId })
 
-/** Archived → Published, again only when the publish rule allows it. */
+/**
+ * Archived → back to what it was: a draft to draft, a published card to published (again only
+ * when the publish rule allows it).
+ */
 export const unarchiveCard = (db: Db, actorId: string, cardId: string) =>
     step(db, 'unarchive_card', { actor: actorId, card_id: cardId })
 

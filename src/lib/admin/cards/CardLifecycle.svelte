@@ -37,7 +37,10 @@
         }
     }
 
-    const ruleBlocks = $derived(card.status === 'archived' && blockers.length > 0)
+    // Unarchiving a once-published card publishes it again, so the publish rule applies.
+    const ruleBlocks = $derived(
+        card.status === 'archived' && card.archivedFrom === 'published' && blockers.length > 0,
+    )
     const verifiedOn = $derived(
         card.verifiedAt
             ? new Date(card.verifiedAt).toLocaleDateString('en-GB', {
@@ -81,10 +84,14 @@
         Status actions
     </h2>
     <!-- A draft's Publish is the editor's: it saves what is in the form too. -->
-    {#if card.status === 'published'}
+    {#if card.status === 'archived'}
+        {@render action(
+            'unarchive',
+            card.archivedFrom === 'draft' ? 'Unarchive as draft' : 'Unarchive',
+            { disabled: dirty || ruleBlocks },
+        )}
+    {:else}
         {@render action('archive', 'Archive', { disabled: dirty, variant: 'outline' })}
-    {:else if card.status === 'archived'}
-        {@render action('unarchive', 'Unarchive', { disabled: dirty || ruleBlocks })}
     {/if}
 
     {#if card.status !== 'draft' && (dirty || ruleBlocks)}

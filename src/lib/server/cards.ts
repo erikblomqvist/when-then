@@ -164,6 +164,7 @@ export async function getCard(db: Db, id: string): Promise<Card | null> {
         ),
         verifiedAt: data.verified_at,
         verifiedBy: data.verified_by,
+        archivedFrom: data.archived_from,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
     }

@@ -63,6 +63,18 @@ test('an editor publishes, archives and unarchives a card from the sidebar', asy
     ])
 })
 
+test('an editor archives a draft and unarchives it as a draft', async ({ page }) => {
+    const { userId } = await signInAs(page, 'editor')
+    const id = await draft(userId, unique('A made-up raft drifts ashore'), year1969)
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    const status = page.getByTestId('card-status')
+
+    await sidebar(page).getByRole('button', { name: 'Archive' }).click()
+    await expect(status).toHaveText('Archived')
+    await sidebar(page).getByRole('button', { name: 'Unarchive as draft' }).click()
+    await expect(status).toHaveText('Draft')
+})
+
 test('Publish says what is missing, and the server refuses it too', async ({ page }) => {
     const { userId } = await signInAs(page, 'editor')
     const id = await draft(userId, unique('A made-up train runs late'), {

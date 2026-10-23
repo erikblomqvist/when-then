@@ -90,6 +90,7 @@ export type Database = {
                 Row: {
                     archived_at: string | null
                     archived_by: string | null
+                    archived_from: Database['public']['Enums']['card_status'] | null
                     category_id: string
                     created_at: string
                     created_by: string | null
@@ -111,6 +112,7 @@ export type Database = {
                 Insert: {
                     archived_at?: string | null
                     archived_by?: string | null
+                    archived_from?: Database['public']['Enums']['card_status'] | null
                     category_id: string
                     created_at?: string
                     created_by?: string | null
@@ -132,6 +134,7 @@ export type Database = {
                 Update: {
                     archived_at?: string | null
                     archived_by?: string | null
+                    archived_from?: Database['public']['Enums']['card_status'] | null
                     category_id?: string
                     created_at?: string
                     created_by?: string | null

@@ -113,6 +113,7 @@ const fieldLabels: Record<string, string> = {
     verified_at: 'Verified at',
     archived_by: 'Archived by',
     archived_at: 'Archived at',
+    archived_from: 'Archived from',
     position: 'Position',
     icon: 'Icon',
     colour: 'Colour',
