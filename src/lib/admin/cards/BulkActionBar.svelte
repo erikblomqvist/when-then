@@ -4,9 +4,11 @@
     Archived tab, `archivedTab`, where neither applies), Move to category and, for admins
     (`canDelete`), Delete, which asks first.
     It is one form that posts the selection as hidden fields (`selectionFields`); each button
-    posts to its own action with `formaction`. More bulk actions go in the `actions` snippet:
-    buttons with `formaction` pointing at a form action that reads the selection with
-    `readCardSelection` / `selectedCardIds` (#lib/server/card-bulk-actions.js).
+    posts to its own action with `formaction={action('name')}`: the list's own URL (its search,
+    filters, review mode) plus the action, so the list stays as it was afterwards. More bulk
+    actions go in the `actions` snippet, which gets `action` too: buttons whose form action
+    reads the selection with `readCardSelection` / `selectedCardIds`
+    (#lib/server/card-bulk-actions.js).
 
     Export selected is a second, plain form (a file download must not go through `enhance`):
     it posts the selected ids, or the filter for "all matching", to the export endpoint (#47)
@@ -17,6 +19,7 @@
 <script lang="ts">
     import type { Snippet } from 'svelte'
     import { enhance } from '$app/forms'
+    import { page } from '$app/state'
     import { Button } from '#lib/components/ui/button/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
@@ -42,8 +45,8 @@
         canDelete?: boolean
         /** The list is on the Archived tab: no Publish or Archive. */
         archivedTab?: boolean
-        /** More bulk actions: buttons inside the form, with their own `formaction`. */
-        actions?: Snippet<[{ busy: boolean }]>
+        /** More bulk actions: buttons inside the form, with `formaction={action('name')}`. */
+        actions?: Snippet<[{ busy: boolean; action: (name: string) => string }]>
     }
 
     let {
@@ -57,6 +60,14 @@
     }: Props = $props()
 
     let busy = $state(false)
+
+    /** A form action at the list's own URL, which the page shows again once it is done. */
+    function action(name: string) {
+        const query = new URLSearchParams(
+            Array.from(page.url.searchParams).filter(([key]) => !key.startsWith('/')),
+        ).toString()
+        return `?${query ? `${query}&` : ''}/${name}`
+    }
     const fields = $derived(selected.selection ? selectionFields(selected.selection) : [])
     // The export endpoint's own fields (`id` per card, or the filter keys); format comes from
     // the form's select.
@@ -161,14 +172,14 @@
                 {#if !archivedTab}
                     <Button
                         type="submit"
-                        formaction="?/publish"
+                        formaction={action('publish')}
                         disabled={busy}>
                         Publish
                     </Button>
                     <Button
                         type="submit"
                         variant="outline"
-                        formaction="?/archive"
+                        formaction={action('archive')}
                         disabled={busy}>
                         Archive
                     </Button>
@@ -189,17 +200,17 @@
                     <Button
                         type="submit"
                         variant="outline"
-                        formaction="?/move"
+                        formaction={action('move')}
                         disabled={busy}>
                         Move
                     </Button>
                 </div>
-                {@render actions?.({ busy })}
+                {@render actions?.({ busy, action })}
                 {#if canDelete}
                     <Button
                         type="submit"
                         variant="destructive"
-                        formaction="?/delete"
+                        formaction={action('delete')}
                         disabled={busy}
                         onclick={confirmDelete}>
                         Delete
