@@ -243,6 +243,30 @@ test('Find date fills in the month and day when its source states them', async (
     })
 })
 
+test('Find date says so when its source has nothing the card has not got', async ({ page }) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/photo')
+    await page.getByLabel('Take photo').setInputFiles(photo())
+    await page.getByRole('button', { name: 'Read 1 photo' }).click()
+    const candidates = page.getByTestId('candidate')
+    await expect(candidates).toHaveCount(3)
+    const kingdom = candidates.nth(2)
+
+    // Typed in already: 1908, the year the stub's Wikidata gives, with no month or day.
+    await kingdom.getByText('Edit').click()
+    await kingdom.getByLabel('Year').fill('1908')
+    await kingdom.getByRole('button', { name: 'Find date' }).click()
+
+    await expect(kingdom).toContainText('No exact day found online; the date stays 1908.')
+    await expect(kingdom).not.toContainText('Date found online')
+    // Nothing changed: the photo stays the source, and it isn't looked up again in bulk.
+    await expect(kingdom.getByRole('link', { name: 'en.wikipedia.org' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /exact date/ })).toHaveCount(0)
+
+    await kingdom.getByRole('button', { name: 'Try again' }).click()
+    await expect(kingdom).toContainText('No exact day found online; the date stays 1908.')
+})
+
 test('an editor has no way in', async ({ page }) => {
     await signInAs(page, 'editor')
     await gotoHydrated(page, '/admin/cards')

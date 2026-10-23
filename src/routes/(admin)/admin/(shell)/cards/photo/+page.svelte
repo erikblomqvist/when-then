@@ -66,8 +66,10 @@
         decade: number | null
         difficulty: string
         categoryId: string
-        /** "Find date": the sourced year it found, while looking, and why it found none. */
+        /** "Find date": the sourced date it found, while looking, and why it found none. */
         found: DateSuggestion | null
+        /** It looked, and found nothing the card hadn't got already. */
+        noMore: boolean
         finding: boolean
         findProblem: string | null
     }
@@ -90,6 +92,7 @@
         difficulty: candidate.difficulty === null ? '' : String(candidate.difficulty),
         categoryId: candidate.categoryId ?? '',
         found: null,
+        noMore: false,
         finding: false,
         findProblem: null,
     })
@@ -223,9 +226,11 @@
 
     // "Find date": the editor's sourced lookup, for a card without an exact date. The date it
     // finds (the year, and the month and day when its source states them) goes straight in, with
-    // its source; Undo puts the AI's own date back.
+    // its source; Undo puts the AI's own date back. A date that adds nothing to the card's (the
+    // same year, no month or day it hasn't got) leaves the card alone and says so.
     async function findDate(row: Row) {
         row.finding = true
+        row.noMore = false
         row.findProblem = null
         try {
             const response = await fetch('/admin/cards/photo/suggest-date', {
@@ -243,6 +248,14 @@
             }
             if (response.ok && answer.suggestion) {
                 const { year, month, day } = answer.suggestion
+                const adds =
+                    whole(row.year) !== year ||
+                    (month !== null && whole(row.month) !== month) ||
+                    (day !== null && whole(row.day) !== day)
+                if (!adds) {
+                    row.noMore = true
+                    return
+                }
                 if (month !== null) {
                     row.month = String(month)
                     row.day = day === null ? '' : String(day)
@@ -272,7 +285,10 @@
 
     /** Worth looking up (unless found already: its source gave no more). */
     const exactDateMissing = (row: Row) =>
-        !foundDate(row) && !!row.texts.en.trim() && exactDateWanted(draftOf(row).date)
+        !foundDate(row) &&
+        !row.noMore &&
+        !!row.texts.en.trim() &&
+        exactDateWanted(draftOf(row).date)
     const missing = $derived(ticked.filter((row) => exactDateMissing(row) && !row.finding))
 
     /** Looks up the exact date of every ticked card without one, three at a time. */
@@ -549,6 +565,14 @@
                             type="button"
                             class="cursor-pointer underline underline-offset-4"
                             onclick={() => undoFound(row)}>Undo</button>
+                    </p>
+                {:else if row.noMore && !row.finding}
+                    <p class="mt-2 text-sm text-muted-foreground">
+                        No exact day found online; the date stays {date}.
+                        <button
+                            type="button"
+                            class="cursor-pointer underline underline-offset-4"
+                            onclick={() => findDate(row)}>Try again</button>
                     </p>
                 {:else if exactDateMissing(row) || row.finding}
                     <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
