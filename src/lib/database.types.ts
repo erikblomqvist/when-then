@@ -278,6 +278,32 @@ export type Database = {
                     },
                 ]
             }
+            game_removals: {
+                Row: {
+                    game_id: string
+                    removed_at: string
+                    user_id: string
+                }
+                Insert: {
+                    game_id: string
+                    removed_at?: string
+                    user_id: string
+                }
+                Update: {
+                    game_id?: string
+                    removed_at?: string
+                    user_id?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: 'game_removals_game_id_fkey'
+                        columns: ['game_id']
+                        isOneToOne: false
+                        referencedRelation: 'games'
+                        referencedColumns: ['id']
+                    },
+                ]
+            }
             games: {
                 Row: {
                     card_language: Database['public']['Enums']['card_locale']
@@ -409,6 +435,7 @@ export type Database = {
                 Returns: {
                     archived_at: string | null
                     archived_by: string | null
+                    archived_from: Database['public']['Enums']['card_status'] | null
                     category_id: string
                     created_at: string
                     created_by: string | null
@@ -433,6 +460,18 @@ export type Database = {
                     isOneToOne: false
                     isSetofReturn: true
                 }
+            }
+            change_player: {
+                Args: {
+                    code: string
+                    player: string
+                    player_icon: string
+                    player_name: string
+                }
+                Returns: {
+                    changed_game: string
+                    game_version: number
+                }[]
             }
             create_game: {
                 Args: {
@@ -484,6 +523,13 @@ export type Database = {
                     joined_game: string
                 }[]
             }
+            leave_game: {
+                Args: { code: string; player: string }
+                Returns: {
+                    game_version: number
+                    left_game: string
+                }[]
+            }
             like_literal: { Args: { text: string }; Returns: string }
             list_people: {
                 Args: never
@@ -499,6 +545,26 @@ export type Database = {
                 Returns: Database['public']['Enums']['card_status']
             }
             lock_category_positions: { Args: never; Returns: undefined }
+            lock_lobby: {
+                Args: { code: string }
+                Returns: {
+                    card_language: Database['public']['Enums']['card_locale']
+                    code: string
+                    created_at: string
+                    ended_at: string | null
+                    exact_year: boolean
+                    id: string
+                    started_at: string | null
+                    target_score: number
+                    version: number
+                }
+                SetofOptions: {
+                    from: '*'
+                    to: 'games'
+                    isOneToOne: true
+                    isSetofReturn: false
+                }
+            }
             move_card: {
                 Args: { actor: string; card_id: string; category_id: string }
                 Returns: undefined
@@ -519,6 +585,13 @@ export type Database = {
                     locale?: Database['public']['Enums']['card_locale']
                 }
                 Returns: number
+            }
+            remove_player: {
+                Args: { code: string; host: string; player_name: string }
+                Returns: {
+                    game_version: number
+                    removed_from_game: string
+                }[]
             }
             reorder_categories: {
                 Args: { actor: string; ids: string[] }

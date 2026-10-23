@@ -24,6 +24,10 @@ const refusals = {
     game_started: 'The game has already started.',
     name_taken: 'Another player has that name.',
     icon_taken: 'Another player has that icon.',
+    not_host: 'Only the host can do that.',
+    no_player: 'No player in the game has that name.',
+    host_cannot_leave: "The host can't leave the lobby.",
+    removed: 'The host removed you from the game.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */
@@ -101,7 +105,9 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
         .maybeSingle()
     if (error) throw new Error(error.message, { cause: error })
     if (!game) return refuse('not_found')
-    if (!game.game_players.some((player) => player.user_id === userId)) refuse('no_seat')
+    if (!game.game_players.some((player) => player.user_id === userId)) {
+        refuse((await wasRemoved(db, game.id, userId)) ? 'removed' : 'no_seat')
+    }
 
     return {
         gameId: game.id,
@@ -124,7 +130,8 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
  * The name-and-icon step for joining the running game with `code` (any case): the names and
  * icons already taken, so the phone can flag a clash before submitting. `seated` says `userId`
  * already has a seat, and the phone goes straight to the lobby; `null` is a phone that hasn't
- * signed in yet. Refused, for a player without a seat, with `not_found`, `game_started` or
+ * signed in yet. `removed` says the host removed `userId` from the lobby, and they haven't
+ * joined again. Refused, for a player without a seat, with `not_found`, `game_started` or
  * `game_full`.
  */
 export async function getJoinStep(
@@ -136,6 +143,7 @@ export async function getJoinStep(
     gameId: string
     version: number
     seated: boolean
+    removed: boolean
     takenNames: string[]
     takenIcons: PlayerIcon[]
 }> {
@@ -161,6 +169,7 @@ export async function getJoinStep(
         gameId: game.id,
         version: game.version,
         seated,
+        removed: !seated && userId !== null && (await wasRemoved(db, game.id, userId)),
         takenNames: game.game_players.map((player) => player.name),
         // Only icons from the set get in; the database checks the shape only.
         takenIcons: game.game_players.map((player) => player.icon as PlayerIcon),
@@ -194,6 +203,83 @@ export async function joinGame(
 
     await nudge(db, { gameId: data.joined_game, version: data.game_version })
     return { code }
+}
+
+/**
+ * Change own name or icon: `userId` takes `name` and `icon` in the lobby of the running game
+ * with `code` (any case), then nudges everyone in it. The same clashes as joining are refused,
+ * and `no_seat` or `game_started` when there's no lobby seat to change.
+ */
+export async function changePlayer(
+    db: Db,
+    input: { userId: string; code: string; name: string; icon: string },
+): Promise<void> {
+    const code = normaliseGameCode(input.code)
+    if (!isGameCode(code)) refuse('not_found')
+    const name = normalisePlayerName(input.name) ?? refuse('invalid_name')
+    if (!isPlayerIcon(input.icon)) refuse('invalid_icon')
+
+    const { data, error } = await db
+        .rpc('change_player', {
+            player: input.userId,
+            code,
+            player_name: name,
+            player_icon: input.icon,
+        })
+        .single()
+    checkRpc(error, refusals, GameRefusal)
+    if (!data) throw new Error('change_player returned no game')
+
+    await nudge(db, { gameId: data.changed_game, version: data.game_version })
+}
+
+/**
+ * Leave lobby: `userId` gives up their seat in the lobby of the running game with `code` (any
+ * case), then nudges everyone left. The host can't leave (`host_cannot_leave`): nobody else
+ * could start the game.
+ */
+export async function leaveGame(db: Db, input: { userId: string; code: string }): Promise<void> {
+    const code = normaliseGameCode(input.code)
+    if (!isGameCode(code)) refuse('not_found')
+
+    const { data, error } = await db.rpc('leave_game', { player: input.userId, code }).single()
+    checkRpc(error, refusals, GameRefusal)
+    if (!data) throw new Error('leave_game returned no game')
+
+    await nudge(db, { gameId: data.left_game, version: data.game_version })
+}
+
+/**
+ * Host removes from lobby: the host `userId` takes the player called `name` (ignoring case)
+ * out of the lobby of the running game with `code` (any case), then nudges everyone, the
+ * removed player's phone too, which then learns it was removed. They can join again with the
+ * code. Refused with `not_host` for anyone else, `no_player` when nobody has that name.
+ */
+export async function removePlayer(
+    db: Db,
+    input: { userId: string; code: string; name: string },
+): Promise<void> {
+    const code = normaliseGameCode(input.code)
+    if (!isGameCode(code)) refuse('not_found')
+
+    const { data, error } = await db
+        .rpc('remove_player', { host: input.userId, code, player_name: input.name.trim() })
+        .single()
+    checkRpc(error, refusals, GameRefusal)
+    if (!data) throw new Error('remove_player returned no game')
+
+    await nudge(db, { gameId: data.removed_from_game, version: data.game_version })
+}
+
+/** Whether the host removed `userId` from the game's lobby, and they haven't joined again. */
+async function wasRemoved(db: Db, gameId: string, userId: string): Promise<boolean> {
+    const { count, error } = await db
+        .from('game_removals')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('game_id', gameId)
+        .eq('user_id', userId)
+    if (error) throw new Error(error.message, { cause: error })
+    return count === 1
 }
 
 /**

@@ -1,10 +1,19 @@
-import { error } from '@sveltejs/kit'
+import { error, fail, redirect } from '@sveltejs/kit'
+import { normaliseGameCode } from '#lib/game/game-code.js'
 import { refusalMessage } from '#lib/game/refusals.js'
-import { GameRefusal, getLobby } from '#lib/server/game-lifecycle.js'
+import {
+    changePlayer,
+    GameRefusal,
+    getLobby,
+    leaveGame,
+    removePlayer,
+} from '#lib/server/game-lifecycle.js'
+import { field } from '#lib/server/people-form.js'
 import { supabaseService } from '#lib/server/supabase.js'
-import type { PageServerLoad } from './$types'
+import type { Actions, PageServerLoad } from './$types'
 
-// The lobby of a game, for players seated in it. Reloading lands here again.
+// The lobby of a game, for players seated in it. Reloading lands here again. A player the host
+// removed goes to the join step, which tells them and lets them join again.
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const { user } = await locals.safeGetSession()
     if (!user) error(403, refusalMessage('no_seat'))
@@ -14,8 +23,57 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
         return { lobby, joinUrl: new URL(`/join/${lobby.code}`, url.origin).href }
     } catch (caught) {
         if (caught instanceof GameRefusal) {
+            if (caught.code === 'removed') {
+                redirect(303, `/join/${encodeURIComponent(normaliseGameCode(params.code))}`)
+            }
             error(caught.code === 'not_found' ? 404 : 403, refusalMessage(caught.code))
         }
         throw caught
     }
+}
+
+/** Runs a lobby command as the signed-in player, turning a refusal into a failed form. */
+async function asPlayer(
+    locals: App.Locals,
+    command: (userId: string) => Promise<void>,
+    values?: Record<string, string>,
+) {
+    const { user } = await locals.safeGetSession()
+    if (!user) return fail(403, { values, refusal: 'no_seat' as const })
+    try {
+        await command(user.id)
+    } catch (caught) {
+        if (caught instanceof GameRefusal) return fail(400, { values, refusal: caught.code })
+        throw caught
+    }
+}
+
+export const actions: Actions = {
+    // Change own name or icon.
+    change: async ({ request, locals, params }) => {
+        const form = await request.formData()
+        const values = { name: field(form, 'name'), icon: field(form, 'icon') }
+        return asPlayer(
+            locals,
+            (userId) => changePlayer(supabaseService(), { userId, code: params.code, ...values }),
+            values,
+        )
+    },
+
+    // Leave lobby: back to the home page.
+    leave: async ({ locals, params }) => {
+        const failed = await asPlayer(locals, (userId) =>
+            leaveGame(supabaseService(), { userId, code: params.code }),
+        )
+        if (failed) return failed
+        redirect(303, '/')
+    },
+
+    // Host removes from lobby: the player named in the form.
+    remove: async ({ request, locals, params }) => {
+        const name = field(await request.formData(), 'name')
+        return asPlayer(locals, (userId) =>
+            removePlayer(supabaseService(), { userId, code: params.code, name }),
+        )
+    },
 }
