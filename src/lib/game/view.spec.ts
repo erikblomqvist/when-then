@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { apply, create, type ApplyResult, type Command } from './machine'
 import { fits, type DeckCard, type GameState } from './state'
+import { scenario } from './scenario'
 import { redact } from './view'
 
 const deck: DeckCard[] = Array.from({ length: 12 }, (_, i) => ({
@@ -313,6 +314,27 @@ describe('what a seat sees during the steals', () => {
             const view = redact(state, seat)
             expect(view.discards).toEqual([cardId])
             expect(view.cards[cardId]).toEqual(state.cards[cardId])
+        }
+    })
+})
+
+describe('what a seat sees of the last turn', () => {
+    it('shows every seat how it ended, and the cards it lost, with their dates', () => {
+        // The active player plays a correct card, continues and misplaces; nobody steals it.
+        const { state } = scenario()
+            .players(3)
+            .unlocked(1)
+            .misplace()
+            .missedSteal()
+            .missedSteal()
+            .build()
+        const lost = state.lastTurn.find((entry) => entry.kind === 'play' && entry.correct)
+        if (lost?.kind !== 'play') throw new Error('No correct play in the last turn.')
+        expect(state.lastTurn.at(-1)).toMatchObject({ kind: 'discard' })
+        for (const seat of state.seating) {
+            const view = redact(state, seat)
+            expect(view.lastTurn).toEqual(state.lastTurn)
+            expect(view.cards[lost.cardId]).toEqual(state.cards[lost.cardId])
         }
     })
 })

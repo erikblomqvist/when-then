@@ -9,7 +9,7 @@ import type { Rng } from './random'
 import type { Seating } from './seating'
 
 /** The state's shape. Changing it means a new number and an upgrade in `load` (`./machine`). */
-export const currentSchema = 1
+export const currentSchema = 2
 
 /**
  * A date as the standard game mode plays it: a year from 1500 onwards, and before that a decade
@@ -112,8 +112,10 @@ export type GameState = {
     phase: Phase
     /** Per seated player, in date order. */
     timelines: Record<string, TimelineEntry[]>
-    /** The current turn's outcomes, cleared when the next turn starts. */
+    /** The current turn's outcomes, moved to `lastTurn` when the next turn starts. */
     log: LogEntry[]
+    /** The turn before's outcomes, so a phone can still show how it ended: a steal, a skip. */
+    lastTurn: LogEntry[]
     /** Cards that left the game unplaced, with their dates revealed. Never dealt again. */
     discards: string[]
     rng: Rng

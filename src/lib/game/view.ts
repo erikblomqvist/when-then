@@ -59,10 +59,12 @@ export type SeatView = {
     timelines: Record<string, TimelineEntry[]>
     scores: Record<string, number>
     log: LogEntry[]
+    /** The turn before's outcomes, so the phone can show how it ended. */
+    lastTurn: LogEntry[]
     discards: string[]
     /**
      * Every card that has come out, with its text and date: on a timeline, discarded, or lost
-     * this turn. Not the card in play until it's placed.
+     * this turn or the last. Not the card in play until it's placed.
      */
     cards: Record<string, DeckCard>
 }
@@ -73,8 +75,8 @@ export function redact(state: GameState, seat: string): SeatView {
     for (const timeline of Object.values(state.timelines)) {
         for (const entry of timeline) if (entry.kind === 'card') shown.add(entry.cardId)
     }
-    // The turn's correct plays, still unlocked or lost to a misplacement since.
-    for (const entry of state.log)
+    // This turn's and the last one's correct plays, still unlocked or lost since.
+    for (const entry of [...state.log, ...state.lastTurn])
         if (entry.kind === 'play' && entry.correct) shown.add(entry.cardId)
     return {
         seat,
@@ -87,6 +89,7 @@ export function redact(state: GameState, seat: string): SeatView {
         timelines: state.timelines,
         scores: Object.fromEntries(state.seating.map((id) => [id, score(state, id)])),
         log: state.log,
+        lastTurn: state.lastTurn,
         discards: state.discards,
         cards: Object.fromEntries([...shown].map((id) => [id, state.cards[id]])),
     }

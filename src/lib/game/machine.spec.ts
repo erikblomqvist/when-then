@@ -99,9 +99,9 @@ describe('creating a two-player game', () => {
         }
     })
 
-    it('carries schema 1 and every player, none removed', () => {
+    it('carries schema 2 and every player, none removed', () => {
         const state = create(twoPlayers())
-        expect(state.schema).toBe(1)
+        expect(state.schema).toBe(2)
         expect(state.players.every((player) => !player.removed)).toBe(true)
     })
 })
@@ -359,9 +359,15 @@ describe('loading a saved state', () => {
         for (const schema of [0, 99, undefined]) {
             const loaded = load({ ...JSON.parse(JSON.stringify(state)), schema })
             expect(loaded.phase).toEqual({ name: 'ended' })
-            expect(loaded.schema).toBe(1)
+            expect(loaded.schema).toBe(2)
             expect(lockIn(loaded, 'astrid').ok).toBe(false)
         }
+    })
+
+    it('upgrades a schema 1 state, with no last turn yet', () => {
+        const state = create(twoPlayers())
+        const { lastTurn: _, ...saved } = { ...JSON.parse(JSON.stringify(state)), schema: 1 }
+        expect(load(saved)).toEqual(state)
     })
 })
 
@@ -848,7 +854,7 @@ describe('misplacing a card, and the steals', () => {
         for (const id of state.seating) expect(score(state, id)).toBe(0)
     })
 
-    it('keeps the turn’s outcomes in the log, and starts the next turn with it empty', () => {
+    it('keeps the turn’s outcomes in the log, and moves them to the last turn when the next starts', () => {
         let state = dealt(ok(continued(play(fourPlayerGame(), true))))
         const { activeId } = playOf(state)
         const first = state.log[0]
@@ -866,6 +872,12 @@ describe('misplacing a card, and the steals', () => {
         const next = stealing(state, false)
         expect(playOf(next).activeId).not.toBe(activeId)
         expect(next.log).toEqual([])
+        expect(next.lastTurn).toEqual([
+            ...state.log,
+            { kind: 'steal', playerId: stealers[2], cardId, correct: false },
+            { kind: 'discard', cardId },
+        ])
+        expect(create(fourPlayers()).lastTurn).toEqual([])
     })
 })
 
@@ -1088,6 +1100,13 @@ describe('skipping', () => {
         expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
         // The card left the game with its date revealed.
         expect(redact(next, 'astrid').cards[cardId]).toEqual(state.cards[cardId])
+        // Everyone can still see how the skipped turn ended.
+        expect(next.log).toEqual([])
+        expect(redact(next, 'astrid').lastTurn).toEqual([
+            ...state.log,
+            { kind: 'skip', playerId: activeId, what: 'turn' },
+            { kind: 'discard', cardId },
+        ])
     })
 
     it('of the active player at the lock-in choice ends the turn, the unlocked cards lost', () => {

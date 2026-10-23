@@ -81,6 +81,7 @@ export function create(input: CreateInput): GameState {
         phase: { name: 'seating' },
         timelines: {},
         log: [],
+        lastTurn: [],
         discards: [],
         rng: dice.rng,
         queues,
@@ -133,9 +134,9 @@ function anchorDate(
     return anchor
 }
 
-/** `activeId`'s turn begins: a fresh log, and the first play. */
+/** `activeId`'s turn begins: a fresh log, the one before kept as the last turn, and the first play. */
 function startTurn(state: GameState, activeId: string): GameState {
-    return startPlay({ ...state, log: [] }, activeId)
+    return startPlay({ ...state, log: [], lastTurn: state.log }, activeId)
 }
 
 /**
@@ -210,7 +211,9 @@ function deal(
  * Upgrades from older schemas, keyed by the schema they upgrade from. A change to the state's
  * shape bumps `currentSchema` and adds one here (ADR 0004).
  */
-const upgrades: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {}
+const upgrades: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {
+    1: (state) => ({ ...state, schema: 2, lastTurn: [] }),
+}
 
 /**
  * A state as saved, brought up to the current schema. A game whose schema can't be upgraded
@@ -236,6 +239,7 @@ export function load(saved: unknown): GameState {
         phase: { name: 'ended' },
         timelines: {},
         log: [],
+        lastTurn: [],
         discards: [],
         rng: { seed: 0, position: 0 },
         queues: {},
