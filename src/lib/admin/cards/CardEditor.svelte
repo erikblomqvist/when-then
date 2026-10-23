@@ -304,6 +304,14 @@
                 aria-invalid={shown.text_en ? 'true' : undefined}
                 aria-describedby={describedBy('text_en')} />
             {@render error('text_en')}
+            <Label
+                for="note_en"
+                class="mt-2">English note (optional)</Label>
+            <Textarea
+                id="note_en"
+                name="note_en"
+                rows={2}
+                bind:value={values.note_en} />
         </section>
 
         <TranslationTabs

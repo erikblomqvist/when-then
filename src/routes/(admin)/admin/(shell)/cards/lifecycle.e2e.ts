@@ -259,3 +259,14 @@ test('the editor sets a card’s difficulty, kept when the card is opened again'
     await saveAndReopen(page)
     await expect(difficulty).toHaveValue('4')
 })
+
+test('the editor writes an English note, kept when the card is opened again', async ({ page }) => {
+    const { userId } = await signInAs(page, 'editor')
+    const id = await draft(userId, unique('A made-up harbour opens'), year1969)
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    const note = page.getByLabel('English note (optional)')
+    await expect(note).toHaveValue('')
+    await note.fill('The harbour, not the town')
+    await saveAndReopen(page)
+    await expect(note).toHaveValue('The harbour, not the town')
+})

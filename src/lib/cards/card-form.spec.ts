@@ -56,6 +56,31 @@ describe('parseCardForm', () => {
         expect(read({ difficulty: 'hard' })).toEqual({ difficulty: 'Difficulty is 1 to 4.' })
     })
 
+    it('reads the English note, empty as none, and leaves it out when not posted', () => {
+        const english = (fields: Record<string, string>) => {
+            const result = parseCardForm(form({ year: '1492', ...fields }))
+            return result.ok ? result.card.translations.en : null
+        }
+        expect(english({ note_en: '  Says "Columbus", not "Colón"  ' })).toEqual({
+            text: 'A made-up event happens',
+            note: 'Says "Columbus", not "Colón"',
+        })
+        expect(english({ note_en: '' })).toEqual({ text: 'A made-up event happens', note: null })
+        // A form without the field keeps the saved note.
+        expect(english({})).toEqual({ text: 'A made-up event happens' })
+    })
+
+    it('fills the English note from a saved card', () => {
+        const values = cardFormValues({
+            categoryId,
+            date: { decade: 1960, year: 1969, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: { en: { text: 'A made-up kite flies', note: 'Not a bird' } },
+        })
+        expect(values.note_en).toBe('Not a bird')
+    })
+
     it('fills the difficulty field from a saved card', () => {
         const values = cardFormValues({
             categoryId,
@@ -163,6 +188,7 @@ describe('cardFormValues', () => {
             }),
         ).toEqual({
             text_en: 'A made-up senator is late',
+            note_en: '',
             category_id: categoryId,
             era: 'BC',
             decade: '40',

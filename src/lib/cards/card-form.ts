@@ -35,6 +35,8 @@ type TranslationFields<L extends TranslationLocale> = Record<
 
 export type CardFormValues = {
     text_en: string
+    /** A note on the card's English text (as each locale tab has its own). */
+    note_en: string
     category_id: string
     era: 'AD' | 'BC'
     decade: string
@@ -153,6 +155,7 @@ export function withSuggestedDate(values: CardFormValues, date: SuggestedDate): 
 
 export const emptyCardFormValues: CardFormValues = {
     text_en: '',
+    note_en: '',
     category_id: '',
     era: 'AD',
     decade: '',
@@ -212,6 +215,11 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     else if (text.length > cardTextMaxLength) {
         errors.text_en = `Keep the card under ${cardTextMaxLength} characters.`
     }
+
+    // The English note; a form without the field (an older page) leaves it as saved.
+    const englishTranslation: TranslationInput = form.has('note_en')
+        ? { text, note: field(form, 'note_en') || null }
+        : { text }
 
     const categoryId = field(form, 'category_id')
     if (!categoryId) errors.category_id = 'Pick a category.'
@@ -294,7 +302,7 @@ export function parseCardForm(form: FormData): ParsedCardForm {
             sourceUrl: sourceUrl || null,
             sourceQuote: sourceQuote || null,
             ...(difficulty !== undefined && { difficulty }),
-            translations: { en: { text }, ...translations },
+            translations: { en: englishTranslation, ...translations },
             // Set by the editor when a verified date changed and the editor chose to clear it.
             ...(form.get('clear_verification') === 'true' && { clearVerification: true }),
         },
@@ -327,6 +335,7 @@ export function cardFormValues(
     const bc = (year ?? decade ?? 0) < 0
     return {
         text_en: card.translations.en?.text ?? '',
+        note_en: card.translations.en?.note ?? '',
         category_id: card.categoryId,
         era: bc ? 'BC' : 'AD',
         decade: decade === null ? '' : String(decadeLabel(decade)),
