@@ -188,9 +188,9 @@
 
         <Surface
             kind="sheet"
-            class="settings">
-            <Text role="heading-2">{m.settings()}</Text>
+            class={['settings', !you?.isHost && 'settings--compact']}>
             {#if you?.isHost}
+                <Text role="heading-2">{m.settings()}</Text>
                 <form
                     class="settings-form"
                     method="post"
@@ -268,6 +268,11 @@
                     {/if}
                 </form>
             {:else}
+                <!-- A player only reads the settings: a small heading, the three values side by
+                     side, and a quiet note on who sets them. -->
+                <Text
+                    role="heading-2"
+                    class="settings-title">{m.settings()}</Text>
                 <dl class="settings-list">
                     <div>
                         <dt class="ui-caption">{m.target_score()}</dt>
@@ -282,9 +287,7 @@
                         <dd>{cardLanguageLabel(lobby.cardLanguage)}</dd>
                     </div>
                 </dl>
-                <Text
-                    role="caption"
-                    as="p">{m.settings_host_only()}</Text>
+                <p class="settings-note">{m.settings_host_only()}</p>
             {/if}
         </Surface>
 
@@ -403,21 +406,43 @@
         min-width: 96px;
         text-align: center;
     }
+    /* A player's read-only settings: tighter than the host's form. */
+    .lobby :global(.settings--compact) {
+        gap: var(--space-5);
+        padding: var(--space-7) var(--space-8);
+    }
+    .lobby :global(.settings-title) {
+        font-size: var(--font-size-21);
+    }
+    .settings-note {
+        margin: 0;
+        font-family: var(--font-family-sans);
+        font-size: var(--font-size-13);
+        color: var(--text-on-paper-subtle);
+    }
     .settings-list {
         display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: var(--space-5);
         margin: 0;
     }
+    /* The value on top, its label under it (the markup keeps dt first, as a list needs). */
     .settings-list div {
         display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: var(--space-5);
+        flex-direction: column;
+        gap: var(--space-1);
+        min-width: 0;
+    }
+    .settings-list dd {
+        order: -1;
+    }
+    .settings-list dt {
+        overflow-wrap: anywhere;
     }
     .settings-list dd {
         margin: 0;
         font-family: var(--type-field-family);
-        font-size: var(--type-field-size);
+        font-size: var(--font-size-21);
         font-weight: var(--type-field-weight);
         font-variation-settings: var(--type-field-variation);
         font-variant-numeric: tabular-nums lining-nums;
