@@ -328,14 +328,21 @@ test('a join nudges the game’s channel with only the game and its version', as
 
     // A phone's view of the channel: the public client, as in the browser.
     const phone = localPublicClient()
-    const received = new Promise<Nudge>((resolve) => {
-        phone
-            .channel(nudgeTopic(gameId))
-            .on('broadcast', { event: nudgeEvent }, ({ payload }) => resolve(payload as Nudge))
-            .subscribe()
+    let received!: Promise<Nudge>
+    // Wait until subscribed, or the nudge can go out before the phone listens. A cold Realtime
+    // (CI's first connection) can take a while to let the first channel in.
+    test.setTimeout(60_000)
+    await new Promise<void>((subscribed, failed) => {
+        received = new Promise<Nudge>((resolve) => {
+            phone
+                .channel(nudgeTopic(gameId))
+                .on('broadcast', { event: nudgeEvent }, ({ payload }) => resolve(payload as Nudge))
+                .subscribe((status, error) => {
+                    if (status === 'SUBSCRIBED') subscribed()
+                    if (status === 'CHANNEL_ERROR') failed(error)
+                })
+        })
     })
-    // Wait until subscribed, or the nudge can go out before the phone listens.
-    await expect.poll(() => phone.getChannels()[0]?.state, { timeout: 10_000 }).toBe('joined')
 
     await joinGame(db, { userId: await newPlayer(), code, name: 'Bo', icon: 'dog' })
 
