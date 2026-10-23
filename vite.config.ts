@@ -4,6 +4,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, lazyPlugins } from 'vite-plus'
 import { playwright } from 'vite-plus/test/browser-playwright'
+import { devBanner } from './src/dev-banner/plugin'
 
 export default defineConfig({
     staged: {
@@ -44,6 +45,8 @@ export default defineConfig({
         options: { typeAware: true, typeCheck: true },
     },
     plugins: lazyPlugins(() => [
+        // The When Then? banner in place of Vite's URLs when `vp dev` starts.
+        devBanner(),
         // Only transforms CSS that uses Tailwind, i.e. src/routes/(admin)/admin/admin.css. Game CSS
         // passes through untouched (findings in issue #33).
         tailwindcss(),

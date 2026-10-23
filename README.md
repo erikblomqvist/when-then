@@ -23,6 +23,8 @@ vpr build-storybook       # static Storybook in storybook-static/
 
 `vpr check` runs both checks and `vpr test` runs all tests. Browser tests need Chromium once: `vp exec playwright install chromium`. A pre-commit hook runs `vp check --fix` on staged files, then `svelte-check`; it is installed by `vp install`.
 
+In a terminal, `vp dev` greets you with a banner in place of Vite's URL list: the wordmark and a timeline with a card dealt onto it, its year turning over a moment later (`src/dev-banner/`). `NO_COLOR` drops the colours; piped output gets Vite's plain lines.
+
 ### Dependencies
 
 Manage packages through `vp`, not `pnpm` or `npm` directly. `vp` always runs the pinned pnpm, while a plain `pnpm` may be a different version on someone else's machine.
