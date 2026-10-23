@@ -9,7 +9,7 @@
 // and `cardFormValues` together.
 
 import type { CardFields, CardInput, CardLocale, TranslationInput } from './card'
-import { yearRequiredFrom } from './publish-rule'
+import { yearRequiredFrom, yearRequiredMessage } from './publish-rule'
 import {
     decadeFromLabel,
     decadeLabel,
@@ -241,7 +241,7 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     // The publish rule's year, asked for already when saving: a decade alone from 1500 on is
     // never enough (on the decade, the field that was filled in).
     if (dateIsReadable && year === null && decade !== null && decade >= yearRequiredFrom) {
-        errors.decade = `Cards from ${yearRequiredFrom} onwards need a year.`
+        errors.decade = yearRequiredMessage
     }
 
     const sourceUrl = field(form, 'source_url')

@@ -43,8 +43,10 @@
         type SuggestedDate,
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
-    import { publishBlockers, yearRequiredFrom } from '#lib/cards/publish-rule.js'
+    import { publishChecklist, publishSuggestions } from '#lib/cards/publish-checklist.js'
+    import { yearRequiredFrom } from '#lib/cards/publish-rule.js'
     import type { Category } from '#lib/server/categories.js'
+    import PublishChecklist from './PublishChecklist.svelte'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
     import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
     import SaveIcon from '@lucide/svelte/icons/save'
@@ -168,14 +170,13 @@
     )
     const shown = $derived(live.shown)
 
-    // Publish (a new card or a draft) saves what is in the form and publishes it: held back,
-    // with the reasons, by what the form or the publish rule still miss.
+    // Publish (a new card or a draft) saves what is in the form and publishes it: held back
+    // until the checklist under the menu (every requirement, ticked off as it is met) is done.
     const offerPublish = $derived(!card || card.status === 'draft')
-    const publishBlocked = $derived.by(() => {
-        const parsed = parseCardFormValues(posted(values))
-        if (parsed.ok) return publishBlockers(parsed.card)
-        return [...new Set(Object.values(parsed.errors))]
-    })
+    const publishChecks = $derived(publishChecklist(posted(values)))
+    const publishOpen = $derived(publishChecks.some((check) => !check.done))
+    const publishSuggested = $derived(publishSuggestions(posted(values), card))
+    const checklistId = 'publish-checklist'
 
     // The actions menu: Save, the page's everyday rows, Publish when offered, then the page's
     // status rows.
@@ -200,8 +201,8 @@
                       form: 'card-editor',
                       formaction: '?/saveAndPublish',
                       keys: ['mod', 'enter'],
-                      disabled: saving || publishBlocked.length > 0,
-                      describedBy: publishBlocked.length > 0 ? 'save-and-publish-why' : undefined,
+                      disabled: saving || publishOpen,
+                      describedBy: publishOpen ? checklistId : undefined,
                   } satisfies ContextMenuAction,
               ]
             : []),
@@ -468,18 +469,12 @@
                 label="Card actions"
                 actions={menu} />
             {#if offerPublish}
-                {#if publishBlocked.length > 0}
-                    <div
-                        id="save-and-publish-why"
-                        class="text-muted-foreground">
-                        <p>Before it can be published:</p>
-                        <ul class="list-disc pl-5">
-                            {#each publishBlocked as blocker (blocker)}
-                                <li>{blocker}</li>
-                            {/each}
-                        </ul>
-                    </div>
-                {/if}
+                <div class="mt-4">
+                    <PublishChecklist
+                        id={checklistId}
+                        checks={publishChecks}
+                        suggestions={publishSuggested} />
+                </div>
                 {#if publishError}
                     <p
                         role="alert"

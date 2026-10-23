@@ -2,7 +2,7 @@
 // Delete draft and verification.
 
 import { randomUUID } from 'node:crypto'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { DateParts } from '../../../../../lib/cards/date-parts'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
@@ -27,6 +27,8 @@ async function draft(actorId: string, text: string, date: DateParts) {
 
 const year1969 = { decade: 1960, year: 1969, month: null, day: null }
 const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Card' })
+/** The publish checklist's requirements (the first list; what is worth adding comes after). */
+const required = (checklist: Locator) => checklist.getByRole('list').first().getByRole('listitem')
 
 async function auditedActions(cardId: string) {
     const { data } = await db
@@ -85,8 +87,17 @@ test('Publish says what is missing, and the server refuses it too', async ({ pag
     })
     await gotoHydrated(page, `/admin/cards/${id}`)
 
-    await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeDisabled()
-    await expect(sidebar(page)).toContainText('Cards from 1500 onwards need a year.')
+    const publish = sidebar(page).getByRole('button', { name: 'Publish' })
+    await expect(publish).toBeDisabled()
+    // The checklist under the menu has the year still open, and Publish points at it.
+    const checklist = sidebar(page).getByRole('region', { name: 'Required to publish' })
+    await expect(required(checklist)).toHaveText([
+        /Done:\s*English text/,
+        /Done:\s*Category/,
+        /Done:\s*Date, at least the decade/,
+        /To do:\s*Year, for cards from 1500 on/,
+    ])
+    await expect(publish).toHaveAccessibleDescription(/Required to publish/)
 
     const response = await page.request.post(`/admin/cards/${id}?/publish`, {
         form: {},
@@ -95,6 +106,48 @@ test('Publish says what is missing, and the server refuses it too', async ({ pag
     expect(await response.json()).toMatchObject({ type: 'failure', status: 400 })
     await reloadHydrated(page)
     await expect(page.getByTestId('card-status')).toHaveText('Draft')
+})
+
+test('the publish checklist shows every requirement at once and ticks them off as typed', async ({
+    page,
+}) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    const checklist = sidebar(page).getByRole('region', { name: 'Required to publish' })
+    await expect(required(checklist)).toHaveText([
+        /To do:\s*English text/,
+        /To do:\s*Category/,
+        /To do:\s*Date, at least the decade/,
+        /To do:\s*Year, for cards from 1500 on/,
+    ])
+
+    await page.getByLabel('English text').fill(unique('A made-up comet returns'))
+    await page.getByLabel('Category').selectOption({ index: 1 })
+    await page.getByLabel('Decade').fill('1490')
+    await expect(required(checklist)).toHaveText([
+        /Done:\s*English text/,
+        /Done:\s*Category/,
+        /Done:\s*Date, at least the decade/,
+        /Done:\s*Year, for cards from 1500 on/,
+    ])
+    await expect(checklist.getByRole('listitem').nth(3)).toContainText('Not needed before 1500')
+    await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeEnabled()
+
+    // Below a line, what is worth adding but not required, while it is missing.
+    const worth = checklist.getByRole('group', { name: 'Also worth adding' })
+    await expect(worth.getByRole('listitem')).toHaveText([
+        'Swedish translation',
+        'Norwegian translation',
+        'Source',
+        'Date verified',
+    ])
+    await page.getByRole('tab', { name: /Swedish/ }).click()
+    await page.getByLabel('Swedish text').fill('En påhittad komet återvänder')
+    await expect(worth.getByRole('listitem')).toHaveText([
+        'Norwegian translation',
+        'Source',
+        'Date verified',
+    ])
 })
 
 test('Publish on a draft saves what was changed, then publishes', async ({ page }) => {
