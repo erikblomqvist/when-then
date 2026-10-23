@@ -56,6 +56,7 @@ export async function importPhotoCards(
             source_url: draft.sourceUrl,
             source_quote: draft.sourceQuote,
             difficulty: draft.difficulty,
+            country_specific: draft.countrySpecific,
             translations: draft.translations,
             request_id: draft.requestId,
         })),

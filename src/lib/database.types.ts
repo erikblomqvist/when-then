@@ -92,6 +92,7 @@ export type Database = {
                     archived_by: string | null
                     archived_from: Database['public']['Enums']['card_status'] | null
                     category_id: string
+                    country_specific: string | null
                     created_at: string
                     created_by: string | null
                     day: number | null
@@ -114,6 +115,7 @@ export type Database = {
                     archived_by?: string | null
                     archived_from?: Database['public']['Enums']['card_status'] | null
                     category_id: string
+                    country_specific?: string | null
                     created_at?: string
                     created_by?: string | null
                     day?: number | null
@@ -136,6 +138,7 @@ export type Database = {
                     archived_by?: string | null
                     archived_from?: Database['public']['Enums']['card_status'] | null
                     category_id?: string
+                    country_specific?: string | null
                     created_at?: string
                     created_by?: string | null
                     day?: number | null
@@ -316,6 +319,7 @@ export type Database = {
                     exact_year: boolean
                     id: string
                     last_active_at: string
+                    left_out_countries: string[]
                     started_at: string | null
                     target_score: number
                     version: number
@@ -328,6 +332,7 @@ export type Database = {
                     exact_year?: boolean
                     id?: string
                     last_active_at?: string
+                    left_out_countries?: string[]
                     started_at?: string | null
                     target_score?: number
                     version?: number
@@ -340,6 +345,7 @@ export type Database = {
                     exact_year?: boolean
                     id?: string
                     last_active_at?: string
+                    left_out_countries?: string[]
                     started_at?: string | null
                     target_score?: number
                     version?: number
@@ -443,6 +449,7 @@ export type Database = {
                     archived_by: string | null
                     archived_from: Database['public']['Enums']['card_status'] | null
                     category_id: string
+                    country_specific: string | null
                     created_at: string
                     created_by: string | null
                     day: number | null
@@ -682,6 +689,7 @@ export type Database = {
                     code: string
                     exact_year: boolean
                     host: string
+                    left_out_countries?: string[]
                     target_score: number
                 }
                 Returns: {

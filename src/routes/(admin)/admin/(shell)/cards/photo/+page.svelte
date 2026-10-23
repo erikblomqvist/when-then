@@ -30,6 +30,7 @@
     import { takeHandedPhotos, usesCamera } from '#lib/admin/cards/photo-handoff.js'
     import { shrinkPhotos } from '#lib/admin/cards/shrink-photo.js'
     import { cardLocales, type CardLocale } from '#lib/cards/card.js'
+    import { cardCountries, countryName } from '#lib/cards/country.js'
     import { decadeLabel, decadeOf, formatCardDate, monthNames } from '#lib/cards/date-parts.js'
     import {
         dateNeeded,
@@ -65,6 +66,8 @@
         /** Kept when the AI knew only the decade and no year is typed. */
         decade: number | null
         difficulty: string
+        /** '' or a country code: the AI's guess until the admin changes it. */
+        countrySpecific: string
         categoryId: string
         /** "Find date": the sourced date it found, while looking, and why it found none. */
         found: DateSuggestion | null
@@ -90,6 +93,7 @@
         day: candidate.date.day === null ? '' : String(candidate.date.day),
         decade: candidate.date.year === null ? candidate.date.decade : null,
         difficulty: candidate.difficulty === null ? '' : String(candidate.difficulty),
+        countrySpecific: candidate.countrySpecific ?? '',
         categoryId: candidate.categoryId ?? '',
         found: null,
         noMore: false,
@@ -150,6 +154,7 @@
             sourceUrl: found?.sourceUrl ?? null,
             sourceQuote: (found ? found.sourceQuote : row.candidate.sourceQuote) || null,
             difficulty: whole(row.difficulty),
+            countrySpecific: row.countrySpecific || null,
             translations,
             requestId: row.requestId,
         }
@@ -540,6 +545,15 @@
                             {:else}
                                 <Badge variant="destructive">No category</Badge>
                             {/if}
+                            {#if row.countrySpecific}
+                                <Badge variant="secondary">
+                                    {countryName(
+                                        row.countrySpecific,
+                                    )}-specific{row.countrySpecific === candidate.countrySpecific
+                                        ? ' · AI-suggested'
+                                        : ''}
+                                </Badge>
+                            {/if}
                             {#if candidate.duplicateOf}
                                 <Badge variant="destructive">Possible duplicate</Badge>
                             {/if}
@@ -756,6 +770,26 @@
                                     {#each [1, 2, 3, 4] as level (level)}
                                         <NativeSelect.Option value={String(level)}>
                                             {level}
+                                        </NativeSelect.Option>
+                                    {/each}
+                                </NativeSelect.Root>
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <Label for={fieldId(row, 'country')}>
+                                    Country-specific
+                                    {#if row.countrySpecific === (candidate.countrySpecific ?? '')}
+                                        <span class="font-normal text-muted-foreground">
+                                            · AI-suggested
+                                        </span>
+                                    {/if}
+                                </Label>
+                                <NativeSelect.Root
+                                    id={fieldId(row, 'country')}
+                                    bind:value={row.countrySpecific}>
+                                    <NativeSelect.Option value="">No</NativeSelect.Option>
+                                    {#each [...new Set( [...cardCountries, ...(candidate.countrySpecific ? [candidate.countrySpecific] : [])] )] as code (code)}
+                                        <NativeSelect.Option value={code}>
+                                            {countryName(code)}
                                         </NativeSelect.Option>
                                     {/each}
                                 </NativeSelect.Root>

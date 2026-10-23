@@ -108,6 +108,7 @@ const fieldLabels: Record<string, string> = {
     source_url: 'Source URL',
     source_quote: 'Source quote',
     difficulty: 'Difficulty',
+    country_specific: 'Country-specific',
     tags: 'Tags',
     verified_by: 'Verified by',
     verified_at: 'Verified at',

@@ -72,6 +72,10 @@ export const actions: Actions = {
             targetScore: Number(field(form, 'targetScore')),
             exactYear: field(form, 'exactYear') === 'on',
             cardLanguage: field(form, 'cardLanguage'),
+            // One `leftOut` field per country whose country-specific cards are left out.
+            leftOutCountries: form
+                .getAll('leftOut')
+                .filter((value): value is string => typeof value === 'string'),
         }
         return asPlayer(
             locals,

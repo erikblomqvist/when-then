@@ -32,7 +32,7 @@ const dateParts = (row: DateParts): DateParts => ({
     day: row.day,
 })
 
-const listColumns = `id, status, decade, year, month, day, verified_at, updated_at,
+const listColumns = `id, status, decade, year, month, day, verified_at, updated_at, country_specific,
     category:categories!inner(id, icon, colour, category_translations(locale, name)),
     card_translations(locale, text, status)`
 
@@ -45,6 +45,7 @@ const filterArgs = (filter: CardFilter) => ({
     verified: filter.verified,
     has_source: filter.hasSource,
     era: filter.era,
+    country: filter.country,
     translations: filter.translations,
 })
 
@@ -135,6 +136,7 @@ export async function listCards(
             texts: Object.fromEntries(
                 row.card_translations.map((translation) => [translation.locale, translation.text]),
             ) as Partial<Record<CardLocale, string>>,
+            countrySpecific: row.country_specific,
             verified: row.verified_at !== null,
             updatedAt: row.updated_at,
         }
@@ -161,6 +163,7 @@ export async function getCard(db: Db, id: string): Promise<Card | null> {
         sourceUrl: data.source_url,
         sourceQuote: data.source_quote,
         difficulty: data.difficulty,
+        countrySpecific: data.country_specific,
         translations: Object.fromEntries(
             data.card_translations.map(({ locale, text, note, status }) => [
                 locale,
@@ -198,6 +201,9 @@ export async function saveCard(
             source_quote: input.sourceQuote,
             // Only when given: an import that leaves it out keeps the card's difficulty.
             ...(input.difficulty === undefined ? {} : { difficulty: input.difficulty }),
+            ...(input.countrySpecific === undefined
+                ? {}
+                : { country_specific: input.countrySpecific }),
             clear_verification: input.clearVerification ?? false,
         },
         translations: input.translations,

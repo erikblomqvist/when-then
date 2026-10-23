@@ -260,6 +260,31 @@ test('the editor sets a card’s difficulty, kept when the card is opened again'
     await expect(difficulty).toHaveValue('4')
 })
 
+test('the editor marks a card Sweden-specific; the list tags and filters it', async ({ page }) => {
+    const { userId } = await signInAs(page, 'editor')
+    const text = unique('A made-up quiz show airs')
+    const id = await draft(userId, text, year1969)
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    const country = page.getByLabel('Country-specific')
+    await expect(country).toHaveValue('')
+    await country.selectOption({ label: 'Sweden' })
+    await saveAndReopen(page)
+    await expect(country).toHaveValue('SE')
+
+    // In the list: tagged, and found by the filter (and not by its opposite).
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}&country=SE`)
+    const row = page.getByRole('row').filter({ hasText: text })
+    await expect(row.getByTestId('country-specific')).toHaveText('Sweden-specific')
+    await gotoHydrated(page, `/admin/cards?q=${encodeURIComponent(text)}&country=none`)
+    await expect(page.getByRole('row').filter({ hasText: text })).toHaveCount(0)
+
+    // Back to not country-specific.
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    await country.selectOption({ label: 'No' })
+    await saveAndReopen(page)
+    await expect(country).toHaveValue('')
+})
+
 test('the editor writes an English note, kept when the card is opened again', async ({ page }) => {
     const { userId } = await signInAs(page, 'editor')
     const id = await draft(userId, unique('A made-up harbour opens'), year1969)

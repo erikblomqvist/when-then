@@ -16,7 +16,7 @@
 // Reading a photo (`#lib/server/ai-read-photo`), whatever the image: three cards. The first
 // goes in the first category listed, dated 1628 from the photo; the second fits no category,
 // so it suggests a new one named "Photo finds <n>" (unique per stub run and call), dated 1609
-// by the AI; the third has no date. The duplicate check finds no repeats.
+// by the AI; the third has no date and is Sweden-specific. The duplicate check finds no repeats.
 // A translation call uses 500 input and 100 output tokens ($0.002 on Sonnet 5.5), every
 // suggestion call 1,000 and 200 ($0.004).
 
@@ -178,6 +178,7 @@ function readPhoto(body: Body) {
         date: { decade: null, year: null, month: null, day: null, ...date },
         date_from_photo: fromPhoto,
         difficulty: 2,
+        country_specific: '',
         category: '',
         new_category: null,
     })
@@ -195,7 +196,11 @@ function readPhoto(body: Body) {
                 colour: 'teal',
             },
         },
-        { ...card('A made-up kingdom is founded', {}, false), category: categories[0] },
+        {
+            ...card('A made-up kingdom is founded', {}, false),
+            category: categories[0],
+            country_specific: 'SE',
+        },
     ]
     return message(
         body.model,

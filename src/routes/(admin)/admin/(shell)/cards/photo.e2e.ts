@@ -52,6 +52,9 @@ test('an admin photographs a page on their phone, finds a missing date, creates 
     await expect(telescope).toContainText('AI-suggested date')
     await expect(telescope).toContainText('No matching category')
     await expect(kingdom).toContainText('Date needed')
+    // The AI's guess that only someone who grew up in Sweden would know it.
+    await expect(kingdom).toContainText('Sweden-specific · AI-suggested')
+    await expect(warship.getByText(/^(Sweden|Norway)-specific/)).toHaveCount(0)
     await expect(page.getByRole('img', { name: 'Photo 1' })).toHaveCount(0)
 
     // A card without a date gets one looked up, with its source; Undo would put it back. A date
@@ -104,7 +107,9 @@ test('an admin photographs a page on their phone, finds a missing date, creates 
             nb: { text: 'NB: A made-up warship sinks', status: 'machine' },
         },
     })
+    expect(savedWarship?.countrySpecific).toBeNull()
     expect(savedKingdom).toMatchObject({
+        countrySpecific: 'SE',
         date: { decade: 1900, year: 1908, month: null, day: null },
         sourceUrl: 'https://en.wikipedia.org/wiki/Made-up_games',
     })

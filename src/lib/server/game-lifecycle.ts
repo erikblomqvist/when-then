@@ -7,6 +7,7 @@
 // one row per player.
 
 import { isCardLocale, type CardLocale } from '../cards/card'
+import { isCountryCode } from '../cards/country'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
 import { isPlayerIcon, maxPlayers, normalisePlayerName, type PlayerIcon } from '../game/player'
@@ -78,6 +79,8 @@ export type Lobby = {
     targetScore: number
     exactYear: boolean
     cardLanguage: CardLocale
+    /** Countries whose country-specific cards the game leaves out (`cards.country_specific`). */
+    leftOutCountries: string[]
     players: LobbyPlayer[]
 }
 
@@ -125,7 +128,7 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
     const { data: game, error } = await db
         .from('games')
         .select(
-            'id, version, code, target_score, exact_year, card_language, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
+            'id, version, code, target_score, exact_year, card_language, left_out_countries, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
         )
         .eq('code', normalised)
         .is('ended_at', null)
@@ -144,6 +147,7 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
         targetScore: game.target_score,
         exactYear: game.exact_year,
         cardLanguage: game.card_language,
+        leftOutCountries: game.left_out_countries,
         players: game.game_players.map((player) => ({
             seatId: player.seat_id,
             name: player.name,
@@ -303,8 +307,9 @@ export async function removePlayer(
 
 /**
  * Update settings: the host `userId` gives the lobby of the running game with `code` (any case)
- * a target score (3–30), the exact-year house rule on or off, and a card language, then
- * nudges everyone in it. Refused with `not_host` for anyone else, `game_started` after Start,
+ * a target score (3–30), the exact-year house rule on or off, a card language, and the
+ * countries whose country-specific cards to leave out (none when not given), then nudges
+ * everyone in it. Anything in `leftOutCountries` that isn't a country code is dropped. Refused with `not_host` for anyone else, `game_started` after Start,
  * `invalid_target_score` or `invalid_card_language`.
  */
 export async function updateSettings(
@@ -315,6 +320,7 @@ export async function updateSettings(
         targetScore: number
         exactYear: boolean
         cardLanguage: string
+        leftOutCountries?: string[]
     },
 ): Promise<void> {
     const code = normaliseGameCode(input.code)
@@ -329,6 +335,7 @@ export async function updateSettings(
             target_score: input.targetScore,
             exact_year: input.exactYear,
             card_language: input.cardLanguage,
+            left_out_countries: [...new Set((input.leftOutCountries ?? []).filter(isCountryCode))],
         })
         .single()
     checkRpc(error, refusals, GameRefusal)

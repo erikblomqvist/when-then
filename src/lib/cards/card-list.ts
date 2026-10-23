@@ -12,6 +12,7 @@
 
 import { Constants } from '../database.types'
 import { cardLocales, type CardLocale, type CardStatus } from './card'
+import { isCountryCode } from './country'
 import {
     translationLocales,
     translationStateLabel,
@@ -53,6 +54,8 @@ export type CardFilter = {
     hasSource?: boolean
     /** By the card's date (year, or decade when only that is known); undated cards match neither. */
     era?: CardEra
+    /** Country-specific cards for a country (its code), or `none` for the rest. */
+    country?: string
     /** By each locale's translation state (URL keys `sv`, `nb`). */
     translations?: Partial<Record<TranslationLocale, TranslationFilter>>
 }
@@ -104,6 +107,8 @@ export function parseFilter(params: URLSearchParams): CardFilter {
     if (hasSource !== undefined) filter.hasSource = hasSource
     const era = oneOf(['before-1500', 'from-1500'], params.get('era'))
     if (era) filter.era = era
+    const country = params.get('country')
+    if (country === 'none' || isCountryCode(country)) filter.country = country
     for (const locale of translationLocales) {
         const state = oneOf(translationFilters, params.get(locale))
         if (state) filter.translations = { ...filter.translations, [locale]: state }
@@ -143,6 +148,7 @@ export function filterParams(filter: CardFilter): URLSearchParams {
     if (filter.verified !== undefined) params.set('verified', yesNoParam(filter.verified))
     if (filter.hasSource !== undefined) params.set('source', yesNoParam(filter.hasSource))
     if (filter.era) params.set('era', filter.era)
+    if (filter.country) params.set('country', filter.country)
     for (const locale of translationLocales) {
         const state = filter.translations?.[locale]
         if (state) params.set(locale, state)

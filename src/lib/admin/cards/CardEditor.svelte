@@ -18,6 +18,8 @@
     - Category: with `canCreateCategory`, the select's "New category…" opens
       `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).
     - Difficulty: optional, 1 (most people know it) to 4 (obscure), as "Add from photo" sets it.
+    - Country-specific: the country whose deep local knowledge the card takes, or none
+      (`#lib/cards/country.js`); "Add from photo" has the AI guess it.
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -57,6 +59,7 @@
     import type { ContextMenuAction } from '../context-menu.js'
     import { LiveErrors } from '../live-errors.svelte.js'
     import { formShortcut } from '../shortcut.js'
+    import { cardCountries, countryName } from '#lib/cards/country.js'
 
     type Props = {
         /** The values the form starts from (the saved card, or empty). */
@@ -137,6 +140,14 @@
 
     // The ends of the difficulty scale, said in words (as the AI reading a photo is told).
     const difficultyHint: Record<number, string> = { 1: 'Most people know it', 4: 'Obscure' }
+    // The countries offered, plus a card's own when it is another one (set elsewhere).
+    const countryChoices = $derived([
+        ...cardCountries,
+        ...(values.country_specific &&
+        !(cardCountries as readonly string[]).includes(values.country_specific)
+            ? [values.country_specific]
+            : []),
+    ])
 
     const months = [
         'January',
@@ -444,6 +455,26 @@
                 How hard the card is to place: 1, most people know it, to 4, obscure.
             </p>
             {@render error('difficulty')}
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <Label for="country_specific">Country-specific</Label>
+            <NativeSelect.Root
+                id="country_specific"
+                name="country_specific"
+                bind:value={values.country_specific}
+                aria-invalid={shown.country_specific ? 'true' : undefined}
+                aria-describedby={describedBy('country_specific')}>
+                <NativeSelect.Option value="">No</NativeSelect.Option>
+                {#each countryChoices as code (code)}
+                    <NativeSelect.Option value={code}>{countryName(code)}</NativeSelect.Option>
+                {/each}
+            </NativeSelect.Root>
+            <p class="text-sm text-muted-foreground">
+                Only when you almost had to grow up there to know it, not for everything about the
+                country. A host can leave these cards out.
+            </p>
+            {@render error('country_specific')}
         </div>
 
         <fieldset class="flex flex-col gap-3">

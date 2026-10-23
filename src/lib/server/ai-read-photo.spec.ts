@@ -60,6 +60,7 @@ const vasa = {
     date: { decade: null, year: 1628, month: 8, day: 10 },
     date_from_photo: true,
     difficulty: 2,
+    country_specific: '',
     category: 'ships',
     new_category: null,
 }
@@ -71,6 +72,8 @@ const telescope = {
     date: { decade: null, year: 1609, month: null, day: null },
     date_from_photo: false,
     difficulty: 7,
+    // Upper-cased and trimmed into a country code.
+    country_specific: ' it ',
     category: '',
     new_category: {
         names: { en: 'Science', sv: 'Vetenskap', nb: 'Vitenskap' },
@@ -93,6 +96,7 @@ describe('readCardsFromPhoto', () => {
                 date: { decade: 1620, year: 1628, month: 8, day: 10 },
                 dateFromPhoto: true,
                 difficulty: 2,
+                countrySpecific: null,
                 categoryId: 'cat-ships',
                 newCategory: null,
                 duplicateOf: null,
@@ -105,6 +109,7 @@ describe('readCardsFromPhoto', () => {
                 date: { decade: 1600, year: 1609, month: null, day: null },
                 dateFromPhoto: false,
                 difficulty: null,
+                countrySpecific: 'IT',
                 categoryId: null,
                 newCategory: telescope.new_category,
                 duplicateOf: null,

@@ -5,11 +5,12 @@
 // A candidate is written in the photo's language (that text is the admin's to review, so it is
 // saved as reviewed) and translated by the AI into the other card languages (saved as machine
 // unless the admin edits them). Whatever the AI inferred instead of reading it from the photo
-// (the date, the difficulty) is marked so the page can say so.
+// (the date, the difficulty, whether it is country-specific) is marked so the page can say so.
 
 import type { CardLocale, TranslationStatus } from './card'
 import { cardLocales } from './card'
 import { cardTextMaxLength, isWebAddress, sourceQuoteMaxLength } from './card-form'
+import { isCountryCode } from './country'
 import { decadeOf, validateDateParts, type DateParts } from './date-parts'
 import { yearRequiredFrom } from './publish-rule'
 import type { CategoryColour, CategoryIconName } from '../categories/look'
@@ -39,6 +40,8 @@ export type PhotoCandidate = {
     /** The date is printed in the photo (otherwise the AI supplied it from what it knows). */
     dateFromPhoto: boolean
     difficulty: number | null
+    /** The country whose deep local knowledge it takes, as the AI guesses (`./country`). */
+    countrySpecific: string | null
     /** An existing category it fits, or null with `newCategory` suggested. */
     categoryId: string | null
     newCategory: SuggestedCategory | null
@@ -128,6 +131,7 @@ export type PhotoDraft = {
     sourceUrl: string | null
     sourceQuote: string | null
     difficulty: number | null
+    countrySpecific: string | null
     translations: { en: PhotoTranslation } & Partial<Record<CardLocale, PhotoTranslation>>
     /** The AI request (audit row) the card was read in. */
     requestId: number | null
@@ -170,6 +174,9 @@ export function photoDraftErrors(draft: PhotoDraft): string[] {
     if (Object.keys(validateDateParts(draft.date)).length > 0) errors.push('The date is not valid.')
     if (draft.difficulty !== null && !isDifficulty(draft.difficulty)) {
         errors.push('Difficulty is 1 to 4.')
+    }
+    if (draft.countrySpecific !== null && !isCountryCode(draft.countrySpecific)) {
+        errors.push('Pick a country, or none.')
     }
     if (draft.sourceUrl !== null && !isWebAddress(draft.sourceUrl)) {
         errors.push('The source is not a web address.')
@@ -224,6 +231,10 @@ export function readPhotoDrafts(json: string): { draft: PhotoDraft; errors: stri
                     ? item.sourceQuote.trim()
                     : null,
             difficulty: item?.difficulty === null ? null : (item?.difficulty as number),
+            countrySpecific:
+                typeof item?.countrySpecific === 'string' && item.countrySpecific
+                    ? item.countrySpecific
+                    : null,
             translations,
             requestId:
                 typeof item?.requestId === 'number' &&

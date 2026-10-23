@@ -4,8 +4,8 @@
 //
 // 1. The photo, the existing categories and the curated looks go in; structured output gives
 //    up to 15 candidates, each written in the photo's language and translated into the other
-//    card languages, with a date (said whether the photo prints it), a difficulty and either an
-//    existing category or a suggested new one.
+//    card languages, with a date (said whether the photo prints it), a difficulty, whether it is
+//    country-specific, and either an existing category or a suggested new one.
 // 2. When existing cards sit near a candidate's year, a second, text-only call says which
 //    candidates repeat one of them. Only those nearby cards are sent, so the request stays
 //    small however many cards there are.
@@ -26,6 +26,7 @@ import {
     suggestedCategory,
     type PhotoCandidate,
 } from '../cards/photo-import'
+import { isCountryCode } from '../cards/country'
 import { categoryColours, categoryIcons } from '../categories/look'
 import { englishNameKey } from '../categories/category-form'
 import { AiAnswerRejectedError, replyText, runModel, type AiDeps, type AiRequest } from './ai'
@@ -75,6 +76,7 @@ For each card:
 - source_quote: the passage in the photo the card is based on, as written, at most 300 characters.
 - date: the event's date as precisely as it is reliably known: year (BCE negative, no year 0); month and day too whenever the event happened on a known day (a launch, a sinking, a birth, a treaty signed), from the photo or from what you reliably know, so fill them in rather than stopping at the year; leave them null for something that took longer than a day or whose day isn't recorded. decade (its earliest year, e.g. 1490) only when the year isn't known. date_from_photo says whether the photo itself states the date; if not, give the date from your own knowledge only when you are confident, and otherwise leave every part null.
 - difficulty: 1 (most people know it) to 4 (obscure).
+- country_specific: the ISO 3166-1 alpha-2 code (e.g. SE, NO) of a country when the card takes knowledge so local that you almost had to grow up there to know it: a domestic TV show, a local politician, a national reform others never heard of. Not just because it happens in that country: Sweden's first Nobel Prizes or the Vasa sinking are known well beyond Sweden. Otherwise an empty string. Most cards are not country-specific.
 - category: the English name of the existing category it fits best, exactly as listed. If it fits none of them, leave category empty and suggest new_category: names in en, sv and nb, an icon and a colour from the lists (prefer a colour not in use). Otherwise new_category is null.
 
 If the photo holds no historical fact that could be a card, or can't be read, return no cards and say why in message (one sentence, in English).`
@@ -112,6 +114,7 @@ const readSchema = {
                     },
                     date_from_photo: { type: 'boolean' },
                     difficulty: { type: 'integer' },
+                    country_specific: { type: 'string' },
                     category: { type: 'string' },
                     new_category: nullable({
                         type: 'object',
@@ -131,6 +134,7 @@ const readSchema = {
                     'date',
                     'date_from_photo',
                     'difficulty',
+                    'country_specific',
                     'category',
                     'new_category',
                 ],
@@ -170,6 +174,7 @@ type ReadCard = {
     date?: Record<string, unknown>
     date_from_photo?: unknown
     difficulty?: unknown
+    country_specific?: unknown
     category?: unknown
     new_category?: unknown
 }
@@ -209,12 +214,19 @@ export function candidatesFrom(
                 date: normaliseDate(card.date ?? {}),
                 dateFromPhoto: card.date_from_photo === true,
                 difficulty: isDifficulty(card.difficulty) ? card.difficulty : null,
+                countrySpecific: countryCode(card.country_specific),
                 categoryId: category?.id ?? null,
                 newCategory: category ? null : suggestedCategory(card.new_category),
                 duplicateOf: null,
             },
         ]
     })
+}
+
+/** The AI's country code, upper-cased, or null when it gave none (or not a code). */
+const countryCode = (value: unknown) => {
+    const code = str(value).toUpperCase()
+    return isCountryCode(code) ? code : null
 }
 
 const yearOf = ({ date }: PhotoCandidate) => date.year ?? date.decade

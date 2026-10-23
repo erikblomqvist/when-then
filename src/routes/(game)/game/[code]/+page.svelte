@@ -20,6 +20,7 @@
     } from '#lib'
     import { cardLocales } from '#lib/cards/card.js'
     import { cardLanguageLabel } from '#lib/game/card-language-labels.js'
+    import { countryLabel, gameCountries } from '#lib/game/country-labels.js'
     import {
         isNameTaken,
         maxPlayers,
@@ -97,6 +98,7 @@
     let targetScore = $derived(unsavedScore ?? lobby.targetScore)
     let exactYear = $derived(lobby.exactYear)
     let cardLanguage = $derived(lobby.cardLanguage)
+    let leftOutCountries = $derived(lobby.leftOutCountries)
     let settingsForm = $state<HTMLFormElement>()
     // The tabs aren't form fields: wait for their hidden inputs to update, then send.
     async function saveSettings() {
@@ -123,6 +125,7 @@
                 targetScore = lobby.targetScore
                 exactYear = lobby.exactYear
                 cardLanguage = lobby.cardLanguage
+                leftOutCountries = lobby.leftOutCountries
             }
         }
     }
@@ -291,6 +294,35 @@
                             name="cardLanguage"
                             value={cardLanguage} />
                     </div>
+                    <div class="field">
+                        <span class="ui-caption">{m.country_cards()}</span>
+                        {#each gameCountries as country (country)}
+                            <div class="country-setting">
+                                <span>{countryLabel(country)}</span>
+                                <Tabs
+                                    label={m.country_cards_from({ country: countryLabel(country) })}
+                                    tabs={[
+                                        { id: 'off', label: m.setting_off() },
+                                        { id: 'on', label: m.setting_on() },
+                                    ]}
+                                    selected={leftOutCountries.includes(country) ? 'off' : 'on'}
+                                    onchange={(id) => {
+                                        leftOutCountries =
+                                            id === 'on'
+                                                ? leftOutCountries.filter((one) => one !== country)
+                                                : [...leftOutCountries, country]
+                                        void saveSettings()
+                                    }} />
+                            </div>
+                        {/each}
+                        {#each leftOutCountries as country (country)}
+                            <input
+                                type="hidden"
+                                name="leftOut"
+                                value={country} />
+                        {/each}
+                        <span class="ui-caption">{m.country_cards_hint()}</span>
+                    </div>
                     {#if error && settingsRefused}
                         <p
                             class="error"
@@ -317,6 +349,18 @@
                     <div>
                         <dt class="ui-caption">{m.card_language()}</dt>
                         <dd>{cardLanguageLabel(lobby.cardLanguage)}</dd>
+                    </div>
+                    <div>
+                        <dt class="ui-caption">{m.country_cards()}</dt>
+                        <dd>
+                            {lobby.leftOutCountries.length === 0
+                                ? m.country_cards_all()
+                                : m.country_cards_without({
+                                      countries: lobby.leftOutCountries
+                                          .map(countryLabel)
+                                          .join(', '),
+                                  })}
+                        </dd>
                     </div>
                 </dl>
                 <p class="settings-note">{m.settings_host_only()}</p>
@@ -495,6 +539,15 @@
     .field {
         display: grid;
         gap: var(--space-3);
+    }
+    /* A country's name with its On/Off beside it. */
+    .country-setting {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        font-family: var(--font-family-sans);
+        font-size: var(--font-size-15);
     }
     .actions {
         display: flex;

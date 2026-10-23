@@ -48,6 +48,11 @@ export type CardInput = {
      * card's difficulty as it is (imports that don't set one).
      */
     difficulty?: number | null
+    /**
+     * The country whose deep local knowledge the card takes (`#lib/cards/country.js`), or null.
+     * Left out, a save keeps the card's as it is.
+     */
+    countrySpecific?: string | null
     translations: Partial<Record<CardLocale, TranslationInput | null>> & { en: TranslationInput }
     /** Clear the date's verification with this save (the editor asks when a verified date changes). */
     clearVerification?: boolean
@@ -62,6 +67,7 @@ export type Translation = { text: string; note: string | null; status: Translati
 export type Card = CardFields & {
     id: string
     difficulty: number | null
+    countrySpecific: string | null
     status: CardStatus
     translations: Partial<Record<CardLocale, Translation>>
     /** When and by whom the date was checked against a source; null when it wasn't. */
@@ -98,6 +104,7 @@ export type CardSummary = {
     translations: Partial<Record<CardLocale, TranslationStatus>>
     /** Per-locale text, for the list's review mode. A missing locale has no entry. */
     texts: Partial<Record<CardLocale, string>>
+    countrySpecific: string | null
     verified: boolean
     updatedAt: string
 }

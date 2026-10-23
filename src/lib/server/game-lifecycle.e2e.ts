@@ -58,6 +58,8 @@ test('creating a game seats the host in its lobby with their name and icon', asy
         targetScore: 10,
         exactYear: false,
         cardLanguage: 'sv',
+        // Every country's country-specific cards are in, until the host leaves some out.
+        leftOutCountries: [],
         players: [
             { seatId: expect.any(String), name: 'Astrid', icon: 'cat', isHost: true, isYou: true },
         ],
@@ -578,6 +580,23 @@ test('the card language is one of the card locales', async () => {
         updateSettings(db, { userId: host, code, ...settings, cardLanguage: 'de' }),
     ).rejects.toMatchObject({ code: 'invalid_card_language' })
     expect((await getLobby(db, host, code)).cardLanguage).toBe('en')
+})
+
+test('the host leaves out country-specific cards per country; everything else is dropped', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    expect((await getLobby(db, bo, code)).leftOutCountries).toEqual([])
+
+    await updateSettings(db, {
+        userId: host,
+        code,
+        ...settings,
+        leftOutCountries: ['SE', 'SE', 'Sweden', 'no'],
+    })
+    expect((await getLobby(db, bo, code)).leftOutCountries).toEqual(['SE'])
+
+    // Settings sent without it put every card back in.
+    await updateSettings(db, { userId: host, code, ...settings })
+    expect((await getLobby(db, bo, code)).leftOutCountries).toEqual([])
 })
 
 test('only the host changes the settings, and only before the game starts', async () => {

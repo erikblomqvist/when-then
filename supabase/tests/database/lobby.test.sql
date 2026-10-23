@@ -6,7 +6,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(22);
 
 insert into auth.users (id, is_anonymous) values
     ('00000000-0000-0000-0000-0000000064a1', true),
@@ -44,6 +44,21 @@ select throws_ok(
     'P0001',
     'invalid_target_score',
     'a target score above 30 is refused'
+);
+select lives_ok(
+    $$ select public.update_settings('00000000-0000-0000-0000-0000000064a2', 'QQQQ', 10, false, 'sv', '{SE}') $$,
+    'the host leaves out the Sweden-specific cards'
+);
+select results_eq(
+    $$ select left_out_countries from public.games where code = 'QQQQ' and ended_at is null $$,
+    $$ values ('{SE}'::text[]) $$,
+    'the game keeps the countries left out'
+);
+select throws_ok(
+    $$ select public.update_settings('00000000-0000-0000-0000-0000000064a2', 'QQQQ', 10, false, 'sv', '{se}') $$,
+    '23514',
+    null,
+    'a country that is not a two-letter code is refused'
 );
 
 select results_eq(

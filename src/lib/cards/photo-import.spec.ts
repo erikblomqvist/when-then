@@ -110,6 +110,7 @@ describe('readPhotoDrafts', () => {
         sourceUrl: null,
         sourceQuote: ' Vasa sank 1628 ',
         difficulty: 2,
+        countrySpecific: 'SE',
         requestId: 41,
         translations: {
             en: { text: 'The Vasa sinks', status: 'machine' },
@@ -163,6 +164,12 @@ describe('readPhotoDrafts', () => {
 
         const [bad] = readPhotoDrafts(JSON.stringify([{ ...draft, sourceUrl: 'wikipedia' }]))!
         expect(bad.errors).toEqual(['The source is not a web address.'])
+        const [country] = readPhotoDrafts(
+            JSON.stringify([{ ...draft, countrySpecific: 'Sweden' }]),
+        )!
+        expect(country.errors).toEqual(['Pick a country, or none.'])
+        const [none] = readPhotoDrafts(JSON.stringify([{ ...draft, countrySpecific: '' }]))!
+        expect(none.draft.countrySpecific).toBeNull()
     })
 
     it('refuses what is not a list of drafts, or too long a one', () => {

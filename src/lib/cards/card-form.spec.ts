@@ -93,6 +93,27 @@ describe('parseCardForm', () => {
         expect(values.difficulty).toBe('2')
     })
 
+    it('saves a country-specific card, clears it when blank, and keeps it when not posted', () => {
+        const sweden = parseCardForm(form({ year: '1975', country_specific: 'SE' }))
+        expect(sweden.ok && sweden.card.countrySpecific).toBe('SE')
+        const none = parseCardForm(form({ year: '1975', country_specific: '' }))
+        expect(none.ok && none.card.countrySpecific).toBeNull()
+        const notPosted = parseCardForm(form({ year: '1975' }))
+        expect(notPosted.ok && 'countrySpecific' in notPosted.card).toBe(false)
+        const wrong = parseCardForm(form({ year: '1975', country_specific: 'Sweden' }))
+        expect(wrong.ok || wrong.errors.country_specific).toBe('Pick a country, or none.')
+        expect(
+            cardFormValues({
+                categoryId,
+                date: { decade: 1970, year: 1975, month: null, day: null },
+                sourceUrl: null,
+                sourceQuote: null,
+                countrySpecific: 'NO',
+                translations: { en: { text: 'A made-up show airs' } },
+            }).country_specific,
+        ).toBe('NO')
+    })
+
     it('asks to clear the verification only when the editor said so', () => {
         const cleared = parseCardForm(form({ year: '1492', clear_verification: 'true' }))
         expect(cleared.ok && cleared.card.clearVerification).toBe(true)
@@ -198,6 +219,7 @@ describe('cardFormValues', () => {
             source_url: '',
             source_quote: 'the Ides of March',
             difficulty: '',
+            country_specific: '',
             text_sv: '',
             note_sv: '',
             reviewed_sv: '',

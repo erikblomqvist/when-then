@@ -9,6 +9,7 @@
 // and `cardFormValues` together.
 
 import type { CardFields, CardInput, CardLocale, TranslationInput } from './card'
+import { isCountryCode } from './country'
 import { yearRequiredFrom, yearRequiredMessage } from './publish-rule'
 import {
     decadeFromLabel,
@@ -47,6 +48,8 @@ export type CardFormValues = {
     source_quote: string
     /** '' (not set) or '1' (most people know it) to '4' (obscure). */
     difficulty: string
+    /** '' (not country-specific) or a country code (`#lib/cards/country.js`). */
+    country_specific: string
 } & TranslationFields<'sv'> &
     TranslationFields<'nb'>
 
@@ -173,6 +176,7 @@ export const emptyCardFormValues: CardFormValues = {
     source_url: '',
     source_quote: '',
     difficulty: '',
+    country_specific: '',
     ...translationFields('sv', draftFromTranslation(undefined)),
     ...translationFields('nb', draftFromTranslation(undefined)),
 }
@@ -280,6 +284,13 @@ export function parseCardForm(form: FormData): ParsedCardForm {
     if (difficulty !== undefined && difficulty !== null && !cardDifficulties.includes(difficulty)) {
         errors.difficulty = 'Difficulty is 1 to 4.'
     }
+    // Likewise: not posted, the save keeps it; blank clears it.
+    const countrySpecific = form.has('country_specific')
+        ? field(form, 'country_specific') || null
+        : undefined
+    if (countrySpecific && !isCountryCode(countrySpecific)) {
+        errors.country_specific = 'Pick a country, or none.'
+    }
 
     const translations: Partial<Record<TranslationLocale, TranslationInput | null>> = {}
     for (const locale of translationLocales) {
@@ -310,6 +321,7 @@ export function parseCardForm(form: FormData): ParsedCardForm {
             sourceUrl: sourceUrl || null,
             sourceQuote: sourceQuote || null,
             ...(difficulty !== undefined && { difficulty }),
+            ...(countrySpecific !== undefined && { countrySpecific }),
             translations: { en: englishTranslation, ...translations },
             // Set by the editor when a verified date changed and the editor chose to clear it.
             ...(form.get('clear_verification') === 'true' && { clearVerification: true }),
@@ -336,6 +348,7 @@ const numberField = (value: number | null) => (value === null ? '' : String(valu
 export function cardFormValues(
     card: CardFields & {
         difficulty?: number | null
+        countrySpecific?: string | null
         translations: Partial<Record<CardLocale, { text: string; note?: string | null }>>
     },
 ): CardFormValues {
@@ -353,6 +366,7 @@ export function cardFormValues(
         source_url: card.sourceUrl ?? '',
         source_quote: card.sourceQuote ?? '',
         difficulty: numberField(card.difficulty ?? null),
+        country_specific: card.countrySpecific ?? '',
         ...translationFields('sv', draftFromTranslation(card.translations.sv)),
         ...translationFields('nb', draftFromTranslation(card.translations.nb)),
     }

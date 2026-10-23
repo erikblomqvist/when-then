@@ -66,6 +66,37 @@ test('a stepper tap is kept when a refetch of the lobby lands before its save', 
         .toBe(17)
 })
 
+test('the host leaves out Sweden-specific cards, and it stays after a reload', async ({ page }) => {
+    await gotoHydrated(page, '/new')
+    await page.getByLabel('Your name').fill('Astrid')
+    await page.getByRole('radio', { name: 'Cat' }).check()
+    await page.getByRole('button', { name: 'Create game' }).click()
+    await page.waitForURL(/\/game\/[A-HJ-NP-Z]{4}$/)
+    await waitForHydration(page)
+    const code = new URL(page.url()).pathname.split('/').pop()!
+
+    // Every country's cards are in until the host says otherwise.
+    const sweden = page.getByRole('tablist', { name: 'Country-specific cards from Sweden' })
+    const norway = page.getByRole('tablist', { name: 'Country-specific cards from Norway' })
+    await expect(sweden.getByRole('tab', { name: 'On' })).toHaveAttribute('aria-selected', 'true')
+    await expect(norway.getByRole('tab', { name: 'On' })).toHaveAttribute('aria-selected', 'true')
+    await sweden.getByRole('tab', { name: 'Off' }).click()
+    await expect
+        .poll(async () => {
+            const { data } = await db
+                .from('games')
+                .select('left_out_countries')
+                .eq('code', code)
+                .single()
+            return data?.left_out_countries
+        })
+        .toEqual(['SE'])
+
+    await reloadHydrated(page)
+    await expect(sweden.getByRole('tab', { name: 'Off' })).toHaveAttribute('aria-selected', 'true')
+    await expect(norway.getByRole('tab', { name: 'On' })).toHaveAttribute('aria-selected', 'true')
+})
+
 test('the host creates a game and lands in its lobby', async ({ browser, baseURL }) => {
     const hostContext = await browser.newContext({
         permissions: ['clipboard-read', 'clipboard-write'],
@@ -208,6 +239,12 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     await expect(boSetting('Exact-year house rule')).toContainText('On')
     await hostLanguage.getByRole('tab', { name: 'Swedish' }).click()
     await expect(boSetting('Card language')).toContainText('Swedish')
+    await expect(boSetting('Country-specific cards')).toContainText('All in')
+    await host
+        .getByRole('tablist', { name: 'Country-specific cards from Norway' })
+        .getByRole('tab', { name: 'Off' })
+        .click()
+    await expect(boSetting('Country-specific cards')).toContainText('Without Norway')
     await expect(caro.locator('.settings-list')).toContainText('15')
     // A target score outside 3–30 is refused, and the field goes back to the saved one.
     await host.getByLabel('Target score', { exact: true }).fill('31')

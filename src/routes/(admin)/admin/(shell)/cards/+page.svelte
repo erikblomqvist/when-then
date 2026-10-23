@@ -25,6 +25,7 @@
         type CardSort,
     } from '#lib/cards/card-list.js'
     import { localeName, translationLocales } from '#lib/cards/translation.js'
+    import { cardCountries, countryName } from '#lib/cards/country.js'
     import { formatCardDate } from '#lib/cards/date-parts.js'
     import { filterParams } from '#lib/cards/card-list.js'
     import BulkActionBar from '#lib/admin/cards/BulkActionBar.svelte'
@@ -126,6 +127,15 @@
             label: 'Date',
             value: filter.era ?? '',
             choices: eras.map((era) => ({ value: era, label: cardEraLabel[era] })),
+        },
+        {
+            name: 'country',
+            label: 'Country-specific',
+            value: filter.country ?? '',
+            choices: [
+                ...cardCountries.map((code) => ({ value: code, label: countryName(code) })),
+                { value: 'none', label: 'Not country-specific' },
+            ],
         },
         ...translationLocales.map((locale) => ({
             name: locale,
@@ -627,6 +637,12 @@
                             href="/admin/cards/{card.id}">
                             {card.text ?? 'No English text'}
                         </a>
+                        {#if card.countrySpecific}
+                            <span
+                                class="ml-1.5 inline-block rounded border px-1.5 text-xs whitespace-nowrap text-muted-foreground"
+                                data-testid="country-specific"
+                                >{countryName(card.countrySpecific)}-specific</span>
+                        {/if}
                     </Table.Cell>
                     <Table.Cell>{formatCardDate(card.date)}</Table.Cell>
                     <Table.Cell>{card.category.name}</Table.Cell>
