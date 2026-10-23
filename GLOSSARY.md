@@ -90,6 +90,13 @@ _Avoid_: PIN, room code, game ID
 The stage of a game before it starts, where players join, the host adjusts the settings, and anyone but the host can still leave. Starting the game closes it to new players.
 _Avoid_: Waiting room
 
+**Seating**:
+The order the players sit in around the table, clockwise, which is also the turn order. The game waits in seating while the host arranges it: once before play starts, and between rounds when the host has asked to reseat.
+_Avoid_: Seat order, table order
+
+**Confirm seating**:
+The host fixing the seating so play can start or resume. The first time, it gives every player their anchor year and picks a random starting player. A two-player game skips seating.
+
 **Absent**:
 A player whose phone has lost contact with the game. They keep their seat and can return to it.
 _Avoid_: Away, offline, disconnected
