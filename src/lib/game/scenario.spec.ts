@@ -129,7 +129,8 @@ describe("stopping at a Reader's or Free choice", () => {
         }
     })
 
-    it('reaches either choice for every active player', () => {
+    // 108 scenarios, each searching for its setup: about 6 s, over the default 5 s.
+    it('reaches either choice for every active player', { timeout: 30_000 }, () => {
         for (const players of counts) {
             for (let k = 1; k <= players; k++) {
                 for (const step of kinds) {
