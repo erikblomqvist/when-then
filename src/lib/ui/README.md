@@ -60,6 +60,7 @@ Names follow the glossary: a card shows **card text** (not a question), a correc
 | `Notepad`, `PlayerRow`, `NumberBadge`, `RoleTag` | Host, Reader | The lobby list and seating order. |
 | `PlayerIcon`, `PlayerIconPicker` | Host, Lobby | A player's icon from the curated Lucide set in `src/lib/game/player.ts`, and the radio grid to pick one. |
 | `QrCode` | Game code | The join link as a QR code (`uqr`), one SVG path on a white tile. |
+| `CornerMenu` | | The round button in the top end corner of every game page and its paper popover, e.g. the app language. |
 | `Surface` | | table, tray, paper, sheet, panel, veil. |
 | `Text` | | The type roles. |
 

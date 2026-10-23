@@ -324,6 +324,27 @@ export async function updateSettings(
     await nudge(db, { gameId: data.updated_game, version: data.game_version })
 }
 
+/** A player's seat in a running game: the game, its code and the seat. */
+export type Seat = { gameId: string; code: string; seatId: string }
+
+/**
+ * Find my seat: `userId`'s seat in a running game, or `null` when they have none (they never
+ * joined, left, or the host removed them). Seated in more than one, it's the one they joined
+ * last. It powers "Back to game" on the home page and every reload.
+ */
+export async function findMySeat(db: Db, userId: string): Promise<Seat | null> {
+    const { data, error } = await db
+        .from('game_players')
+        .select('seat_id, games!inner (id, code)')
+        .eq('user_id', userId)
+        .is('games.ended_at', null)
+        .order('joined_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    if (error) throw new Error(error.message, { cause: error })
+    return data && { gameId: data.games.id, code: data.games.code, seatId: data.seat_id }
+}
+
 /** Whether the host removed `userId` from the game's lobby, and they haven't joined again. */
 async function wasRemoved(db: Db, gameId: string, userId: string): Promise<boolean> {
     const { count, error } = await db

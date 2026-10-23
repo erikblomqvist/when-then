@@ -638,9 +638,10 @@
     box-shadow: inset 0 0 0 1px oklch(from var(--color-paper-300) l c h / 0.12);
 }
 
-/* On paper surfaces (sheet, panel), ghost becomes outline and ink goes brown */
+/* On paper surfaces (sheet, panel, corner menu), ghost becomes outline and ink goes brown */
 .ui-sheet .ui-button--ghost,
-.ui-panel .ui-button--ghost {
+.ui-panel .ui-button--ghost,
+.ui-corner-menu .ui-button--ghost {
     color: var(--text-on-paper);
     background: transparent;
     box-shadow: inset 0 0 0 1.5px oklch(from var(--color-ink-900) l c h / 0.3);
@@ -985,6 +986,38 @@ button.ui-chip:focus-visible {
     color: oklch(from var(--color-paper-300) l c h / 0.6);
     background: transparent;
     box-shadow: inset 0 0 0 1.5px oklch(from var(--color-paper-300) l c h / 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Corner menu
+   A round button in the top end corner of every game page, opening a paper popover below it
+   (e.g. the app language). Fixed insets place it, so it needs no anchor positioning.
+   -------------------------------------------------------------------------- */
+.ui-corner-menu__trigger,
+.ui-corner-menu {
+    --corner-menu-top: max(var(--space-5), env(safe-area-inset-top));
+    position: fixed;
+    inset-inline-end: max(var(--space-5), env(safe-area-inset-right));
+}
+.ui-corner-menu__trigger {
+    z-index: 1;
+    top: var(--corner-menu-top);
+}
+.ui-corner-menu {
+    bottom: auto;
+    inset-inline-start: auto;
+    /* Below the trigger, which is .ui-icon-button's 44px tall. */
+    top: calc(var(--corner-menu-top) + 44px + var(--space-3));
+    margin: 0;
+    border: none;
+    display: none;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 200px;
+    box-shadow: var(--shadow-overlay);
+}
+.ui-corner-menu:popover-open {
+    display: flex;
 }
 
 /* --------------------------------------------------------------------------
