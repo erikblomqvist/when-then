@@ -1,6 +1,6 @@
 // Bulk lifecycle steps over many cards (publish, archive, move to category, delete), one
 // rpc per call (`public.bulk_card_action`, migrations `20261023004600_bulk_card_actions.sql`
-// and `20261023006600_bulk_delete_drafts.sql`). Each card
+// and `20261023006600_bulk_delete_drafts.sql`, `20261023011200_delete_any_card.sql`). Each card
 // goes through the same single-card rpc as the editor's sidebar, in its own savepoint: a
 // card the rule refuses is skipped with the reason, the rest still happen, and the audit log
 // gets one row per affected card, naming the actor.

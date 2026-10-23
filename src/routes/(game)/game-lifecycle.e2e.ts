@@ -1,6 +1,8 @@
 // The game lifecycle, played through on phones (spec #59, seam 3): one flow that grows with
 // each lifecycle ticket. So far: the host creates a game and lands in its lobby, one player
 // joins by link and another by the code typed on the home page, and every lobby updates live.
+// In the lobby a player changes their name and icon, another leaves, and the host removes a
+// player, who joins again.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -116,6 +118,41 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     const response = await stranger.goto(`/game/${code}`)
     expect(response?.status()).toBe(403)
     await expect(stranger.getByText('Astrid')).toHaveCount(0)
+
+    // Bo changes name and icon; a name someone else has is flagged, ignoring case.
+    await expect(bo.getByRole('button', { name: /^Remove / })).toHaveCount(0)
+    await bo.getByRole('button', { name: 'Change name or icon' }).click()
+    await expect(bo.getByRole('radio', { name: 'Fish' })).toBeDisabled()
+    await bo.getByLabel('Your name').fill('caro')
+    await expect(bo.getByText('Someone in this game already has that name.')).toBeVisible()
+    await expect(bo.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await bo.getByLabel('Your name').fill('Bosse')
+    await bo.getByRole('radio', { name: 'Rabbit' }).check()
+    await bo.getByRole('button', { name: 'Save' }).click()
+    await expect(boPlayers.nth(1)).toContainText('Bosse')
+    await expect(bo.getByRole('button', { name: 'Change name or icon' })).toBeVisible()
+    await expect(players.nth(1)).toContainText('Bosse')
+    await expect(caro.locator('.ui-player-row').nth(1)).toContainText('Bosse')
+
+    // Caro leaves and lands on the home page; the others see Caro go.
+    await caro.getByRole('button', { name: 'Leave game' }).click()
+    await caro.waitForURL((url) => url.pathname === '/')
+    await expect(players).toHaveCount(2)
+    await expect(boPlayers).toHaveCount(2)
+
+    // The host can't leave, but removes Bosse, whose phone is told and can join again.
+    await expect(host.getByRole('button', { name: 'Leave game' })).toHaveCount(0)
+    await host.getByRole('button', { name: 'Remove Bosse' }).click()
+    await expect(players).toHaveCount(1)
+    await bo.waitForURL(new RegExp(`/join/${code}$`))
+    await expect(bo.getByText('The host removed you from this game.')).toBeVisible()
+    await waitForHydration(bo)
+    await bo.getByLabel('Your name').fill('Bo')
+    await bo.getByRole('radio', { name: 'Dog' }).check()
+    await bo.getByRole('button', { name: 'Join game' }).click()
+    await bo.waitForURL(new RegExp(`/game/${code}$`))
+    await expect(boPlayers).toHaveCount(2)
+    await expect(players.nth(1)).toContainText('Bo')
 
     await Promise.all(
         [hostContext, boContext, caroContext, strangerContext].map((context) => context.close()),

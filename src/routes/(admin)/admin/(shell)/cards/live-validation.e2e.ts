@@ -175,9 +175,9 @@ test('Publish on a new card saves and publishes it, and goes back to the list', 
     await gotoHydrated(page, '/admin/cards/new')
     const publish = page.getByRole('button', { name: 'Publish', exact: true })
     await expect(publish).toBeDisabled()
-    await expect(page.getByRole('complementary', { name: 'Card' })).toContainText(
-        'Write the card in English.',
-    )
+    await expect(
+        page.getByRole('region', { name: 'Required to publish' }).getByRole('listitem').first(),
+    ).toHaveText(/To do:\s*English text/)
 
     const text = unique('A made-up tram departs')
     await page.getByLabel('English text').fill(text)

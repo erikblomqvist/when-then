@@ -59,6 +59,14 @@
         class="sheet">
         {#if step}
             <Text role="heading-2">{m.join_title({ code: step.code })}</Text>
+            {#if step.removed}
+                <p
+                    class="error"
+                    role="alert">
+                    {refusalMessage('removed')}
+                    {m.removed_join_again()}
+                </p>
+            {/if}
             <Text
                 role="caption"
                 as="p">{m.player_form_intro()}</Text>

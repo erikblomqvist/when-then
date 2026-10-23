@@ -1,147 +1,58 @@
 <!--
-    The card editor sidebar's status actions and date verification, rendered through
-    CardEditor's `sidebar` snippet. Each button is its own small form posting to an action from
-    `cardLifecycleActions` (#lib/server/card-editor.js). Status actions wait while the editor
-    has unsaved changes, so what gets published is what was saved. A draft is published from
-    the editor instead, which saves it first.
+    The forms behind the card editor's status and verification rows, rendered through
+    CardEditor's `sidebar` snippet. The rows themselves are in the editor's menu (from
+    `CardLifecycleActions.menuActions`); this renders the forms they submit (one per step,
+    posting to an action from `cardLifecycleActions` in #lib/server/card-editor.js), why
+    Unarchive waits for the publish rule, and a refusal from the last step. (Rows waiting for a
+    save point at the editor's "Unsaved changes" note.)
 -->
 <script lang="ts">
     import { enhance } from '$app/forms'
-    import { Button } from '#lib/components/ui/button/index.js'
-    import type { Card } from '#lib/cards/card.js'
-    import type { AppRole } from '#lib/server/roles.js'
+    import {
+        lifecycleForm,
+        lifecycleWhyId,
+        type CardLifecycleActions,
+    } from './card-lifecycle.svelte.js'
 
     type Props = {
-        card: Card
-        /** Why the saved card can't be published yet (`publishBlockers`); empty when it can. */
-        blockers: string[]
-        role: AppRole
-        /** The editor has unsaved changes. */
-        dirty: boolean
-        verifiedByEmail: string | null
+        lifecycle: CardLifecycleActions
         /** A refusal from the last action, to show. */
         error?: string
     }
 
-    let { card, blockers, role, dirty, verifiedByEmail, error }: Props = $props()
-
-    let busy = $state(false)
-    const submit = (confirmation?: string) => {
-        return ({ cancel }: { cancel: () => void }) => {
-            if (confirmation && !confirm(confirmation)) return cancel()
-            busy = true
-            return async ({ update }: { update: () => Promise<void> }) => {
-                await update()
-                busy = false
-            }
-        }
-    }
-
-    // Unarchiving a once-published card publishes it again, so the publish rule applies.
-    const ruleBlocks = $derived(
-        card.status === 'archived' && card.archivedFrom === 'published' && blockers.length > 0,
-    )
-    const verifiedOn = $derived(
-        card.verifiedAt
-            ? new Date(card.verifiedAt).toLocaleDateString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-              })
-            : null,
-    )
+    let { lifecycle, error }: Props = $props()
 </script>
 
-{#snippet action(
-    name: string,
-    label: string,
-    options: {
-        disabled?: boolean
-        confirm?: string
-        variant?: 'default' | 'outline' | 'destructive'
-    } = {},
-)}
+{#each lifecycle.steps as step (step)}
     <form
+        id={lifecycleForm(step)}
         method="POST"
-        action="?/{name}"
-        use:enhance={submit(options.confirm)}>
-        <Button
-            type="submit"
-            variant={options.variant ?? 'default'}
-            disabled={busy || options.disabled}
-            aria-describedby={options.disabled ? 'lifecycle-why' : undefined}>
-            {label}
-        </Button>
+        action="?/{step}"
+        hidden
+        use:enhance={lifecycle.submit()}>
     </form>
-{/snippet}
+{/each}
 
-<section
-    aria-labelledby="lifecycle-heading"
-    class="flex flex-col gap-2">
-    <h2
-        id="lifecycle-heading"
-        class="sr-only">
-        Status actions
-    </h2>
-    <!-- A draft's Publish is the editor's: it saves what is in the form too. -->
-    {#if card.status === 'archived'}
-        {@render action(
-            'unarchive',
-            card.archivedFrom === 'draft' ? 'Unarchive as draft' : 'Unarchive',
-            { disabled: dirty || ruleBlocks },
-        )}
-    {:else}
-        {@render action('archive', 'Archive', { disabled: dirty, variant: 'outline' })}
-    {/if}
-
-    {#if card.status !== 'draft' && (dirty || ruleBlocks)}
-        <div
-            id="lifecycle-why"
-            class="text-muted-foreground">
-            {#if dirty}
-                <p>Save your changes first.</p>
-            {:else}
+{#if lifecycle.ruleBlocks || error}
+    <div class="flex flex-col gap-2">
+        {#if lifecycle.ruleBlocks}
+            <div
+                id={lifecycleWhyId}
+                class="text-muted-foreground">
                 <p>Before it can be published:</p>
                 <ul class="list-disc pl-5">
-                    {#each blockers as blocker (blocker)}
+                    {#each lifecycle.blockers as blocker (blocker)}
                         <li>{blocker}</li>
                     {/each}
                 </ul>
-            {/if}
-        </div>
-    {/if}
-
-    {#if role === 'admin'}
-        {@render action('deleteCard', 'Delete card', {
-            variant: 'destructive',
-            confirm: 'Delete this card for good? This cannot be undone.',
-        })}
-    {/if}
-
-    {#if error}
-        <p
-            role="alert"
-            class="text-destructive">
-            {error}
-        </p>
-    {/if}
-</section>
-
-<section
-    aria-labelledby="verification-heading"
-    class="flex flex-col gap-2 border-t pt-4">
-    <h2
-        id="verification-heading"
-        class="font-medium">
-        Date verification
-    </h2>
-    {#if card.verifiedAt}
-        <p>
-            Verified by {verifiedByEmail ?? 'someone no longer here'} on {verifiedOn}.
-        </p>
-        {@render action('unverify', 'Clear verification', { variant: 'outline' })}
-    {:else}
-        <p class="text-muted-foreground">Not verified against a source yet.</p>
-        {@render action('verify', 'Mark date verified', { variant: 'outline' })}
-    {/if}
-</section>
+            </div>
+        {/if}
+        {#if error}
+            <p
+                role="alert"
+                class="text-destructive">
+                {error}
+            </p>
+        {/if}
+    </div>
+{/if}

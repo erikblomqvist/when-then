@@ -6,13 +6,15 @@
     Extension points:
     - Locale tabs (sv, nb): `TranslationTabs`, inside the <form>, sharing this save and guard.
       `translationActions` renders in each tab with `{ locale, english, fill }` (see there).
-    - Save and Publish: in the <aside>, outside the <form> (posting it with `form`). Save is
-      the secondary button, above Publish (beside it on narrow screens). Publish, for a new
-      card or a draft, posts to the page's `?/saveAndPublish` (it saves and publishes); it goes
-      back to the card list.
-    - Sidebar: the `sidebar` snippet renders in the <aside>, outside the <form>, so status
-      actions (Publish, Archive, Delete card) can be forms of their own; it gets `dirty` so
-      they can hold off while there are unsaved changes. History goes there too.
+    - Actions: a `ContextMenu` in the <aside>, outside the <form> (its rows post it with
+      `form`): Save, the page's `afterSave` rows (everyday actions such as date verification),
+      Publish for a new card or a draft (posting to the page's `?/saveAndPublish`, which saves
+      and publishes and goes back to the card list), then the page's `afterPublish` rows
+      (status actions such as Archive). `menuActions` gets `{ dirty, unsavedId }`, so rows can
+      hold off while there are unsaved changes and point at the note under Status saying so.
+    - Sidebar: the `sidebar` snippet renders in the <aside> after the menu, outside the <form>,
+      so the forms the status actions submit can be forms of their own; it gets `dirty` too.
+      History goes there.
     - Category: with `canCreateCategory`, the select's "New category…" opens
       `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
@@ -23,7 +25,6 @@
     import { beforeNavigate } from '$app/navigation'
     import { enhance } from '$app/forms'
     import { Badge } from '#lib/components/ui/badge/index.js'
-    import { Button } from '#lib/components/ui/button/index.js'
     import { Input } from '#lib/components/ui/input/index.js'
     import { Label } from '#lib/components/ui/label/index.js'
     import * as NativeSelect from '#lib/components/ui/native-select/index.js'
@@ -42,13 +43,18 @@
         type SuggestedDate,
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
-    import { publishBlockers, yearRequiredFrom } from '#lib/cards/publish-rule.js'
+    import { publishChecklist, publishSuggestions } from '#lib/cards/publish-checklist.js'
+    import { yearRequiredFrom } from '#lib/cards/publish-rule.js'
     import type { Category } from '#lib/server/categories.js'
+    import PublishChecklist from './PublishChecklist.svelte'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
     import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
-    import Keys from '../Keys.svelte'
+    import SaveIcon from '@lucide/svelte/icons/save'
+    import SendIcon from '@lucide/svelte/icons/send'
+    import ContextMenu from '../ContextMenu.svelte'
+    import type { ContextMenuAction } from '../context-menu.js'
     import { LiveErrors } from '../live-errors.svelte.js'
-    import { ariaKeyshortcuts, formShortcut } from '../shortcut.js'
+    import { formShortcut } from '../shortcut.js'
 
     type Props = {
         /** The values the form starts from (the saved card, or empty). */
@@ -61,6 +67,11 @@
         /** Why the last Publish didn't publish. */
         publishError?: string
         sidebar?: Snippet<[{ dirty: boolean }]>
+        /** More rows for the actions menu, after Save and Publish (status actions). */
+        menuActions?: (state: { dirty: boolean; unsavedId: string }) => {
+            afterSave?: ContextMenuAction[]
+            afterPublish?: ContextMenuAction[]
+        }
         /** Rendered in each locale tab, e.g. a machine translation button. */
         translationActions?: TranslationActions
         /** Rendered under the date fields, e.g. an AI date suggestion. */
@@ -76,6 +87,7 @@
         errors = {},
         publishError,
         sidebar,
+        menuActions,
         translationActions,
         dateActions,
         canCreateCategory = false,
@@ -86,14 +98,18 @@
     // Cmd/Ctrl + S saves, Cmd/Ctrl + Enter publishes (when that is offered). Not while the
     // new-category dialog is open: its own form takes the shortcut.
     let formElement: HTMLFormElement | undefined = $state()
-    let saveButton: HTMLButtonElement | null = $state(null)
-    let publishButton: HTMLButtonElement | null = $state(null)
+    const saveId = 'card-save'
+    // The "Unsaved changes" note, for rows that wait for a save to say so.
+    const unsavedId = 'card-unsaved'
+    const publishId = 'card-publish'
     function onkeydown(event: KeyboardEvent) {
         const shortcut = formShortcut(event)
         if (!shortcut || creatingCategory) return
         event.preventDefault()
-        const button = shortcut === 'save' ? saveButton : publishButton
-        if (button && !button.disabled) formElement?.requestSubmit(button)
+        const button = document.getElementById(shortcut === 'save' ? saveId : publishId)
+        if (button instanceof HTMLButtonElement && !button.disabled) {
+            formElement?.requestSubmit(button)
+        }
     }
 
     // "New category…" is an option of the category select: picking it opens the dialog and
@@ -154,14 +170,44 @@
     )
     const shown = $derived(live.shown)
 
-    // Publish (a new card or a draft) saves what is in the form and publishes it: held back,
-    // with the reasons, by what the form or the publish rule still miss.
+    // Publish (a new card or a draft) saves what is in the form and publishes it: held back
+    // until the checklist under the menu (every requirement, ticked off as it is met) is done.
     const offerPublish = $derived(!card || card.status === 'draft')
-    const publishBlocked = $derived.by(() => {
-        const parsed = parseCardFormValues(posted(values))
-        if (parsed.ok) return publishBlockers(parsed.card)
-        return [...new Set(Object.values(parsed.errors))]
-    })
+    const publishChecks = $derived(publishChecklist(posted(values)))
+    const publishOpen = $derived(publishChecks.some((check) => !check.done))
+    const publishSuggested = $derived(publishSuggestions(posted(values), card))
+    const checklistId = 'publish-checklist'
+
+    // The actions menu: Save, the page's everyday rows, Publish when offered, then the page's
+    // status rows.
+    const pageActions = $derived(menuActions?.({ dirty, unsavedId }) ?? {})
+    const menu: ContextMenuAction[] = $derived([
+        {
+            id: saveId,
+            label: 'Save',
+            icon: SaveIcon,
+            form: 'card-editor',
+            keys: ['mod', 's'],
+            disabled: saving,
+        },
+        ...(pageActions.afterSave ?? []),
+        ...(offerPublish
+            ? [
+                  {
+                      id: publishId,
+                      label: 'Publish',
+                      icon: SendIcon,
+                      tone: 'constructive',
+                      form: 'card-editor',
+                      formaction: '?/saveAndPublish',
+                      keys: ['mod', 'enter'],
+                      disabled: saving || publishOpen,
+                      describedBy: publishOpen ? checklistId : undefined,
+                  } satisfies ContextMenuAction,
+              ]
+            : []),
+        ...(pageActions.afterPublish ?? []),
+    ])
 
     // Changing a verified date asks whether to clear the verification (sent with the save).
     const dateFields = ['era', 'decade', 'year', 'month', 'day'] as const
@@ -198,7 +244,8 @@
 
 <svelte:window {onkeydown} />
 
-<div class="grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
+<!-- Room under the form (pb-40), so its end can be scrolled up from the window's edge. -->
+<div class="grid max-w-5xl gap-8 pb-40 lg:grid-cols-[minmax(0,1fr)_16rem]">
     <form
         bind:this={formElement}
         id="card-editor"
@@ -398,65 +445,37 @@
     <aside
         aria-label="Card"
         class="flex flex-col gap-4 text-sm">
-        <div class="flex items-center justify-between gap-2">
-            <span class="font-medium">Status</span>
-            {#if card}
-                <Badge
-                    variant="secondary"
-                    data-testid="card-status">
-                    {cardStatusLabel[card.status]}
-                </Badge>
-            {:else}
-                <span class="text-muted-foreground">Not saved yet</span>
-            {/if}
-        </div>
-        <div class="flex flex-col items-start gap-2">
-            <!-- Save is the secondary action: above Publish, or beside it on narrow screens. -->
-            <div class="flex flex-wrap items-start gap-2 lg:flex-col">
-                <Button
-                    bind:ref={saveButton}
-                    type="submit"
-                    form="card-editor"
-                    variant="outline"
-                    disabled={saving}
-                    aria-keyshortcuts={ariaKeyshortcuts(['mod', 's'])}>
-                    Save
-                    <Keys keys={['mod', 's']} />
-                </Button>
-                {#if offerPublish}
-                    <Button
-                        type="submit"
-                        form="card-editor"
-                        formaction="?/saveAndPublish"
-                        bind:ref={publishButton}
-                        aria-keyshortcuts={ariaKeyshortcuts(['mod', 'enter'])}
-                        disabled={saving || publishBlocked.length > 0}
-                        aria-describedby={publishBlocked.length > 0
-                            ? 'save-and-publish-why'
-                            : undefined}>
-                        Publish
-                        <Keys keys={['mod', 'enter']} />
-                    </Button>
+        <div class="mb-2 flex flex-col gap-1">
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-medium">Status</span>
+                {#if card}
+                    <Badge
+                        variant="secondary"
+                        data-testid="card-status">
+                        {cardStatusLabel[card.status]}
+                    </Badge>
+                {:else}
+                    <span class="text-muted-foreground">Not saved yet</span>
                 {/if}
             </div>
             <p
+                id={unsavedId}
                 role="status"
                 class="text-muted-foreground empty:hidden">
                 {#if dirty}Unsaved changes{/if}
             </p>
+        </div>
+        <div class="flex flex-col gap-2">
+            <ContextMenu
+                label="Card actions"
+                actions={menu} />
             {#if offerPublish}
-                {#if publishBlocked.length > 0}
-                    <div
-                        id="save-and-publish-why"
-                        class="text-muted-foreground">
-                        <p>Before it can be published:</p>
-                        <ul class="list-disc pl-5">
-                            {#each publishBlocked as blocker (blocker)}
-                                <li>{blocker}</li>
-                            {/each}
-                        </ul>
-                    </div>
-                {/if}
+                <div class="mt-4">
+                    <PublishChecklist
+                        id={checklistId}
+                        checks={publishChecks}
+                        suggestions={publishSuggested} />
+                </div>
                 {#if publishError}
                     <p
                         role="alert"

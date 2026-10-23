@@ -14,6 +14,10 @@ export type GameRefusalCode =
     | 'game_started'
     | 'name_taken'
     | 'icon_taken'
+    | 'not_host'
+    | 'no_player'
+    | 'host_cannot_leave'
+    | 'removed'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -24,6 +28,10 @@ const words: Record<GameRefusalCode, () => string> = {
     game_started: m.refusal_game_started,
     name_taken: m.refusal_name_taken,
     icon_taken: m.refusal_icon_taken,
+    not_host: m.refusal_not_host,
+    no_player: m.refusal_no_player,
+    host_cannot_leave: m.refusal_host_cannot_leave,
+    removed: m.refusal_removed,
 }
 
 /** The message for a refusal, in the current locale. */
