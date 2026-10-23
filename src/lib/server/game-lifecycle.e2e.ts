@@ -326,8 +326,11 @@ test('a join nudges the game’s channel with only the game and its version', as
     const { host, code } = await newLobby()
     const { gameId } = await getLobby(db, host, code)
 
-    // A phone's view of the channel: the public client, as in the browser.
+    // A phone's view of the channel: the public client, signed in anonymously like every
+    // phone with a seat (Realtime then sees a user token, not just the publishable key).
     const phone = localPublicClient()
+    const signedIn = await phone.auth.signInAnonymously()
+    expect(signedIn.error).toBeNull()
     const statuses: string[] = []
     let received!: Promise<Nudge>
     // Wait until subscribed, or the nudge can go out before the phone listens.
