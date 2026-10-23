@@ -2,7 +2,7 @@
 // machine (`./machine`); this is only a safety net that the scenario builder (`./scenario`)
 // runs after every step, so a rules bug shows up next to the move that caused it (ADR 0004).
 
-import type { GameState } from './state'
+import { categoriesLeft, type GameState } from './state'
 
 /** Everything wrong with `state`, in words; empty when it's sound. */
 export function invariantProblems(state: GameState): string[] {
@@ -61,16 +61,21 @@ export function invariantProblems(state: GameState): string[] {
         if (!state.seating.includes(activeId)) problems.push('the active player is not seated')
         if (!state.seating.includes(play.readerId)) problems.push('the reader is not seated')
         if (play.readerId === activeId) problems.push('the active player reads their own card')
-        if (state.cards[play.cardId]?.category !== play.draw.category) {
-            problems.push('the card in play is not from the drawn category')
+        if (play.step === 'picking') {
+            if (categoriesLeft(state).length === 0) problems.push('picking with no category left')
+        } else {
+            const category = state.cards[play.cardId]?.category
+            if (play.draw.kind === 'category' && category !== play.draw.category) {
+                problems.push('the card in play is not from the drawn category')
+            }
+            const onTimeline = state.timelines[activeId]?.some(
+                (entry) => entry.kind === 'card' && entry.cardId === play.cardId && !entry.locked,
+            )
+            if (play.step === 'deciding' && !onTimeline) {
+                problems.push('deciding without the card unlocked on the timeline')
+            }
+            if (play.step === 'placing') put(play.cardId)
         }
-        const onTimeline = state.timelines[activeId]?.some(
-            (entry) => entry.kind === 'card' && entry.cardId === play.cardId && !entry.locked,
-        )
-        if (play.step === 'deciding' && !onTimeline) {
-            problems.push('deciding without the card unlocked on the timeline')
-        }
-        if (play.step === 'placing') put(play.cardId)
     }
 
     for (const [cardId, count] of places) {

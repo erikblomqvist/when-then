@@ -8,19 +8,32 @@ import { apply, create, type Command } from './machine'
 import { invariantProblems } from './invariants'
 import { maxPlayers, playerIcons } from './player'
 import { defaultTargetScore } from './settings'
-import { fits, type GameDate, type GameState, type TimelineEntry } from './state'
+import {
+    categoriesLeft,
+    fits,
+    pickerOf,
+    type GameDate,
+    type GameState,
+    type TimelineEntry,
+} from './state'
 import { syntheticDeck } from './synthetic-deck'
 import { redact, type SeatView } from './view'
 
-/** The steps of a play a recipe can stop at so far. */
-export const scenarioSteps = ['placing', 'deciding'] as const
+/**
+ * The steps of a play a recipe can stop at so far: a Reader's or Free choice waiting for its
+ * category, the card waiting to be placed, or the lock-in choice after a correct play.
+ */
+export const scenarioSteps = ['readersChoice', 'freeChoice', 'placing', 'deciding'] as const
 export type ScenarioStep = (typeof scenarioSteps)[number]
 
 /** A moment in a game, flat and serialisable. Players are numbered from 1 in seating order. */
 export type Recipe = {
     seed: number
     players: number
-    /** The player whose turn it is; null for whoever the seed picks to start. */
+    /**
+     * The player whose turn it is; null for whoever the seed picks to start, or on a choice
+     * step, whoever is first to draw that choice.
+     */
     activePlayer: number | null
     step: ScenarioStep
     /** The player whose phone the view is for; null for the active player. */
@@ -101,7 +114,9 @@ export function buildScenario(recipe: Recipe): Scenario {
         })),
         settings: { targetScore: defaultTargetScore, exactYear: false, cardLanguage: 'en' },
         seating: ids,
-        cards: syntheticDeck(seed, 'en'),
+        // Until Continue (#93) a turn has one draw, so waiting for a choice can take many turns:
+        // enough copies of the deck that it doesn't run dry first.
+        cards: syntheticDeck(seed, 'en', 2 * players),
         seed,
         currentYear,
     })
@@ -119,26 +134,44 @@ export function buildScenario(recipe: Recipe): Scenario {
         play({ type: 'confirmSeating', by: ids[0], currentYear }, 'players')
     }
 
-    // Real turns, one card each, until it's the chosen player's. Each misplaces when it can, to
-    // leave the scores alone; a card that fits every gap scores, as it's placed and locked in.
-    if (activePlayer !== null) {
-        const target = ids[activePlayer - 1]
-        for (;;) {
-            const { activeId, cardId } = playing(state, 'activePlayer')
-            if (activeId === target) break
-            const timeline = state.timelines[activeId]
-            const date = state.cards[cardId].date
-            const wrong = wrongSlot(timeline, date)
-            const slot = wrong ?? correctSlot(timeline, date)
-            play({ type: 'place', by: activeId, slot }, 'activePlayer')
-            if (wrong === undefined) play({ type: 'lockIn', by: activeId }, 'activePlayer')
+    /** The play in progress with its card dealt; a choice picks the first category left. */
+    const dealt = (field: keyof Recipe) => {
+        const current = playing(state, field)
+        if (current.step === 'picking') {
+            const by = pickerOf(current.draw, current.activeId, current.readerId)
+            play({ type: 'pickCategory', by, category: categoriesLeft(state)[0] }, field)
         }
+        const next = playing(state, field)
+        if (next.step === 'picking') throw new Error('Picking a category dealt no card.')
+        return next
     }
 
-    if (step === 'deciding') {
-        const { activeId, cardId } = playing(state, 'step')
-        const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
-        play({ type: 'place', by: activeId, slot }, 'step')
+    // Real turns, one card each, until it's the chosen player's, drawing the chosen choice. Each
+    // misplaces when it can, to leave the scores alone; a card that fits every gap scores, as
+    // it's placed and locked in.
+    const choice = step === 'readersChoice' || step === 'freeChoice' ? step : null
+    const target = activePlayer === null ? null : ids[activePlayer - 1]
+    const field = choice === null ? 'activePlayer' : 'step'
+    for (;;) {
+        const { activeId, draw } = playing(state, field)
+        const theirTurn = target === null || activeId === target
+        const theirDraw = choice === null || draw.kind === choice
+        if (theirTurn && theirDraw) break
+        const { cardId } = dealt(field)
+        const timeline = state.timelines[activeId]
+        const date = state.cards[cardId].date
+        const wrong = wrongSlot(timeline, date)
+        const slot = wrong ?? correctSlot(timeline, date)
+        play({ type: 'place', by: activeId, slot }, field)
+        if (wrong === undefined) play({ type: 'lockIn', by: activeId }, field)
+    }
+
+    if (choice === null) {
+        const { activeId, cardId } = dealt('step')
+        if (step === 'deciding') {
+            const slot = correctSlot(state.timelines[activeId], state.cards[cardId].date)
+            play({ type: 'place', by: activeId, slot }, 'step')
+        }
     }
 
     const seat = viewer === null ? playing(state, 'viewer').activeId : ids[viewer - 1]

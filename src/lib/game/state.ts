@@ -40,19 +40,24 @@ export type TimelineEntry =
     | { kind: 'anchor'; date: GameDate }
     | { kind: 'card'; cardId: string; date: GameDate; locked: boolean }
 
-/** What the Category draw landed on. Reader's choice and Free choice come with #92. */
-export type DrawOutcome = { kind: 'category'; category: string }
+/** A Category draw that leaves the category to someone: the reader, or the active player. */
+export type ChoiceDraw = { kind: 'readersChoice' } | { kind: 'freeChoice' }
+
+/** What the Category draw landed on. */
+export type DrawOutcome = { kind: 'category'; category: string } | ChoiceDraw
 
 /**
- * The play in progress: the card is dealt and waits to be placed, or it sits unlocked on the
- * active player's timeline while they decide whether to lock in.
+ * The play in progress: a Reader's or Free choice waits for its category, the card is dealt and
+ * waits to be placed, or it sits unlocked on the active player's timeline while they decide
+ * whether to lock in.
  */
-export type Play = {
-    step: 'placing' | 'deciding'
-    readerId: string
-    draw: DrawOutcome
-    cardId: string
-}
+export type Play =
+    | { step: 'picking'; readerId: string; draw: ChoiceDraw }
+    | { step: 'placing' | 'deciding'; readerId: string; draw: DrawOutcome; cardId: string }
+
+/** Who picks the category on a choice: the reader on Reader's choice, else the active player. */
+export const pickerOf = (draw: ChoiceDraw, activeId: string, readerId: string) =>
+    draw.kind === 'readersChoice' ? readerId : activeId
 
 /** Something that happened this turn, for a phone that reloads mid-turn. */
 export type LogEntry =
@@ -83,7 +88,7 @@ export type GameState = {
     /** Cards that left the game unplaced, with their dates revealed. Never dealt again. */
     discards: string[]
     rng: Rng
-    /** Per category, the card ids still to be dealt, front first. */
+    /** Per category in the deck's order, the card ids still to be dealt, front first. */
     queues: Record<string, string[]>
     /** Every card in the deck snapshot, dealt or not. */
     cards: Record<string, DeckCard>
@@ -96,6 +101,10 @@ export type GameState = {
 export const fits = (timeline: readonly TimelineEntry[], slot: number, date: GameDate) =>
     (slot === 0 || timeline[slot - 1].date <= date) &&
     (slot === timeline.length || date <= timeline[slot].date)
+
+/** The categories that still have cards to deal, in the order the deck lists them. */
+export const categoriesLeft = (state: GameState) =>
+    Object.keys(state.queues).filter((category) => state.queues[category].length > 0)
 
 /** A player's score: their locked cards. Anchors and unlocked cards never count. */
 export const score = (state: GameState, playerId: string): number =>

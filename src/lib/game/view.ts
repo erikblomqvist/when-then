@@ -5,7 +5,10 @@
 // its text.
 
 import {
+    categoriesLeft,
+    pickerOf,
     score,
+    type ChoiceDraw,
     type DeckCard,
     type DrawOutcome,
     type GameDate,
@@ -21,13 +24,24 @@ import {
 /** The card in play as a seat sees it: null for what that seat may not know yet. */
 export type CardInPlay = { category: string; text: string | null; date: GameDate | null }
 
-/** The play in progress as a seat sees it. */
-export type PlayView = {
-    step: Play['step']
-    readerId: string
-    draw: DrawOutcome
-    card: CardInPlay
-}
+/**
+ * The play in progress as a seat sees it. On a Reader's or Free choice, everyone sees who picks
+ * and which categories they can pick from.
+ */
+export type PlayView =
+    | {
+          step: 'picking'
+          readerId: string
+          draw: ChoiceDraw
+          pickerId: string
+          categories: string[]
+      }
+    | {
+          step: Exclude<Play['step'], 'picking'>
+          readerId: string
+          draw: DrawOutcome
+          card: CardInPlay
+      }
 
 /** The phase as a seat sees it: only a play has anything to hide. */
 export type PhaseView =
@@ -75,6 +89,19 @@ export function redact(state: GameState, seat: string): SeatView {
 function phaseView(state: GameState, seat: string, shown: Set<string>): PhaseView {
     if (state.phase.name !== 'playing') return state.phase
     const { activeId, play } = state.phase
+    if (play.step === 'picking') {
+        return {
+            name: 'playing',
+            activeId,
+            play: {
+                step: 'picking',
+                readerId: play.readerId,
+                draw: play.draw,
+                pickerId: pickerOf(play.draw, activeId, play.readerId),
+                categories: categoriesLeft(state),
+            },
+        }
+    }
     const card = state.cards[play.cardId]
     // Once placed, the card is on a timeline for all to see; until then only the reader reads it.
     const revealed = shown.has(card.id)

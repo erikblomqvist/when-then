@@ -5,12 +5,12 @@ import { redact } from './view'
 
 const deck: DeckCard[] = Array.from({ length: 12 }, (_, i) => ({
     id: `card-${i}`,
-    category: i % 2 ? 'events' : 'people',
-    text: `Secret statement number ${i}`,
+    category: ['people', 'events', 'places'][i % 3],
+    text: `Secret statement number ${i}.`,
     date: 1950,
 }))
 
-const game = (seed = 3) =>
+const created = (seed: number) =>
     create({
         players: [
             { id: 'astrid', name: 'Astrid', icon: 'cat', host: true },
@@ -31,6 +31,38 @@ const playOf = <P>(of: {
     return { activeId: of.phase.activeId, ...of.phase.play }
 }
 
+/** The play in progress with its card dealt, failing the test while a category waits. */
+const dealtPlay = <P extends { step: string }>(of: {
+    phase: { name: string } | { name: 'playing'; activeId: string; play: P }
+}) => {
+    const play = playOf(of)
+    if (play.step === 'picking') throw new Error('The play is waiting for a category.')
+    return play as Exclude<typeof play, { step: 'picking' }>
+}
+
+/** A game with a card dealt: on a Reader's or Free choice, the picker takes the first category. */
+const game = (seed = 3) => {
+    const state = created(seed)
+    const play = playOf(redact(state, 'astrid'))
+    if (play.step !== 'picking') return state
+    const result = apply(state, {
+        type: 'pickCategory',
+        by: play.pickerId,
+        category: play.categories[0],
+    })
+    if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+    return result.state
+}
+
+/** The first game (by seed) whose first draw lands on `kind`. */
+const drawing = (kind: 'readersChoice' | 'freeChoice') => {
+    for (let seed = 1; seed < 50; seed++) {
+        const state = created(seed)
+        if (playOf(state).draw.kind === kind) return state
+    }
+    throw new Error(`No seed draws ${kind}.`)
+}
+
 /** A game where the active player has just placed the card correctly. */
 const afterCorrectPlay = () => {
     for (let seed = 1; seed < 50; seed++) {
@@ -46,17 +78,17 @@ const afterCorrectPlay = () => {
 
 describe('what a seat sees while a card waits to be placed', () => {
     const state = game()
-    const { activeId, readerId, cardId } = playOf(state)
+    const { activeId, readerId, cardId } = dealtPlay(state)
     const text = state.cards[cardId].text
 
     it('gives the card text to the reader only', () => {
-        expect(playOf(redact(state, readerId)).card.text).toBe(text)
-        expect(playOf(redact(state, activeId)).card.text).toBeNull()
+        expect(dealtPlay(redact(state, readerId)).card.text).toBe(text)
+        expect(dealtPlay(redact(state, activeId)).card.text).toBeNull()
     })
 
     it("hides the card's date from every seat", () => {
         for (const seat of [activeId, readerId]) {
-            expect(playOf(redact(state, seat)).card.date).toBeNull()
+            expect(dealtPlay(redact(state, seat)).card.date).toBeNull()
         }
     })
 
@@ -74,13 +106,60 @@ describe('what a seat sees while a card waits to be placed', () => {
     })
 })
 
+describe("what a seat sees while a Reader's or Free choice waits", () => {
+    it('shows everyone which choice it is, who picks and what they can pick', () => {
+        for (const [kind, picker] of [
+            ['readersChoice', 'readerId'],
+            ['freeChoice', 'activeId'],
+        ] as const) {
+            const state = drawing(kind)
+            const play = playOf(state)
+            for (const seat of ['astrid', 'bjorn']) {
+                expect(playOf(redact(state, seat))).toEqual({
+                    activeId: play.activeId,
+                    step: 'picking',
+                    readerId: play.readerId,
+                    draw: { kind },
+                    pickerId: play[picker],
+                    categories: ['people', 'events', 'places'],
+                })
+            }
+        }
+    })
+
+    it('offers only the categories with cards left', () => {
+        // Pick Events at every choice until it runs dry; the next choice offers the other two.
+        for (let seed = 1; seed < 50; seed++) {
+            let state = created(seed)
+            while (state.phase.name === 'playing') {
+                const view = playOf(redact(state, 'astrid'))
+                if (view.step === 'picking' && !view.categories.includes('events')) {
+                    expect(view.categories).toEqual(['people', 'places'])
+                    return
+                }
+                const result = apply(
+                    state,
+                    view.step === 'picking'
+                        ? { type: 'pickCategory', by: view.pickerId, category: 'events' }
+                        : view.step === 'placing'
+                          ? { type: 'place', by: view.activeId, slot: 0 }
+                          : { type: 'lockIn', by: view.activeId },
+                )
+                if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+                state = result.state
+            }
+        }
+        throw new Error('No seed draws a choice after Events runs dry.')
+    })
+})
+
 describe('what a seat sees after a correct play', () => {
     it('shows everyone the card, its date and its text', () => {
         const state = afterCorrectPlay()
-        const { activeId, readerId, cardId } = playOf(state)
+        const { activeId, readerId, cardId } = dealtPlay(state)
         for (const seat of [activeId, readerId]) {
             const view = redact(state, seat)
-            expect(playOf(view).card).toEqual({
+            expect(dealtPlay(view).card).toEqual({
                 category: state.cards[cardId].category,
                 text: state.cards[cardId].text,
                 date: 1950,
@@ -92,7 +171,7 @@ describe('what a seat sees after a correct play', () => {
 
 describe('what no seat ever sees', () => {
     it('leaves out the seed, the queues and every card not yet dealt', () => {
-        for (const state of [game(), afterCorrectPlay()]) {
+        for (const state of [game(), afterCorrectPlay(), drawing('readersChoice')]) {
             const undealt = Object.values(state.queues).flat()
             expect(undealt.length).toBeGreaterThan(0)
             for (const seat of ['astrid', 'bjorn']) {
@@ -108,7 +187,7 @@ describe('what no seat ever sees', () => {
 
     it('leaves out the card in play, but for its text on the reader’s phone', () => {
         const state = game()
-        const { activeId, readerId, cardId } = playOf(state)
+        const { activeId, readerId, cardId } = dealtPlay(state)
         const { text } = state.cards[cardId]
         expect(JSON.stringify(redact(state, activeId))).not.toContain(text)
         for (const seat of [activeId, readerId]) {

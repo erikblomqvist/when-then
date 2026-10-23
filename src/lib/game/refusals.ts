@@ -24,6 +24,9 @@ export type GameRefusalCode =
     | 'not_seating'
     | 'invalid_seating'
     | 'not_your_turn'
+    | 'not_picking'
+    | 'not_your_pick'
+    | 'category_unavailable'
     | 'not_placing'
     | 'invalid_slot'
     | 'lock_in_unavailable'
@@ -47,6 +50,9 @@ const words: Record<GameRefusalCode, () => string> = {
     not_seating: m.refusal_not_seating,
     invalid_seating: m.refusal_invalid_seating,
     not_your_turn: m.refusal_not_your_turn,
+    not_picking: m.refusal_not_picking,
+    not_your_pick: m.refusal_not_your_pick,
+    category_unavailable: m.refusal_category_unavailable,
     not_placing: m.refusal_not_placing,
     invalid_slot: m.refusal_invalid_slot,
     lock_in_unavailable: m.refusal_lock_in_unavailable,

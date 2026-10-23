@@ -227,18 +227,22 @@ const texts: Record<(typeof syntheticCategories)[number], CardText[]> = {
 
 /**
  * The synthetic deck in `language`, with each card's date drawn from `seed`: most from 1500 on,
- * by year, and about a quarter earlier, by decade.
+ * by year, and about a quarter earlier, by decade. With `copies`, the texts come round again
+ * under new ids and dates, for scenarios that play more cards than there are texts; the first
+ * copy is the same however many follow.
  */
-export function syntheticDeck(seed: number, language: CardLocale): DeckCard[] {
+export function syntheticDeck(seed: number, language: CardLocale, copies = 1): DeckCard[] {
     const dice = roll({ seed: seed >>> 0, position: 0 })
-    return syntheticCategories.flatMap((category) =>
-        texts[category].map((text, i) => ({
-            id: `${category}-${i + 1}`,
-            category,
-            text: text[language],
-            date: standardDate(
-                dice.random() < 0.75 ? 1500 + dice.int(526) : -1999 + dice.int(3499),
-            ),
-        })),
-    )
+    return Array.from({ length: copies }, (_, copy) =>
+        syntheticCategories.flatMap((category) =>
+            texts[category].map((text, i) => ({
+                id: `${category}-${i + 1}${copy > 0 ? `-${copy + 1}` : ''}`,
+                category,
+                text: text[language],
+                date: standardDate(
+                    dice.random() < 0.75 ? 1500 + dice.int(526) : -1999 + dice.int(3499),
+                ),
+            })),
+        ),
+    ).flat()
 }

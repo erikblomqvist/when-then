@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
 import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
-import { score, type DeckCard, type GameState } from './state'
+import { score, type DeckCard, type DrawOutcome, type GameState } from './state'
+import { redact } from './view'
 
 const astrid = { id: 'astrid', name: 'Astrid', icon: 'cat', host: true } as const
 const bjorn = { id: 'bjorn', name: 'Björn', icon: 'dog', host: false } as const
@@ -31,7 +32,8 @@ describe('creating a two-player game', () => {
         expect(state.phase.name).toBe('playing')
         if (state.phase.name !== 'playing') return
         expect(['astrid', 'bjorn']).toContain(state.phase.activeId)
-        expect(state.phase.play.step).toBe('placing')
+        // A card is dealt, or waits for a Reader's or Free choice.
+        expect(['placing', 'picking']).toContain(state.phase.play.step)
         // With two players, the other one reads.
         expect(state.phase.play.readerId).not.toBe(state.phase.activeId)
         expect(state.startingPlayerId).toBe(state.phase.activeId)
@@ -93,13 +95,35 @@ const playOf = (state: GameState) => {
     return { activeId: state.phase.activeId, ...state.phase.play }
 }
 
+/** The play in progress with its card dealt, failing the test while a category waits. */
+const dealtPlay = (state: GameState) => {
+    const play = playOf(state)
+    if (play.step === 'picking') throw new Error('The play is waiting for a category.')
+    return play
+}
+
+/**
+ * `state` with a card dealt: on a Reader's or Free choice, whoever picks takes the first
+ * category they're offered.
+ */
+const dealt = (state: GameState) => {
+    const play = playOf(state)
+    if (play.step !== 'picking') return state
+    const view = redact(state, play.activeId)
+    if (view.phase.name !== 'playing' || view.phase.play.step !== 'picking') return state
+    const { pickerId, categories } = view.phase.play
+    const result = apply(state, { type: 'pickCategory', by: pickerId, category: categories[0] })
+    if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+    return result.state
+}
+
 const anchorOf = (state: GameState, id: string) =>
     state.timelines[id].find((entry) => entry.kind === 'anchor')!.date
 
 /** The first game (by seed) whose active player's anchor passes `test`. */
 const gameWhere = (cards: DeckCard[], test: (anchor: number) => boolean) => {
     for (const seed of seeds) {
-        const state = create(twoPlayers({ seed, cards }))
+        const state = dealt(create(twoPlayers({ seed, cards })))
         if (test(anchorOf(state, playOf(state).activeId))) return state
     }
     throw new Error('No seed gives that anchor.')
@@ -119,7 +143,7 @@ describe('placing a card', () => {
 
     it('is correct when the card fits between its neighbours, and sits unlocked', () => {
         const state = gameWhere(at1950, (anchor) => anchor < 1950)
-        const { activeId, cardId } = playOf(state)
+        const { activeId, cardId } = dealtPlay(state)
         const next = placed(state, 1)
         expect(playOf(next).step).toBe('deciding')
         expect(next.timelines[activeId]).toEqual([
@@ -130,7 +154,7 @@ describe('placing a card', () => {
 
     it('is wrong on the other side of a later anchor', () => {
         const state = gameWhere(at1950, (anchor) => anchor < 1950)
-        const { activeId, cardId } = playOf(state)
+        const { activeId, cardId } = dealtPlay(state)
         const next = placed(state, 0)
         // The turn is over: the card is gone from the game and the other player is up.
         expect(next.timelines[activeId]).toHaveLength(1)
@@ -156,18 +180,18 @@ describe('placing a card', () => {
             [1490].includes(anchor),
         )
         expect(playOf(placed(early, 0)).step).toBe('deciding')
-        expect(playOf(placed(early, 1)).step).toBe('placing')
+        expect(placed(early, 1).discards).toEqual([dealtPlay(early).cardId])
     })
 
     it('refuses anyone but the active player', () => {
-        const state = create(twoPlayers())
+        const state = dealt(create(twoPlayers()))
         const other = playOf(state).readerId
         expect(place(state, 0, other)).toEqual({ ok: false, refusal: 'not_your_turn' })
         expect(place(state, 0, 'stranger')).toEqual({ ok: false, refusal: 'no_seat' })
     })
 
     it('refuses a gap that is not on the timeline', () => {
-        const state = create(twoPlayers())
+        const state = dealt(create(twoPlayers()))
         expect(place(state, 2)).toEqual({ ok: false, refusal: 'invalid_slot' })
         expect(place(state, -1)).toEqual({ ok: false, refusal: 'invalid_slot' })
         expect(place(state, 0.5)).toEqual({ ok: false, refusal: 'invalid_slot' })
@@ -190,7 +214,7 @@ describe('locking in', () => {
             gameWhere(at1950, (anchor) => anchor < 1950),
             1,
         )
-        const { activeId, readerId, cardId } = playOf(state)
+        const { activeId, readerId, cardId } = dealtPlay(state)
         const result = lockIn(state)
         expect(result.ok).toBe(true)
         if (!result.ok) return
@@ -219,7 +243,7 @@ describe('locking in', () => {
     })
 
     it('is refused before a correct play', () => {
-        expect(lockIn(create(twoPlayers()))).toEqual({
+        expect(lockIn(dealt(create(twoPlayers())))).toEqual({
             ok: false,
             refusal: 'lock_in_unavailable',
         })
@@ -246,16 +270,22 @@ describe('the Category draw', () => {
         ]
         for (const seed of seeds.slice(0, 10)) {
             let state = create(twoPlayers({ seed, cards }))
-            const dealt: string[] = []
+            const seen: string[] = []
             while (state.phase.name === 'playing') {
-                const { draw, cardId } = playOf(state)
-                expect(state.cards[cardId].category).toBe(draw.category)
-                dealt.push(cardId)
-                const result = playOf(state).step === 'placing' ? place(state, 0) : lockIn(state)
+                const play = playOf(state)
+                if (play.step === 'picking') {
+                    state = dealt(state)
+                    continue
+                }
+                if (play.draw.kind === 'category') {
+                    expect(state.cards[play.cardId].category).toBe(play.draw.category)
+                }
+                seen.push(play.cardId)
+                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
                 if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
                 state = result.state
             }
-            expect(new Set(dealt).size).toBe(cards.length)
+            expect(new Set(seen).size).toBe(cards.length)
         }
     })
 })
@@ -264,6 +294,7 @@ describe('determinism', () => {
     const play = (seed: number) => {
         let state = create(twoPlayers({ seed }))
         for (let i = 0; i < 4; i++) {
+            state = dealt(state)
             const result = place(state, 1)
             state = result.ok ? result.state : state
             const locked = lockIn(state)
@@ -389,7 +420,7 @@ describe('seating', () => {
             expect(new Set(dates).size).toBe(4)
             for (const id of state.seating) expect(state.timelines[id]).toHaveLength(1)
             const { activeId, step } = playOf(state)
-            expect(step).toBe('placing')
+            expect(['placing', 'picking']).toContain(step)
             expect(state.startingPlayerId).toBe(activeId)
         }
     })
@@ -424,5 +455,173 @@ describe('seating', () => {
         const right = { astrid: 'dag', cecilia: 'astrid', bjorn: 'cecilia', dag: 'bjorn' }
         const { activeId, readerId } = playOf(state)
         expect(readerId).toBe(right[activeId as keyof typeof right])
+    })
+})
+
+describe("Reader's choice and Free choice", () => {
+    const cards = [
+        ...deckOf(Array.from({ length: 6 }, (_, i) => 1900 + i)),
+        ...deckOf(
+            Array.from({ length: 6 }, (_, i) => 1950 + i),
+            'people',
+        ).map((card) => ({
+            ...card,
+            id: `people-${card.id}`,
+        })),
+    ]
+
+    /** The first game (by seed) whose first draw lands on `kind`. */
+    const drawing = (kind: DrawOutcome['kind'], deck = cards) => {
+        for (const seed of seeds) {
+            const state = create(twoPlayers({ seed, cards: deck }))
+            if (playOf(state).draw.kind === kind) return state
+        }
+        throw new Error(`No seed draws ${kind}.`)
+    }
+
+    const pick = (state: GameState, by: string, category: string) =>
+        apply(state, { type: 'pickCategory', by, category })
+
+    it('are outcomes of the draw, alongside the categories', () => {
+        const kinds = new Set(
+            seeds.map((seed) => playOf(create(twoPlayers({ seed, cards }))).draw.kind),
+        )
+        expect(kinds).toEqual(new Set(['category', 'readersChoice', 'freeChoice']))
+    })
+
+    it('wait for someone to pick, with no card dealt yet', () => {
+        for (const kind of ['readersChoice', 'freeChoice'] as const) {
+            const play = playOf(drawing(kind))
+            expect(play.step).toBe('picking')
+            expect(play).not.toHaveProperty('cardId')
+        }
+    })
+
+    it("lets only the reader pick on Reader's choice, and deals from what they picked", () => {
+        const state = drawing('readersChoice')
+        const { activeId, readerId } = playOf(state)
+        expect(pick(state, activeId, 'people')).toEqual({ ok: false, refusal: 'not_your_pick' })
+        const result = pick(state, readerId, 'people')
+        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+        const play = playOf(result.state)
+        if (play.step !== 'placing') throw new Error(`The play is ${play.step}.`)
+        expect(play).toMatchObject({ activeId, readerId, draw: { kind: 'readersChoice' } })
+        expect(result.state.cards[play.cardId].category).toBe('people')
+    })
+
+    it('lets only the active player pick on Free choice', () => {
+        const state = drawing('freeChoice')
+        const { activeId, readerId } = playOf(state)
+        expect(pick(state, readerId, 'events')).toEqual({ ok: false, refusal: 'not_your_pick' })
+        expect(pick(state, 'stranger', 'events')).toEqual({ ok: false, refusal: 'no_seat' })
+        const result = pick(state, activeId, 'events')
+        if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+        const play = playOf(result.state)
+        if (play.step !== 'placing') throw new Error(`The play is ${play.step}.`)
+        expect(result.state.cards[play.cardId].category).toBe('events')
+    })
+
+    it('refuses a category with no cards left, or one the game does not have', () => {
+        // One Places card among Events and People: once it's dealt, Places can't be picked.
+        const deck = [
+            ...deckOf(Array.from({ length: 8 }, (_, i) => 1900 + i)),
+            ...deckOf(
+                Array.from({ length: 8 }, (_, i) => 1920 + i),
+                'people',
+            ).map((card) => ({
+                ...card,
+                id: `people-${card.id}`,
+            })),
+            { id: 'only-place', category: 'places', text: 'A harbour opens', date: 1950 },
+        ]
+        for (const seed of seeds) {
+            let state = create(twoPlayers({ seed, cards: deck }))
+            let placesDealt = false
+            while (state.phase.name === 'playing') {
+                const play = playOf(state)
+                if (play.step === 'picking') {
+                    const by = play.draw.kind === 'readersChoice' ? play.readerId : play.activeId
+                    if (placesDealt) {
+                        expect(pick(state, by, 'places')).toEqual({
+                            ok: false,
+                            refusal: 'category_unavailable',
+                        })
+                        expect(pick(state, by, 'sports')).toEqual({
+                            ok: false,
+                            refusal: 'category_unavailable',
+                        })
+                        return
+                    }
+                    const result = pick(state, by, 'places')
+                    if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+                    state = result.state
+                    continue
+                }
+                if (state.cards[play.cardId].category === 'places') placesDealt = true
+                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
+                if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+                state = result.state
+            }
+        }
+        throw new Error('No seed draws a choice after Places runs out.')
+    })
+
+    it('drop out of the draw once only one category has cards left', () => {
+        // Two Places cards among the Events: once both are dealt, every draw is Events.
+        const deck = [
+            ...deckOf(Array.from({ length: 8 }, (_, i) => 1900 + i)),
+            { id: 'place-1', category: 'places', text: 'A harbour opens', date: 1950 },
+            { id: 'place-2', category: 'places', text: 'A bridge opens', date: 1960 },
+        ]
+        for (const seed of seeds.slice(0, 10)) {
+            let state = create(twoPlayers({ seed, cards: deck }))
+            let placesLeft = 2
+            while (state.phase.name === 'playing') {
+                const play = playOf(state)
+                if (placesLeft === 0 && play.step !== 'deciding') {
+                    expect(play.draw).toEqual({ kind: 'category', category: 'events' })
+                }
+                if (play.step === 'picking') {
+                    const by = play.draw.kind === 'readersChoice' ? play.readerId : play.activeId
+                    const result = pick(state, by, 'places')
+                    if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+                    state = result.state
+                    continue
+                }
+                if (play.step === 'placing' && state.cards[play.cardId].category === 'places') {
+                    placesLeft--
+                }
+                const result = play.step === 'placing' ? place(state, 0) : lockIn(state)
+                if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
+                state = result.state
+            }
+        }
+    })
+
+    it('refuses a pick when no choice is waiting', () => {
+        const state = dealt(create(twoPlayers()))
+        const { activeId, readerId } = playOf(state)
+        for (const by of [activeId, readerId]) {
+            expect(pick(state, by, 'events')).toEqual({ ok: false, refusal: 'not_picking' })
+        }
+        const seating = create(
+            twoPlayers({
+                players: [
+                    astrid,
+                    bjorn,
+                    { id: 'cecilia', name: 'Cecilia', icon: 'bird', host: false },
+                ],
+                seating: ['astrid', 'bjorn', 'cecilia'],
+            }),
+        )
+        expect(pick(seating, 'astrid', 'events')).toEqual({ ok: false, refusal: 'not_picking' })
+    })
+
+    it('refuses placing a card before the category is picked', () => {
+        for (const kind of ['readersChoice', 'freeChoice'] as const) {
+            const state = drawing(kind)
+            expect(place(state, 0)).toEqual({ ok: false, refusal: 'not_placing' })
+            expect(lockIn(state)).toEqual({ ok: false, refusal: 'lock_in_unavailable' })
+        }
     })
 })

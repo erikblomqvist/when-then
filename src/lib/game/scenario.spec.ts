@@ -10,6 +10,13 @@ const playOf = (state: GameState) => {
     return { activeId: state.phase.activeId, ...state.phase.play }
 }
 
+/** The play in progress with its card dealt, failing the test while a category waits. */
+const dealtPlay = (state: GameState) => {
+    const play = playOf(state)
+    if (play.step === 'picking') throw new Error('The play is waiting for a category.')
+    return play
+}
+
 describe('building a two-player scenario', () => {
     it('stops with the card waiting to be placed', () => {
         const { state, view } = scenario().players(2).step('placing').build()
@@ -22,7 +29,7 @@ describe('building a two-player scenario', () => {
 
     it('stops at the lock-in choice after a correct play', () => {
         const { state } = scenario().players(2).step('deciding').build()
-        const { activeId, cardId, step } = playOf(state)
+        const { activeId, cardId, step } = dealtPlay(state)
         expect(step).toBe('deciding')
         expect(state.timelines[activeId]).toContainEqual(
             expect.objectContaining({ kind: 'card', cardId, locked: false }),
@@ -100,6 +107,49 @@ describe('building a scenario for 3 to 10 players', () => {
     })
 })
 
+describe("stopping at a Reader's or Free choice", () => {
+    const counts = Array.from({ length: 9 }, (_, i) => i + 2)
+    const kinds = ['readersChoice', 'freeChoice'] as const
+
+    it("waits for the reader to pick on Reader's choice, and the active player on Free choice", () => {
+        for (const players of counts) {
+            for (const step of kinds) {
+                const { state, view } = scenario().players(players).step(step).build()
+                const play = playOf(state)
+                expect(play).toMatchObject({ step: 'picking', draw: { kind: step } })
+                if (view.phase.name !== 'playing') throw new Error('Not playing.')
+                expect(view.phase.play).toMatchObject({
+                    step: 'picking',
+                    pickerId: step === 'readersChoice' ? play.readerId : play.activeId,
+                })
+            }
+        }
+    })
+
+    it('reaches either choice for every active player', () => {
+        for (const players of counts) {
+            for (let k = 1; k <= players; k++) {
+                for (const step of kinds) {
+                    const { state } = scenario().players(players).activePlayer(k).step(step).build()
+                    expect(playOf(state)).toMatchObject({
+                        activeId: state.seating[k - 1],
+                        step: 'picking',
+                        draw: { kind: step },
+                    })
+                }
+            }
+        }
+    })
+
+    it('picks a category to get past a choice on the way to placing', () => {
+        const passed = Array.from({ length: 30 }, (_, i) => scenario().seed(i).build().state)
+            .map(playOf)
+            .filter((play) => play.draw.kind !== 'category')
+        expect(passed.length).toBeGreaterThan(0)
+        for (const play of passed) expect(play.step).toBe('placing')
+    })
+})
+
 describe('an impossible recipe', () => {
     const fieldOf = (build: () => unknown) => {
         try {
@@ -143,7 +193,7 @@ describe('the invariant check the builder runs after every step', () => {
     })
 
     it('catches a card in two places', () => {
-        const { cardId } = playOf(state)
+        const { cardId } = dealtPlay(state)
         const [category] = Object.keys(state.queues)
         const broken = { ...state, queues: { ...state.queues, [category]: [cardId] } }
         expect(invariantProblems(broken).join()).toContain(`${cardId} is in 2 places`)
@@ -167,6 +217,14 @@ describe('the synthetic deck', () => {
         for (const category of syntheticCategories) {
             expect(deck.filter((card) => card.category === category)).toHaveLength(8)
         }
+    })
+
+    it('comes round again under new ids, keeping the first copy', () => {
+        const three = syntheticDeck(1, 'en', 3)
+        expect(three).toHaveLength(120)
+        expect(new Set(three.map((card) => card.id)).size).toBe(120)
+        expect(three.slice(0, 40)).toEqual(deck)
+        expect(three[40]).toMatchObject({ id: deck[0].id + '-2', text: deck[0].text })
     })
 
     it('has different text in English, Swedish and Norwegian', () => {

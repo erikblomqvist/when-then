@@ -8,10 +8,13 @@ import { roll, type Dice } from './random'
 import { leftOf, rightOf, samePlayers, type Seating } from './seating'
 import { defaultTargetScore } from './settings'
 import {
+    categoriesLeft,
     currentSchema,
     fits,
+    pickerOf,
     standardDate,
     type DeckCard,
+    type DrawOutcome,
     type GameDate,
     type GamePlayer,
     type GameSettings,
@@ -37,6 +40,8 @@ export type Command =
     | { type: 'setSeating'; by: string; seating: Seating }
     /** `currentYear` caps the anchors, which confirming deals. */
     | { type: 'confirmSeating'; by: string; currentYear: number }
+    /** On a Reader's or Free choice, the category to deal from. */
+    | { type: 'pickCategory'; by: string; category: string }
     | { type: 'place'; by: string; slot: number }
     | { type: 'lockIn'; by: string }
 
@@ -51,8 +56,10 @@ export function create(input: CreateInput): GameState {
     if (input.players.length < 2) throw new Error('A game needs at least two players.')
     const dice = roll({ seed: input.seed >>> 0, position: 0 })
 
+    // Categories in the deck's order, each with its cards shuffled.
     const queues: Record<string, string[]> = {}
-    for (const card of dice.shuffle(input.cards)) (queues[card.category] ??= []).push(card.id)
+    for (const card of input.cards) queues[card.category] ??= []
+    for (const card of dice.shuffle(input.cards)) queues[card.category].push(card.id)
 
     const state: GameState = {
         schema: currentSchema,
@@ -125,29 +132,46 @@ const endTurn = (state: GameState, activeId: string) =>
     startTurn(state, leftOf(state.seating, activeId))
 
 /**
- * The Category draw among the categories with cards left, then the front card of the drawn
- * category is dealt. Reader's choice and Free choice join the draw with #92. With every
+ * The Category draw: each category with cards left, Reader's choice and Free choice are equally
+ * likely, though with one category left there is nothing to choose and only it is drawn. A
+ * category is dealt from at once; a choice waits for its category to be picked. With every
  * category empty the game stops; who wins then comes with rounds (#94).
  */
 function startPlay(state: GameState, activeId: string): GameState {
-    const categories = Object.keys(state.queues).filter((id) => state.queues[id].length > 0)
+    const categories = categoriesLeft(state)
     if (categories.length === 0) return { ...state, phase: { name: 'ended' } }
     const dice = roll(state.rng)
-    const category = dice.pick(categories)
+    const choices: DrawOutcome[] =
+        categories.length > 1 ? [{ kind: 'readersChoice' }, { kind: 'freeChoice' }] : []
+    const draw = dice.pick<DrawOutcome>([
+        ...categories.map((category) => ({ kind: 'category' as const, category })),
+        ...choices,
+    ])
+    const readerId = rightOf(state.seating, activeId)
+    const next = { ...state, rng: dice.rng }
+    if (draw.kind === 'category') return deal(next, activeId, readerId, draw, draw.category)
+    return {
+        ...next,
+        phase: { name: 'playing', activeId, play: { step: 'picking', readerId, draw } },
+    }
+}
+
+/** The front card of `category` is dealt, waiting to be placed. */
+function deal(
+    state: GameState,
+    activeId: string,
+    readerId: string,
+    draw: DrawOutcome,
+    category: string,
+): GameState {
     const [cardId, ...rest] = state.queues[category]
     return {
         ...state,
-        rng: dice.rng,
         queues: { ...state.queues, [category]: rest },
         phase: {
             name: 'playing',
             activeId,
-            play: {
-                step: 'placing',
-                readerId: rightOf(state.seating, activeId),
-                draw: { kind: 'category', category },
-                cardId,
-            },
+            play: { step: 'placing', readerId, draw, cardId },
         },
     }
 }
@@ -207,10 +231,21 @@ export function apply(state: GameState, command: Command): ApplyResult {
         }
     }
 
-    if (state.phase.name !== 'playing') {
-        return refuse(command.type === 'lockIn' ? 'lock_in_unavailable' : 'not_placing')
-    }
+    if (state.phase.name !== 'playing') return refuse(unavailable[command.type])
     const { activeId, play } = state.phase
+
+    // The one command of a play that isn't only the active player's.
+    if (command.type === 'pickCategory') {
+        if (play.step !== 'picking') return refuse('not_picking')
+        if (command.by !== pickerOf(play.draw, activeId, play.readerId)) {
+            return refuse('not_your_pick')
+        }
+        if (!categoriesLeft(state).includes(command.category)) {
+            return refuse('category_unavailable')
+        }
+        return succeed(deal(state, activeId, play.readerId, play.draw, command.category))
+    }
+
     if (command.by !== activeId) return refuse('not_your_turn')
 
     switch (command.type) {
@@ -248,6 +283,13 @@ export function apply(state: GameState, command: Command): ApplyResult {
             return succeed(endTurn(next, activeId))
         }
     }
+}
+
+/** Why a play's command is refused when no play is in progress. */
+const unavailable: Record<'pickCategory' | 'place' | 'lockIn', GameRefusalCode> = {
+    pickCategory: 'not_picking',
+    place: 'not_placing',
+    lockIn: 'lock_in_unavailable',
 }
 
 const refuse = (refusal: GameRefusalCode): ApplyResult => ({ ok: false, refusal })

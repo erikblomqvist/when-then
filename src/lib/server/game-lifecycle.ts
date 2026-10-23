@@ -34,6 +34,10 @@ const refusals = {
     not_seating: 'The game is not in seating.',
     invalid_seating: 'A seating has every seated player exactly once.',
     not_your_turn: 'Only the active player can do that.',
+    not_picking: 'No category is waiting to be picked.',
+    not_your_pick:
+        "Only the reader picks on Reader's choice, and the active player on Free choice.",
+    category_unavailable: 'That category has no cards left.',
     not_placing: 'No card is waiting to be placed.',
     invalid_slot: 'That is not a gap on the timeline.',
     lock_in_unavailable: 'Lock in comes only after a correct play.',
