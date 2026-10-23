@@ -47,11 +47,23 @@ test('a filter and a sort narrow and order the list, and the URL keeps them', as
     await dateHeader.getByRole('link').click()
     await expect(page).toHaveURL(/\?q=Sample&sort=date$/)
     await expect(dateHeader).toHaveAttribute('aria-sort', 'ascending')
-    await expect.poll(() => listed(page)).toEqual([sampleby, balloonist, samplebridge])
+    // The archived balloonist is on the Archived tab, which keeps the search and sort.
+    await expect.poll(() => listed(page)).toEqual([sampleby, samplebridge])
+    await page
+        .getByRole('navigation', { name: 'Card tabs' })
+        .getByRole('link', { name: /^Archived/ })
+        .click()
+    await expect(page).toHaveURL(/\?tab=archived&q=Sample&sort=date$/)
+    await expect.poll(() => listed(page)).toEqual([balloonist])
+    await page
+        .getByRole('navigation', { name: 'Card tabs' })
+        .getByRole('link', { name: /^Cards/ })
+        .click()
+    await expect(page).toHaveURL(/\?q=Sample&sort=date$/)
 
     await dateHeader.getByRole('link').click()
     await expect(page).toHaveURL(/\?q=Sample&sort=-date$/)
-    await expect.poll(() => listed(page)).toEqual([samplebridge, balloonist, sampleby])
+    await expect.poll(() => listed(page)).toEqual([samplebridge, sampleby])
 
     // Filters show only once added.
     await expect(page.getByLabel('Status', { exact: true })).toHaveCount(0)

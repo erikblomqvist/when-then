@@ -158,6 +158,27 @@ test('leaving with unsaved changes asks first', async ({ page }) => {
     expect(dialogs).toHaveLength(2)
 })
 
+test('archived cards are on the Archived tab, not the Cards tab', async ({ page }) => {
+    await signInAs(page, 'editor')
+    const text = unique('A made-up lighthouse goes dark')
+    await createCard(page, text)
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await expect(page.getByTestId('card-status')).toHaveText('Archived')
+
+    await gotoHydrated(page, findCard(text))
+    await expect(cardRow(page, text)).toHaveCount(0)
+
+    await page.getByRole('link', { name: /^Archived/ }).click()
+    await expect(page).toHaveURL(/tab=archived/)
+    await expect(page.getByRole('link', { name: /^Archived/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+    )
+    // The search carries over to the tab.
+    await expect(page.getByLabel('Search')).toHaveValue(text)
+    await expect(cardRow(page, text)).toHaveCount(1)
+})
+
 test('an unknown card is a 404', async ({ page }) => {
     await signInAs(page, 'editor')
     const response = await page.goto(`/admin/cards/${randomUUID()}`)

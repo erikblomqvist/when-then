@@ -42,6 +42,8 @@ export type CardFilter = {
     /** Free text, matched case-insensitively against the card's text in any locale. */
     search?: string
     status?: CardStatus
+    /** The Archived tab (archived cards only); otherwise the Cards tab (drafts and published). */
+    archived?: true
     categoryId?: string
     verified?: boolean
     /** Whether the card has a source URL. */
@@ -78,8 +80,10 @@ export function parseFilter(params: URLSearchParams): CardFilter {
     const filter: CardFilter = {}
     const search = params.get('q')?.trim()
     if (search) filter.search = search
+    // `status=archived` is the Archived tab, from before it had one.
     const status = oneOf(cardStatuses, params.get('status'))
-    if (status) filter.status = status
+    if (params.get('tab') === 'archived' || status === 'archived') filter.archived = true
+    else if (status) filter.status = status
     const categoryId = params.get('category')
     if (categoryId && uuid.test(categoryId)) filter.categoryId = categoryId.toLowerCase()
     const verified = yesNo(params.get('verified'))
@@ -110,6 +114,7 @@ const yesNoParam = (value: boolean) => (value ? 'yes' : 'no')
 /** The filter as URL parameters, in a fixed order; absent fields are left out. */
 export function filterParams(filter: CardFilter): URLSearchParams {
     const params = new URLSearchParams()
+    if (filter.archived) params.set('tab', 'archived')
     if (filter.search) params.set('q', filter.search)
     if (filter.status) params.set('status', filter.status)
     if (filter.categoryId) params.set('category', filter.categoryId)
@@ -140,7 +145,9 @@ export function cardListHref({
 }
 
 /** Whether the filter narrows the list at all (for "No cards match" vs "No cards yet"). */
-export const isFiltered = (filter: CardFilter) => filterParams(filter).size > 0
+/** Whether the filter narrows the tab it is in. */
+export const isFiltered = (filter: CardFilter) =>
+    filterParams({ ...filter, archived: undefined }).size > 0
 
 /** The review queue for a locale: cards whose translation there is machine or stale. */
 export const reviewQueueHref = (locale: TranslationLocale) =>

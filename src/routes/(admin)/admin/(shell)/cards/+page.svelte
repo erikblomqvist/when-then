@@ -39,7 +39,10 @@
     let { data, form: result }: PageProps = $props()
 
     const updated = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
-    const statuses = Object.keys(cardStatusLabel) as CardStatus[]
+    // Archived cards have a tab of their own, so the status filter picks within the Cards tab.
+    const statuses = (Object.keys(cardStatusLabel) as CardStatus[]).filter(
+        (status) => status !== 'archived',
+    )
     const eras = Object.keys(cardEraLabel) as CardEra[]
     const yesNo = (value: boolean | undefined) => (value === undefined ? '' : value ? 'yes' : 'no')
 
@@ -74,12 +77,19 @@
         choices: { value: string; label: string }[]
     }
     const filterOptions: FilterOption[] = $derived([
-        {
-            name: 'status',
-            label: 'Status',
-            value: filter.status ?? '',
-            choices: statuses.map((status) => ({ value: status, label: cardStatusLabel[status] })),
-        },
+        ...(filter.archived
+            ? []
+            : [
+                  {
+                      name: 'status',
+                      label: 'Status',
+                      value: filter.status ?? '',
+                      choices: statuses.map((status) => ({
+                          value: status,
+                          label: cardStatusLabel[status],
+                      })),
+                  },
+              ]),
         {
             name: 'category',
             label: 'Category',
@@ -229,6 +239,28 @@
 {/if}
 
 <nav
+    aria-label="Card tabs"
+    class="mt-6 flex gap-1 border-b text-sm">
+    {#each [{ archived: undefined, label: 'Cards', count: data.tabCounts.active }, { archived: true as const, label: 'Archived', count: data.tabCounts.archived }] as tab (tab.label)}
+        <a
+            href={cardListHref({
+                filter: { ...filter, status: undefined, archived: tab.archived },
+                sort: data.view.sort,
+            })}
+            aria-current={filter.archived === tab.archived ? 'page' : undefined}
+            class={[
+                '-mb-px border-b-2 px-3 py-2',
+                filter.archived === tab.archived
+                    ? 'border-primary font-medium'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+            ]}>
+            {tab.label}
+            <span class="text-muted-foreground">({tab.count})</span>
+        </a>
+    {/each}
+</nav>
+
+<nav
     aria-label="Review queues"
     class="mt-4 flex flex-wrap gap-4 text-sm">
     {#each translationLocales as locale (locale)}
@@ -249,6 +281,12 @@
     aria-label="Find cards"
     class="mt-6 flex flex-col gap-3"
     onsubmit={apply}>
+    {#if filter.archived}
+        <input
+            type="hidden"
+            name="tab"
+            value="archived" />
+    {/if}
     <div class="flex flex-wrap items-center gap-2">
         <Label
             for="q"
@@ -350,7 +388,7 @@
         {#if filtered || added.length > 0}
             <a
                 class="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                href={cardListHref({ sort: data.view.sort })}
+                href={cardListHref({ filter: { archived: filter.archived }, sort: data.view.sort })}
                 onclick={() => (added = [])}>
                 Clear filters
             </a>
@@ -508,6 +546,8 @@
                         </a>
                     {:else if filtered}
                         No cards match these filters.
+                    {:else if filter.archived}
+                        No archived cards.
                     {:else}
                         No cards yet.
                     {/if}

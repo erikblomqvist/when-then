@@ -1,5 +1,6 @@
 // Reading cards for export against the local database: filters, explicit ids and paging.
-// Uses the seeded made-up cards; "Sample" matches exactly three of them.
+// Uses the seeded made-up cards; "Sample" matches exactly three of them, one archived (the
+// balloonist), which only the Archived tab's filter exports.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../testing/e2e-auth'
@@ -20,7 +21,9 @@ async function all(selection: ExportSelection, options?: { batchSize?: number })
 
 test('exports the cards matching a filter, in full, in id order', async () => {
     const cards = await all({ filter: { search: 'Sample' } })
-    expect(cards.map((card) => card.id)).toEqual([sampleby, balloonist, samplebridge])
+    expect(cards.map((card) => card.id)).toEqual([sampleby, samplebridge])
+    const archived = await all({ filter: { search: 'Sample', archived: true } })
+    expect(archived.map((card) => card.id)).toEqual([balloonist])
     expect(cards[0]).toMatchObject({
         status: 'published',
         category: { id: '00000000-0000-4000-8000-000000000004', name: 'Places' },
@@ -41,10 +44,10 @@ test('exports the cards matching a filter, in full, in id order', async () => {
 })
 
 test('pages through more cards than one batch without repeats or gaps', async () => {
-    const cards = await all({ filter: { search: 'Sample' } }, { batchSize: 2 })
-    expect(cards.map((card) => card.id)).toEqual([sampleby, balloonist, samplebridge])
+    const cards = await all({ filter: { search: 'Sample' } }, { batchSize: 1 })
+    expect(cards.map((card) => card.id)).toEqual([sampleby, samplebridge])
     const everything = await all({ filter: {} }, { batchSize: 2 })
-    expect(everything.length).toBeGreaterThanOrEqual(6)
+    expect(everything.length).toBeGreaterThanOrEqual(5)
     expect(new Set(everything.map((card) => card.id)).size).toBe(everything.length)
 })
 
