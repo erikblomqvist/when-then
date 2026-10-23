@@ -363,12 +363,37 @@ function quiet(urls: Urls): string[] {
 // ---------------------------------------------------------------------------------------------
 // Switching
 
+// F. The table's wordmark and stripe over the timeline, all three the same width
+
+function wordmarkOverTimeline(urls: Urls, revealed: boolean, hand: Card[]): string[] {
+    // The timeline runs from "When" at column 2 to the end of "Then?" at column 73.
+    const width = 71
+    const margin = '  '
+    const navy = (s: string) => margin + bg(hex.navy700)(padEnd(s, width))
+    const { rows, marks } = bigText('WHEN THEN?')
+    const left = Math.floor((width - rows[0].length) / 2)
+    const q = marks[0]
+    const letters = rows.map((row) =>
+        navy(
+            ' '.repeat(left) +
+                fg(hex.paper50)(row.slice(0, q)) +
+                fg(hex.amber500)(row.slice(q, q + 5)) +
+                fg(hex.paper50)(row.slice(q + 5)),
+        ),
+    )
+    const stripe = Object.values(categories)
+        .map((c, i) => bg(c.colour)(' '.repeat(i < 3 ? 18 : 17)))
+        .join('')
+    return [navy(''), ...letters, navy(''), margin + stripe, '', ...timeline(urls, revealed, hand)]
+}
+
 export const variants = {
     A: 'The deal',
     B: 'The timeline',
     C: 'The table',
     D: 'The lobby',
     E: 'Quiet',
+    F: 'Wordmark over timeline',
 } as const
 export type Variant = keyof typeof variants
 
@@ -387,6 +412,13 @@ export async function render(
         if (!animate) return
         await sleep(1800)
         return write(timeline(urls, true, hand))
+    }
+    if (variant === 'F') {
+        const hand = spreadHand()
+        write(wordmarkOverTimeline(urls, false, hand))
+        if (!animate) return
+        await sleep(1800)
+        return write(wordmarkOverTimeline(urls, true, hand))
     }
     if (variant === 'C') return write(table(urls))
     if (variant === 'D') return write(lobby(urls))
