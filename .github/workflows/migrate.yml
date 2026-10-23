@@ -9,6 +9,8 @@ on:
         branches: [main]
         paths:
             - supabase/migrations/**
+            # A change to this workflow runs it too, so it is never first tried on a real migration.
+            - .github/workflows/migrate.yml
     workflow_dispatch:
 
 concurrency:
@@ -27,8 +29,11 @@ jobs:
             # and v3 installs through npm, which refuses this pnpm project (devEngines).
             - name: Install the Supabase CLI 2.109.1
               run: |
+                  # Both binaries, side by side: `supabase` is a shim that runs `supabase-go` next to it.
+                  mkdir -p "$HOME/.supabase-cli"
                   curl -fsSL "https://github.com/supabase/cli/releases/download/v2.109.1/supabase_linux_amd64.tar.gz" \
-                      | sudo tar -xz -C /usr/local/bin supabase
-                  supabase --version
+                      | tar -xz -C "$HOME/.supabase-cli"
+                  echo "$HOME/.supabase-cli" >> "$GITHUB_PATH"
+                  "$HOME/.supabase-cli/supabase" --version
             - run: supabase link --project-ref ${{ vars.SUPABASE_PROJECT_REF }}
             - run: supabase db push
