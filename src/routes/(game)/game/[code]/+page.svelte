@@ -432,7 +432,15 @@
         align-items: center;
         gap: var(--space-3);
     }
+    /* The − and + buttons step it, so no browser spin buttons as well. */
+    .settings-form :global(.score::-webkit-inner-spin-button),
+    .settings-form :global(.score::-webkit-outer-spin-button) {
+        -webkit-appearance: none;
+        margin: 0;
+    }
     .settings-form :global(.score) {
+        appearance: textfield;
+        -moz-appearance: textfield;
         width: 6ch;
         min-width: 96px;
         text-align: center;
