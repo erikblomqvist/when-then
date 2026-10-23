@@ -17,6 +17,7 @@
       History goes there.
     - Category: with `canCreateCategory`, the select's "New category…" opens
       `NewCategoryDialog` and picks the category it creates, keeping everything typed (#52).
+    - Difficulty: optional, 1 (most people know it) to 4 (obscure), as "Add from photo" sets it.
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -31,6 +32,7 @@
     import { Textarea } from '#lib/components/ui/textarea/index.js'
     import { cardStatusLabel, type Card } from '#lib/cards/card.js'
     import {
+        cardDifficulties,
         cardFormErrors,
         parseCardFormValues,
         cardFormValues,
@@ -43,8 +45,10 @@
         type SuggestedDate,
     } from '#lib/cards/card-form.js'
     import { decadeLabel, decadeOf } from '#lib/cards/date-parts.js'
-    import { publishBlockers, yearRequiredFrom } from '#lib/cards/publish-rule.js'
+    import { publishChecklist, publishSuggestions } from '#lib/cards/publish-checklist.js'
+    import { yearRequiredFrom } from '#lib/cards/publish-rule.js'
     import type { Category } from '#lib/server/categories.js'
+    import PublishChecklist from './PublishChecklist.svelte'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
     import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
     import SaveIcon from '@lucide/svelte/icons/save'
@@ -131,6 +135,9 @@
     let saving = $state(false)
     const dirty = $derived(JSON.stringify(values) !== baseline)
 
+    // The ends of the difficulty scale, said in words (as the AI reading a photo is told).
+    const difficultyHint: Record<number, string> = { 1: 'Most people know it', 4: 'Obscure' }
+
     const months = [
         'January',
         'February',
@@ -168,14 +175,13 @@
     )
     const shown = $derived(live.shown)
 
-    // Publish (a new card or a draft) saves what is in the form and publishes it: held back,
-    // with the reasons, by what the form or the publish rule still miss.
+    // Publish (a new card or a draft) saves what is in the form and publishes it: held back
+    // until the checklist under the menu (every requirement, ticked off as it is met) is done.
     const offerPublish = $derived(!card || card.status === 'draft')
-    const publishBlocked = $derived.by(() => {
-        const parsed = parseCardFormValues(posted(values))
-        if (parsed.ok) return publishBlockers(parsed.card)
-        return [...new Set(Object.values(parsed.errors))]
-    })
+    const publishChecks = $derived(publishChecklist(posted(values)))
+    const publishOpen = $derived(publishChecks.some((check) => !check.done))
+    const publishSuggested = $derived(publishSuggestions(posted(values), card))
+    const checklistId = 'publish-checklist'
 
     // The actions menu: Save, the page's everyday rows, Publish when offered, then the page's
     // status rows.
@@ -200,8 +206,8 @@
                       form: 'card-editor',
                       formaction: '?/saveAndPublish',
                       keys: ['mod', 'enter'],
-                      disabled: saving || publishBlocked.length > 0,
-                      describedBy: publishBlocked.length > 0 ? 'save-and-publish-why' : undefined,
+                      disabled: saving || publishOpen,
+                      describedBy: publishOpen ? checklistId : undefined,
                   } satisfies ContextMenuAction,
               ]
             : []),
@@ -243,7 +249,8 @@
 
 <svelte:window {onkeydown} />
 
-<div class="grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_16rem]">
+<!-- Room under the form (pb-40), so its end can be scrolled up from the window's edge. -->
+<div class="grid max-w-5xl gap-8 pb-40 lg:grid-cols-[minmax(0,1fr)_16rem]">
     <form
         bind:this={formElement}
         id="card-editor"
@@ -411,6 +418,27 @@
             {@render error('category_id')}
         </div>
 
+        <div class="flex flex-col gap-2">
+            <Label for="difficulty">Difficulty (optional)</Label>
+            <NativeSelect.Root
+                id="difficulty"
+                name="difficulty"
+                bind:value={values.difficulty}
+                aria-invalid={shown.difficulty ? 'true' : undefined}
+                aria-describedby={describedBy('difficulty')}>
+                <NativeSelect.Option value="">Not set</NativeSelect.Option>
+                {#each cardDifficulties as level (level)}
+                    <NativeSelect.Option value={String(level)}>
+                        {level}{difficultyHint[level] ? ` · ${difficultyHint[level]}` : ''}
+                    </NativeSelect.Option>
+                {/each}
+            </NativeSelect.Root>
+            <p class="text-sm text-muted-foreground">
+                How hard the card is to place: 1, most people know it, to 4, obscure.
+            </p>
+            {@render error('difficulty')}
+        </div>
+
         <fieldset class="flex flex-col gap-3">
             <legend class="mb-2 text-sm font-medium">Source (optional)</legend>
             <div class="flex flex-col gap-2">
@@ -468,18 +496,12 @@
                 label="Card actions"
                 actions={menu} />
             {#if offerPublish}
-                {#if publishBlocked.length > 0}
-                    <div
-                        id="save-and-publish-why"
-                        class="text-muted-foreground">
-                        <p>Before it can be published:</p>
-                        <ul class="list-disc pl-5">
-                            {#each publishBlocked as blocker (blocker)}
-                                <li>{blocker}</li>
-                            {/each}
-                        </ul>
-                    </div>
-                {/if}
+                <div class="mt-4">
+                    <PublishChecklist
+                        id={checklistId}
+                        checks={publishChecks}
+                        suggestions={publishSuggested} />
+                </div>
                 {#if publishError}
                     <p
                         role="alert"

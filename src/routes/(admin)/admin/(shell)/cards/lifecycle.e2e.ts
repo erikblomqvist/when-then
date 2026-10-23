@@ -1,8 +1,8 @@
 // The card editor's sidebar: Publish (the editor's, which saves too) / Archive / Unarchive,
-// Delete draft and verification.
+// Delete card and verification.
 
 import { randomUUID } from 'node:crypto'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { DateParts } from '../../../../../lib/cards/date-parts'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
@@ -27,6 +27,8 @@ async function draft(actorId: string, text: string, date: DateParts) {
 
 const year1969 = { decade: 1960, year: 1969, month: null, day: null }
 const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Card' })
+/** The publish checklist's requirements (the first list; what is worth adding comes after). */
+const required = (checklist: Locator) => checklist.getByRole('list').first().getByRole('listitem')
 
 async function auditedActions(cardId: string) {
     const { data } = await db
@@ -85,8 +87,17 @@ test('Publish says what is missing, and the server refuses it too', async ({ pag
     })
     await gotoHydrated(page, `/admin/cards/${id}`)
 
-    await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeDisabled()
-    await expect(sidebar(page)).toContainText('Cards from 1500 onwards need a year.')
+    const publish = sidebar(page).getByRole('button', { name: 'Publish' })
+    await expect(publish).toBeDisabled()
+    // The checklist under the menu has the year still open, and Publish points at it.
+    const checklist = sidebar(page).getByRole('region', { name: 'Required to publish' })
+    await expect(required(checklist)).toHaveText([
+        /Done:\s*English text/,
+        /Done:\s*Category/,
+        /Done:\s*Date, at least the decade/,
+        /To do:\s*Year, for cards from 1500 on/,
+    ])
+    await expect(publish).toHaveAccessibleDescription(/Required to publish/)
 
     const response = await page.request.post(`/admin/cards/${id}?/publish`, {
         form: {},
@@ -95,6 +106,50 @@ test('Publish says what is missing, and the server refuses it too', async ({ pag
     expect(await response.json()).toMatchObject({ type: 'failure', status: 400 })
     await reloadHydrated(page)
     await expect(page.getByTestId('card-status')).toHaveText('Draft')
+})
+
+test('the publish checklist shows every requirement at once and ticks them off as typed', async ({
+    page,
+}) => {
+    await signInAs(page, 'editor')
+    await gotoHydrated(page, '/admin/cards/new')
+    const checklist = sidebar(page).getByRole('region', { name: 'Required to publish' })
+    await expect(required(checklist)).toHaveText([
+        /To do:\s*English text/,
+        /To do:\s*Category/,
+        /To do:\s*Date, at least the decade/,
+        /To do:\s*Year, for cards from 1500 on/,
+    ])
+
+    await page.getByLabel('English text').fill(unique('A made-up comet returns'))
+    await page.getByLabel('Category').selectOption({ index: 1 })
+    await page.getByLabel('Decade').fill('1490')
+    await expect(required(checklist)).toHaveText([
+        /Done:\s*English text/,
+        /Done:\s*Category/,
+        /Done:\s*Date, at least the decade/,
+        /Done:\s*Year, for cards from 1500 on/,
+    ])
+    await expect(checklist.getByRole('listitem').nth(3)).toContainText('Not needed before 1500')
+    await expect(sidebar(page).getByRole('button', { name: 'Publish' })).toBeEnabled()
+
+    // Below a line, what is worth having but not required.
+    const worth = checklist.getByRole('group', { name: 'Also worth adding' })
+    await expect(worth.getByRole('listitem')).toHaveText([
+        /Missing:\s*Swedish translation/,
+        /Missing:\s*Norwegian translation/,
+        /Missing:\s*Source link for the date/,
+        /Missing:\s*Date verified/,
+    ])
+    // Ticked off as they come, not dropped.
+    await page.getByRole('tab', { name: /Swedish/ }).click()
+    await page.getByLabel('Swedish text').fill('En påhittad komet återvänder')
+    await expect(worth.getByRole('listitem')).toHaveText([
+        /Done:\s*Swedish translation/,
+        /Missing:\s*Norwegian translation/,
+        /Missing:\s*Source link for the date/,
+        /Missing:\s*Date verified/,
+    ])
 })
 
 test('Publish on a draft saves what was changed, then publishes', async ({ page }) => {
@@ -110,44 +165,52 @@ test('Publish on a draft saves what was changed, then publishes', async ({ page 
     await expect(page.getByTestId('card-status')).toHaveText('Published')
 })
 
-test('an admin deletes a never-published draft; editors cannot', async ({
-    page,
-    browser,
-    baseURL,
-}) => {
+test('an admin deletes a card; editors cannot', async ({ page, browser, baseURL }) => {
     const { userId } = await signInAs(page, 'admin')
     const text = unique('A made-up draft to throw away')
     const id = await draft(userId, text, year1969)
 
-    // An editor sees no Delete draft.
+    // An editor sees no Delete card.
     const editorContext = await browser.newContext({ baseURL })
     const editorPage = await editorContext.newPage()
     await signInAs(editorPage, 'editor')
     await gotoHydrated(editorPage, `/admin/cards/${id}`)
     await expect(editorPage.getByTestId('card-status')).toHaveText('Draft')
-    await expect(sidebar(editorPage).getByRole('button', { name: 'Delete draft' })).toHaveCount(0)
+    await expect(sidebar(editorPage).getByRole('button', { name: 'Delete card' })).toHaveCount(0)
     await editorContext.close()
 
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await sidebar(page).getByRole('button', { name: 'Delete draft' }).click()
+    await sidebar(page).getByRole('button', { name: 'Delete card' }).click()
     // It asks first, saying what goes.
-    const confirm = page.getByRole('dialog', { name: 'Delete this draft?' })
+    const confirm = page.getByRole('dialog', { name: 'Delete this card?' })
     await expect(confirm).toContainText('deleted for good')
-    await confirm.getByRole('button', { name: 'Delete draft' }).click()
+    await confirm.getByRole('button', { name: 'Delete card' }).click()
     await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
     expect((await page.goto(`/admin/cards/${id}`))?.status()).toBe(404)
     expect((await auditedActions(id)).at(-1)).toEqual({ action: 'delete', actor_id: userId })
 })
 
-test('a published card cannot be deleted', async ({ page }) => {
+test('an archived card can be deleted, and saving one goes back to the Archived tab', async ({
+    page,
+}) => {
     const { userId } = await signInAs(page, 'admin')
     const id = await draft(userId, unique('A made-up statue is unveiled'), year1969)
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await sidebar(page).getByRole('button', { name: 'Publish' }).click()
-    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await sidebar(page).getByRole('button', { name: 'Archive' }).click()
+    await expect(page.getByTestId('card-status')).toHaveText('Archived')
+
+    await page.getByLabel('English text').fill(unique('A made-up statue is toppled'))
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page).toHaveURL(/\/admin\/cards\?tab=archived$/)
+
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await expect(page.getByTestId('card-status')).toHaveText('Published')
-    await expect(sidebar(page).getByRole('button', { name: 'Delete draft' })).toHaveCount(0)
+    await sidebar(page).getByRole('button', { name: 'Delete card' }).click()
+    await page
+        .getByRole('dialog', { name: 'Delete this card?' })
+        .getByRole('button', { name: 'Delete card' })
+        .click()
+    await expect(page).toHaveURL(/\/admin\/cards\?tab=archived$/)
+    expect((await page.goto(`/admin/cards/${id}`))?.status()).toBe(404)
 })
 
 test('marking the date verified, then changing the date asks to clear it', async ({ page }) => {
@@ -182,4 +245,17 @@ test('marking the date verified, then changing the date asks to clear it', async
         'verify',
         'update',
     ])
+})
+
+test('the editor sets a card’s difficulty, kept when the card is opened again', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'editor')
+    const id = await draft(userId, unique('A made-up lighthouse is lit'), year1969)
+    await gotoHydrated(page, `/admin/cards/${id}`)
+    const difficulty = page.getByLabel('Difficulty (optional)')
+    await expect(difficulty).toHaveValue('')
+    await difficulty.selectOption({ label: '4 · Obscure' })
+    await saveAndReopen(page)
+    await expect(difficulty).toHaveValue('4')
 })

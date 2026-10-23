@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import type { DateParts } from '../cards/date-parts'
 import { localServiceClient, newPerson } from '../testing/e2e-auth'
-import { archiveCards, deleteDrafts, moveCards, publishCards } from './card-bulk'
+import { archiveCards, deleteCards, moveCards, publishCards } from './card-bulk'
 import { publishCard } from './card-lifecycle'
 import { resolveCardSelection } from './card-selection'
 import { getCard, saveCard } from './cards'
@@ -93,35 +93,23 @@ test('bulk archive archives published cards and drafts, and skips archived ones'
     ])
 })
 
-test('bulk delete deletes the drafts and skips published and archived cards', async () => {
+test('bulk delete deletes cards whatever their status', async () => {
     const admin = (await newPerson('admin')).id
     const first = await newCard(admin, `A made-up kite ${randomUUID()}`)
     const second = await newCard(admin, `A made-up raft ${randomUUID()}`)
-    const publishedText = `A made-up glider ${randomUUID()}`
-    const published = await newCard(admin, publishedText)
+    const published = await newCard(admin, `A made-up glider ${randomUUID()}`)
     await publishCard(db, admin, published)
-    const archivedText = `A made-up sled ${randomUUID()}`
-    const archived = await newCard(admin, archivedText)
+    const archived = await newCard(admin, `A made-up sled ${randomUUID()}`)
     await archiveCards(db, admin, [archived])
+    const all = [first, published, second, archived]
 
-    const result = await deleteDrafts(db, admin, [first, published, second, archived])
+    const result = await deleteCards(db, admin, all)
 
-    const notDraft = 'Only a never-published draft can be deleted.'
-    expect(result).toEqual({
-        done: [first, second],
-        skipped: [
-            { id: published, text: publishedText, reason: notDraft },
-            { id: archived, text: archivedText, reason: notDraft },
-        ],
-    })
-    expect(await getCard(db, first)).toBeNull()
-    expect(await getCard(db, second)).toBeNull()
-    expect(await status(published)).toBe('published')
-    expect(await status(archived)).toBe('archived')
-    expect(await auditActions([first, second])).toEqual([
-        [first, 'delete', admin],
-        [second, 'delete', admin],
-    ])
+    expect(result).toEqual({ done: all, skipped: [] })
+    for (const id of all) expect(await getCard(db, id)).toBeNull()
+    expect((await auditActions(all)).filter(([, action]) => action === 'delete')).toEqual(
+        all.map((id) => [id, 'delete', admin]),
+    )
 })
 
 test('bulk delete by an editor deletes nothing', async () => {
@@ -129,11 +117,11 @@ test('bulk delete by an editor deletes nothing', async () => {
     const text = `A made-up kite ${randomUUID()}`
     const draft = await newCard(editor, text)
 
-    const result = await deleteDrafts(db, editor, [draft])
+    const result = await deleteCards(db, editor, [draft])
 
     expect(result).toEqual({
         done: [],
-        skipped: [{ id: draft, text, reason: 'Only admins can delete drafts.' }],
+        skipped: [{ id: draft, text, reason: 'Only admins can delete cards.' }],
     })
     expect(await status(draft)).toBe('draft')
 })

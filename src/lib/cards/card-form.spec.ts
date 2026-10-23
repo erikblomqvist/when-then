@@ -43,6 +43,31 @@ describe('parseCardForm', () => {
         })
     })
 
+    it('reads a difficulty from 1 to 4, empty as not set, and leaves it out when not posted', () => {
+        const read = (fields: Record<string, string>) => {
+            const result = parseCardForm(form({ year: '1492', ...fields }))
+            return result.ok ? result.card : result.errors
+        }
+        expect(read({ difficulty: '3' })).toMatchObject({ difficulty: 3 })
+        expect(read({ difficulty: '' })).toMatchObject({ difficulty: null })
+        // A form without the field keeps the card's difficulty on save.
+        expect('difficulty' in read({})).toBe(false)
+        expect(read({ difficulty: '5' })).toEqual({ difficulty: 'Difficulty is 1 to 4.' })
+        expect(read({ difficulty: 'hard' })).toEqual({ difficulty: 'Difficulty is 1 to 4.' })
+    })
+
+    it('fills the difficulty field from a saved card', () => {
+        const values = cardFormValues({
+            categoryId,
+            date: { decade: 1960, year: 1969, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            difficulty: 2,
+            translations: { en: { text: 'A made-up kite flies' } },
+        })
+        expect(values.difficulty).toBe('2')
+    })
+
     it('asks to clear the verification only when the editor said so', () => {
         const cleared = parseCardForm(form({ year: '1492', clear_verification: 'true' }))
         expect(cleared.ok && cleared.card.clearVerification).toBe(true)
@@ -146,6 +171,7 @@ describe('cardFormValues', () => {
             day: '15',
             source_url: '',
             source_quote: 'the Ides of March',
+            difficulty: '',
             text_sv: '',
             note_sv: '',
             reviewed_sv: '',

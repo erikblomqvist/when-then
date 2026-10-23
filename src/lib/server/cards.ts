@@ -157,6 +157,7 @@ export async function getCard(db: Db, id: string): Promise<Card | null> {
         date: dateParts(data),
         sourceUrl: data.source_url,
         sourceQuote: data.source_quote,
+        difficulty: data.difficulty,
         translations: Object.fromEntries(
             data.card_translations.map(({ locale, text, note, status }) => [
                 locale,
@@ -192,6 +193,8 @@ export async function saveCard(
             day: input.date.day,
             source_url: input.sourceUrl,
             source_quote: input.sourceQuote,
+            // Only when given: an import that leaves it out keeps the card's difficulty.
+            ...(input.difficulty === undefined ? {} : { difficulty: input.difficulty }),
             clear_verification: input.clearVerification ?? false,
         },
         translations: input.translations,

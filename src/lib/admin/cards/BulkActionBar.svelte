@@ -1,7 +1,8 @@
 <!--
     The card list's bulk actions on the selected rows (`CardListSelection`): shown while
-    something is selected, with "select all matching", Publish, Archive, Move to category and,
-    for admins (`canDelete`), Delete, which asks first and deletes only the drafts.
+    something is selected, with "select all matching", Publish and Archive (not on the
+    Archived tab, `archivedTab`, where neither applies), Move to category and, for admins
+    (`canDelete`), Delete, which asks first.
     It is one form that posts the selection as hidden fields (`selectionFields`); each button
     posts to its own action with `formaction`. More bulk actions go in the `actions` snippet:
     buttons with `formaction` pointing at a form action that reads the selection with
@@ -37,13 +38,23 @@
         report?: BulkReport
         /** A refusal of the last bulk action, to show. */
         error?: string
-        /** Offer Delete (admins): it deletes the selected drafts and skips the rest. */
+        /** Offer Delete (admins): it deletes the selected cards, whatever their status. */
         canDelete?: boolean
+        /** The list is on the Archived tab: no Publish or Archive. */
+        archivedTab?: boolean
         /** More bulk actions: buttons inside the form, with their own `formaction`. */
         actions?: Snippet<[{ busy: boolean }]>
     }
 
-    let { selected, categories, report, error, canDelete = false, actions }: Props = $props()
+    let {
+        selected,
+        categories,
+        report,
+        error,
+        canDelete = false,
+        archivedTab = false,
+        actions,
+    }: Props = $props()
 
     let busy = $state(false)
     const fields = $derived(selected.selection ? selectionFields(selected.selection) : [])
@@ -66,11 +77,7 @@
         const which = selected.allMatching
             ? `all ${selected.count} matching cards`
             : plural(selected.count)
-        if (
-            !confirm(
-                `Delete the drafts among ${which} for good? Cards that aren’t drafts are skipped. This cannot be undone.`,
-            )
-        ) {
+        if (!confirm(`Delete ${which} for good? This cannot be undone.`)) {
             event.preventDefault()
         }
     }
@@ -151,19 +158,21 @@
                         </button>
                     </span>
                 </div>
-                <Button
-                    type="submit"
-                    formaction="?/publish"
-                    disabled={busy}>
-                    Publish
-                </Button>
-                <Button
-                    type="submit"
-                    variant="outline"
-                    formaction="?/archive"
-                    disabled={busy}>
-                    Archive
-                </Button>
+                {#if !archivedTab}
+                    <Button
+                        type="submit"
+                        formaction="?/publish"
+                        disabled={busy}>
+                        Publish
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        formaction="?/archive"
+                        disabled={busy}>
+                        Archive
+                    </Button>
+                {/if}
                 <div class="flex items-end gap-2">
                     <div class="flex flex-col gap-2">
                         <Label for="move-to">Move to</Label>

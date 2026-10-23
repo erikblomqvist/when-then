@@ -14,7 +14,6 @@ export type CardLifecycleErrorCode =
     | 'invalid_transition'
     | 'publish_blocked'
     | 'not_admin'
-    | 'not_draft'
 
 // The database words every lifecycle refusal itself, in the detail.
 const inItsWords = (details: string) => details
@@ -23,7 +22,6 @@ const refusals = {
     invalid_transition: inItsWords,
     publish_blocked: inItsWords,
     not_admin: inItsWords,
-    not_draft: inItsWords,
 } satisfies Record<CardLifecycleErrorCode, unknown> & Refusals
 
 /** A refused step; `message` says why, in a sentence the editor can show. */
@@ -53,9 +51,9 @@ export const archiveCard = (db: Db, actorId: string, cardId: string) =>
 export const unarchiveCard = (db: Db, actorId: string, cardId: string) =>
     step(db, 'unarchive_card', { actor: actorId, card_id: cardId })
 
-/** Hard-deletes a never-published draft. Admins only (`not_admin`), drafts only (`not_draft`). */
-export const deleteDraft = (db: Db, actorId: string, cardId: string) =>
-    step(db, 'delete_draft', { actor: actorId, card_id: cardId })
+/** Hard-deletes a card, whatever its status. Admins only (`not_admin`). */
+export const deleteCard = (db: Db, actorId: string, cardId: string) =>
+    step(db, 'delete_card', { actor: actorId, card_id: cardId })
 
 /** Records that `actorId` checked the card's date against a source, now. */
 export const markVerified = (db: Db, actorId: string, cardId: string) =>

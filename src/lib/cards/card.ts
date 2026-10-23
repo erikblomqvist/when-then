@@ -43,6 +43,11 @@ export type CardInput = {
     date: DateParts
     sourceUrl: string | null
     sourceQuote: string | null
+    /**
+     * 1 (most people know it) to 4 (obscure), or null when not set. Left out, a save keeps the
+     * card's difficulty as it is (imports that don't set one).
+     */
+    difficulty?: number | null
     translations: Partial<Record<CardLocale, TranslationInput | null>> & { en: TranslationInput }
     /** Clear the date's verification with this save (the editor asks when a verified date changes). */
     clearVerification?: boolean
@@ -56,6 +61,7 @@ export type Translation = { text: string; note: string | null; status: Translati
 /** A saved card as the editor loads it. */
 export type Card = CardFields & {
     id: string
+    difficulty: number | null
     status: CardStatus
     translations: Partial<Record<CardLocale, Translation>>
     /** When and by whom the date was checked against a source; null when it wasn't. */

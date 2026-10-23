@@ -10,7 +10,7 @@ import { gotoHydrated } from './e2e-hydration'
 
 /**
  * The editor's form, without its sidebar: an error shows by its field here, while the
- * sidebar repeats it under Publish ("Before it can be published").
+ * sidebar's publish checklist names what is still open.
  */
 export const editorForm = (page: Page) => page.locator('form#card-editor')
 

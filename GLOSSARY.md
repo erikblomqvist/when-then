@@ -87,7 +87,7 @@ The four letters that identify a game, used to join it, until the game finishes.
 _Avoid_: PIN, room code, game ID
 
 **Lobby**:
-The stage of a game before it starts, where players join, the host adjusts the settings, and anyone can still leave. Starting the game closes it to new players.
+The stage of a game before it starts, where players join, the host adjusts the settings, and anyone but the host can still leave. Starting the game closes it to new players.
 _Avoid_: Waiting room
 
 **Absent**:
@@ -98,7 +98,7 @@ _Avoid_: Away, offline, disconnected
 The host moving play past whatever an absent player is holding up: their turn, their steal attempt or their reading. The player keeps their seat and score.
 
 **Remove**:
-The host taking a player out of a game for good, together with their timeline. A removed player cannot win or return to their seat.
+The host taking a player out of a game for good, together with their timeline. A removed player cannot win or return to their seat. During the lobby, a removed player can join again with the code.
 _Avoid_: Kick
 
 **Abandoned**:
