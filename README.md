@@ -52,6 +52,7 @@ brew install supabase/tap/supabase   # the CLI, once (CI pins 2.109.1)
 vpr db:start                         # local Postgres, Auth, Studio (http://127.0.0.1:54323)
                                      # then put the URL and keys it prints in .env.local
 vpr db:reset                         # re-apply supabase/migrations and supabase/seed.sql
+vpr db:migrate                       # apply only the migrations not applied yet (a teammate's new ones)
 vpr db:types                         # regenerate src/lib/database.types.ts after a migration
 vpr db:pull                          # copy production cards and categories into the local stack
 vpr db:stop
@@ -93,7 +94,7 @@ on conflict (user_id) do update set role = excluded.role;
 
 ### Signing in from tests
 
-There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null, { email? })` from `src/lib/testing/e2e-auth.ts`: it creates a user on the **local** stack that looks like a first Google sign-in (so a pending invite for its email attaches) with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. Tests that call the server modules directly make a user with `newPerson(role)` from the same file. Navigate admin pages with `gotoHydrated` from `src/lib/testing/e2e-hydration.ts` before clicking. `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
+There is no test sign-in in the app. Playwright uses `signInAs(page, 'editor' | 'admin' | null, { email? })` from `src/lib/testing/e2e-auth.ts`: it creates a user on the **local** stack that looks like a first Google sign-in (so a pending invite for its email attaches) with the secret key, gives it the role, signs it in through `@supabase/ssr` and puts the auth cookies in the browser. It refuses any Supabase URL that is not `localhost` or `127.0.0.1`. Tests that call the server modules directly make a user with `newPerson(role)` from the same file. Navigate admin pages with `gotoHydrated` from `src/lib/testing/e2e-hydration.ts` before clicking. Every run creates fresh users that can't be deleted, so before any test `src/lib/testing/e2e-database-check.ts` stops the run when a migration isn't applied locally (`vpr db:migrate`) or more than 550 users have piled up, where the next run would push People and the audit log past 1,000 rows (`vpr db:reset`). `playwright.config.ts` loads `.env.local`; CI starts the stack and writes that file.
 
 ## Translations
 

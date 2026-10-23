@@ -12,6 +12,9 @@ const port = Number(process.env.E2E_PORT ?? 4173)
 const anthropicStubPort = port + 1000
 
 export default defineConfig({
+    // Stops the run early when the local database can't give a true result (missing
+    // migrations, too many users left by earlier runs).
+    globalSetup: './src/lib/testing/e2e-database-check.ts',
     webServer: [
         {
             command: `node src/lib/testing/anthropic-stub.ts ${anthropicStubPort}`,
