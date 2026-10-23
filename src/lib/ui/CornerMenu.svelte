@@ -1,6 +1,7 @@
 <script lang="ts">
     import MenuIcon from '@lucide/svelte/icons/menu'
     import type { Snippet } from 'svelte'
+    import IconButton from './IconButton.svelte'
 
     type Props = {
         /** Required: the trigger is an icon with no text. */
@@ -14,13 +15,12 @@
 
 <!-- A button group in a popover, not an ARIA menu: Tab moves through it, Escape or a tap
      outside closes it. -->
-<button
-    type="button"
-    class="ui-button ui-button--ghost ui-icon-button ui-corner-menu__trigger"
-    aria-label={label}
+<IconButton
+    {label}
+    class="ui-corner-menu__trigger"
     popovertarget={id}>
     <MenuIcon />
-</button>
+</IconButton>
 <div
     {id}
     popover="auto"

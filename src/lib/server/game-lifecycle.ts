@@ -324,13 +324,13 @@ export async function updateSettings(
     await nudge(db, { gameId: data.updated_game, version: data.game_version })
 }
 
-/** A player's seat in a game that hasn't finished: the game, its code and the seat. */
+/** A player's seat in a running game: the game, its code and the seat. */
 export type Seat = { gameId: string; code: string; seatId: string }
 
 /**
- * Find my seat: `userId`'s seat in a game that hasn't finished, or `null` when they have none
- * (they never joined, left, or the host removed them). Seated in more than one, it's the one
- * they joined last. It powers "Back to game" on the home page and every reload.
+ * Find my seat: `userId`'s seat in a running game, or `null` when they have none (they never
+ * joined, left, or the host removed them). Seated in more than one, it's the one they joined
+ * last. It powers "Back to game" on the home page and every reload.
  */
 export async function findMySeat(db: Db, userId: string): Promise<Seat | null> {
     const { data, error } = await db
