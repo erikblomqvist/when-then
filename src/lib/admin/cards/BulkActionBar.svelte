@@ -1,6 +1,7 @@
 <!--
     The card list's bulk actions on the selected rows (`CardListSelection`): shown while
-    something is selected, with "select all matching", Publish, Archive and Move to category.
+    something is selected, with "select all matching", Publish, Archive, Move to category and,
+    for admins (`canDelete`), Delete, which asks first and deletes only the drafts.
     It is one form that posts the selection as hidden fields (`selectionFields`); each button
     posts to its own action with `formaction`. More bulk actions go in the `actions` snippet:
     buttons with `formaction` pointing at a form action that reads the selection with
@@ -36,11 +37,13 @@
         report?: BulkReport
         /** A refusal of the last bulk action, to show. */
         error?: string
+        /** Offer Delete (admins): it deletes the selected drafts and skips the rest. */
+        canDelete?: boolean
         /** More bulk actions: buttons inside the form, with their own `formaction`. */
         actions?: Snippet<[{ busy: boolean }]>
     }
 
-    let { selected, categories, report, error, actions }: Props = $props()
+    let { selected, categories, report, error, canDelete = false, actions }: Props = $props()
 
     let busy = $state(false)
     const fields = $derived(selected.selection ? selectionFields(selected.selection) : [])
@@ -57,6 +60,20 @@
         return [...params]
     })
     const plural = (n: number) => (n === 1 ? '1 card' : `${n} cards`)
+
+    // Delete can't be undone: the button asks before its form posts.
+    const confirmDelete = (event: MouseEvent) => {
+        const which = selected.allMatching
+            ? `all ${selected.count} matching cards`
+            : plural(selected.count)
+        if (
+            !confirm(
+                `Delete the drafts among ${which} for good? Cards that aren’t drafts are skipped. This cannot be undone.`,
+            )
+        ) {
+            event.preventDefault()
+        }
+    }
 
     const submit = () => {
         busy = true
@@ -169,6 +186,16 @@
                     </Button>
                 </div>
                 {@render actions?.({ busy })}
+                {#if canDelete}
+                    <Button
+                        type="submit"
+                        variant="destructive"
+                        formaction="?/delete"
+                        disabled={busy}
+                        onclick={confirmDelete}>
+                        Delete
+                    </Button>
+                {/if}
             </form>
             <form
                 method="POST"
