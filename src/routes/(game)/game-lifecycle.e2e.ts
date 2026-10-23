@@ -13,6 +13,59 @@ import { qrPath } from '../../lib/ui/qr-path'
 
 const db = localServiceClient()
 
+test('a stepper tap is kept when a refetch of the lobby lands before its save', async ({
+    page,
+}) => {
+    await gotoHydrated(page, '/new')
+    await page.getByLabel('Your name').fill('Astrid')
+    await page.getByRole('radio', { name: 'Cat' }).check()
+    await page.getByRole('button', { name: 'Create game' }).click()
+    await page.waitForURL(/\/game\/[A-HJ-NP-Z]{4}$/)
+    await waitForHydration(page)
+    const score = page.getByLabel('Target score', { exact: true })
+    const up = page.getByRole('button', { name: 'Raise the target score' })
+
+    // The save of 15 reaches the server, but its answer (and the lobby refetch after it) is
+    // held back until the host has tapped + once.
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let first = true
+    await page.route(
+        (url) => url.search.includes('/settings'),
+        async (route) => {
+            if (!first) return route.continue()
+            first = false
+            const response = await route.fetch()
+            await held
+            await route.fulfill({ response })
+        },
+    )
+    await score.fill('15')
+    await score.press('Tab')
+    await up.click()
+    await expect(score).toHaveValue('16')
+
+    // The refetch says 15, saved before the tap; the tap stays.
+    const refetched = page.waitForResponse((response) => response.url().includes('__data.json'))
+    release()
+    await refetched
+    await expect(score).toHaveValue('16')
+    await up.click()
+    await expect(score).toHaveValue('17')
+
+    // And 17 is what gets saved.
+    await expect
+        .poll(async () => {
+            const { data } = await db
+                .from('games')
+                .select('target_score')
+                .eq('code', new URL(page.url()).pathname.split('/').pop()!)
+                .single()
+            return data?.target_score
+        })
+        .toBe(17)
+})
+
 test('the host creates a game and lands in its lobby', async ({ browser, baseURL }) => {
     const hostContext = await browser.newContext({
         permissions: ['clipboard-read', 'clipboard-write'],
