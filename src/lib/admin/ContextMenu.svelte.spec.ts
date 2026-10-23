@@ -35,8 +35,6 @@ describe('ContextMenu.svelte', () => {
         const archiveRow = page.getByRole('button', { name: 'Archive' })
         await expect.element(archiveRow).toHaveAttribute('type', 'button')
         await expect.element(archiveRow).toHaveClass(/text-tone-caution/)
-        // The whole row shows it can be clicked.
-        await expect.element(archiveRow).toHaveClass(/\bcursor-pointer\b/)
         await archiveRow.click()
         expect(archive).toHaveBeenCalledOnce()
 

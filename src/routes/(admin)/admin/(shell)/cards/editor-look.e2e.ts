@@ -2,7 +2,7 @@
 // editor's actions as one menu of full-width rows (`ContextMenu`) in the right column.
 
 import { randomUUID } from 'node:crypto'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
@@ -83,3 +83,17 @@ for (const [screen, size] of [
         )
     })
 }
+
+test('every enabled button shows a pointer; a disabled one does not', async ({ page }) => {
+    const menu = await draftPage(page)
+    const cursor = (button: Locator) =>
+        button.evaluate((element) => getComputedStyle(element).cursor)
+    // A menu row and a plain button.
+    expect(await cursor(menu.getByRole('button', { name: 'Save' }))).toBe('pointer')
+    expect(await cursor(page.getByRole('button', { name: 'Suggest date' }))).toBe('pointer')
+    // With unsaved changes, Archive waits.
+    await page.getByLabel('Year').fill('1968')
+    const archive = menu.getByRole('button', { name: 'Archive' })
+    await expect(archive).toBeDisabled()
+    expect(await cursor(archive)).not.toBe('pointer')
+})

@@ -121,7 +121,7 @@
         class="flex flex-col divide-y overflow-hidden rounded-lg border text-sm">
         {#each actions as action, index (action.id ?? action.label)}
             {@const classes = [
-                'flex min-h-10 w-full cursor-pointer items-start gap-2 bg-background px-3 py-2.5 text-left font-medium outline-none transition-colors',
+                'flex min-h-10 w-full items-start gap-2 bg-background px-3 py-2.5 text-left font-medium outline-none transition-colors',
                 'focus-visible:relative focus-visible:z-10 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset',
                 // Disabled: no tone, no hover, a light grey (struck through, see the label).
                 action.disabled

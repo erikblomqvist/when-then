@@ -147,6 +147,12 @@
     html {
         @apply font-sans;
     }
+    /* Anything clickable says so (Tailwind leaves buttons on the default arrow); not while
+       disabled. */
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]) {
+        cursor: pointer;
+    }
 }
 
 /*
