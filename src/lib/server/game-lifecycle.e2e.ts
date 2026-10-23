@@ -328,24 +328,30 @@ test('a join nudges the game’s channel with only the game and its version', as
 
     // A phone's view of the channel: the public client, as in the browser.
     const phone = localPublicClient()
+    const statuses: string[] = []
     let received!: Promise<Nudge>
-    // Wait until subscribed, or the nudge can go out before the phone listens. A cold Realtime
-    // (CI's first connection) can take a while to let the first channel in.
-    test.setTimeout(60_000)
+    // Wait until subscribed, or the nudge can go out before the phone listens.
     await new Promise<void>((subscribed, failed) => {
+        setTimeout(() => failed(new Error(`Not subscribed: ${statuses.join(', ')}`)), 15_000)
         received = new Promise<Nudge>((resolve) => {
             phone
                 .channel(nudgeTopic(gameId))
                 .on('broadcast', { event: nudgeEvent }, ({ payload }) => resolve(payload as Nudge))
                 .subscribe((status, error) => {
+                    statuses.push(error ? `${status} (${error.message})` : status)
                     if (status === 'SUBSCRIBED') subscribed()
-                    if (status === 'CHANNEL_ERROR') failed(error)
                 })
         })
     })
 
     await joinGame(db, { userId: await newPlayer(), code, name: 'Bo', icon: 'dog' })
 
-    expect(await received).toEqual({ gameId, version: (await getLobby(db, host, code)).version })
+    const nudge = await Promise.race([
+        received,
+        new Promise<never>((_, failed) =>
+            setTimeout(() => failed(new Error(`No nudge: ${statuses.join(', ')}`)), 15_000),
+        ),
+    ])
+    expect(nudge).toEqual({ gameId, version: (await getLobby(db, host, code)).version })
     await phone.removeAllChannels()
 })
