@@ -252,10 +252,12 @@ export function apply(state: GameState, command: Command): ApplyResult {
             if (!player.host) return refuse('not_host')
             if (state.phase.name !== 'seating') return refuse('not_seating')
             if (command.type === 'confirmSeating') {
+                // The host has just seated everyone, so a reseat flagged meanwhile is done with.
                 // Between rounds the anchors are out already: the next round just opens.
-                const { startingPlayerId } = state
-                if (startingPlayerId !== null) return succeed(startTurn(state, startingPlayerId))
-                return succeed(beginPlaying(state, command.currentYear))
+                const seated = { ...state, reseat: false }
+                const { startingPlayerId } = seated
+                if (startingPlayerId !== null) return succeed(startTurn(seated, startingPlayerId))
+                return succeed(beginPlaying(seated, command.currentYear))
             }
             if (!samePlayers(state.seating, command.seating)) return refuse('invalid_seating')
             return succeed({ ...state, seating: [...command.seating] })

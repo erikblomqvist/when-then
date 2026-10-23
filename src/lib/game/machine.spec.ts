@@ -1043,6 +1043,16 @@ describe('rounds and winning', () => {
         }
     })
 
+    it('clears a flag raised during seating when the host confirms it', () => {
+        const flagged = ok(setReseat(turns(ok(setReseat(threePlayerGame(), true)), 0, 0, 0), true))
+        expect(flagged.phase).toEqual({ name: 'seating' })
+        const resumed = ok(apply(flagged, confirm))
+        expect(resumed.reseat).toBe(false)
+        expect(turns(resumed, 0, 0, 0).phase.name).toBe('playing')
+        const first = ok(apply(ok(setReseat(create(threePlayers()), true)), confirm))
+        expect(first.reseat).toBe(false)
+    })
+
     it('refuses the reseat once the game is over', () => {
         const won = turns(threePlayerGame(), 3, 0, 0)
         expect(setReseat(won, true)).toEqual({ ok: false, refusal: 'game_over' })
