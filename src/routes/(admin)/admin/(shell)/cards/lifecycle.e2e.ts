@@ -129,8 +129,11 @@ test('an admin deletes a never-published draft; editors cannot', async ({
     await editorContext.close()
 
     await gotoHydrated(page, `/admin/cards/${id}`)
-    page.on('dialog', (dialog) => void dialog.accept())
     await sidebar(page).getByRole('button', { name: 'Delete draft' }).click()
+    // It asks first, saying what goes.
+    const confirm = page.getByRole('dialog', { name: 'Delete this draft?' })
+    await expect(confirm).toContainText('deleted for good')
+    await confirm.getByRole('button', { name: 'Delete draft' }).click()
     await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
     expect((await page.goto(`/admin/cards/${id}`))?.status()).toBe(404)
     expect((await auditedActions(id)).at(-1)).toEqual({ action: 'delete', actor_id: userId })
@@ -153,7 +156,9 @@ test('marking the date verified, then changing the date asks to clear it', async
     await gotoHydrated(page, `/admin/cards/${id}`)
 
     await sidebar(page).getByRole('button', { name: 'Mark date verified' }).click()
-    await expect(sidebar(page)).toContainText(`Verified by ${email}`)
+    // The row turns into Clear, its caption saying who verified it.
+    const clear = sidebar(page).getByRole('button', { name: 'Clear date verification' })
+    await expect(clear).toHaveAccessibleDescription(new RegExp(`^Verified by ${email} on `))
 
     const dialogs: string[] = []
     page.on('dialog', (dialog) => {

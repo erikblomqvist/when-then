@@ -4,9 +4,17 @@
     import CardEditor from '#lib/admin/cards/CardEditor.svelte'
     import CardHistory from '#lib/admin/cards/CardHistory.svelte'
     import CardLifecycle from '#lib/admin/cards/CardLifecycle.svelte'
+    import { CardLifecycleActions } from '#lib/admin/cards/card-lifecycle.svelte.js'
     import type { PageProps } from './$types'
 
     let { data, form }: PageProps = $props()
+
+    const lifecycle = new CardLifecycleActions(() => ({
+        card: data.card,
+        role: data.role,
+        blockers: data.publishBlockers,
+        verifiedByEmail: data.verifiedByEmail,
+    }))
 </script>
 
 <svelte:head>
@@ -23,7 +31,8 @@
         card={data.card}
         errors={form?.errors}
         publishError={form?.publishError}
-        canCreateCategory={data.role === 'admin'}>
+        canCreateCategory={data.role === 'admin'}
+        menuActions={(state) => lifecycle.menuActions(state)}>
         {#snippet translationActions({ locale, english, fill })}
             <AiTranslateButton
                 cardId={data.card.id}
@@ -37,13 +46,9 @@
                 {english}
                 {apply} />
         {/snippet}
-        {#snippet sidebar({ dirty })}
+        {#snippet sidebar()}
             <CardLifecycle
-                card={data.card}
-                blockers={data.publishBlockers}
-                role={data.role}
-                {dirty}
-                verifiedByEmail={data.verifiedByEmail}
+                {lifecycle}
                 error={form?.lifecycleError} />
             <CardHistory {...data.history} />
         {/snippet}

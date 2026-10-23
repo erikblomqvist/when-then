@@ -52,7 +52,7 @@
 
 <section
     aria-labelledby="history-heading"
-    class="flex flex-col gap-3 border-t pt-4">
+    class="flex flex-col gap-3 pt-4">
     <h2
         id="history-heading"
         class="font-medium">
