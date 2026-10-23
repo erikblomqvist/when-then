@@ -46,6 +46,8 @@ const refusals = {
     not_stealing: 'No misplaced card is waiting to be stolen.',
     not_your_steal: 'Only the current stealer can steal.',
     game_over: 'The game is over.',
+    nothing_to_skip: 'That player is not holding up play: no turn, steal or reading of theirs.',
+    no_other_reader: 'Nobody else can read the card.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */

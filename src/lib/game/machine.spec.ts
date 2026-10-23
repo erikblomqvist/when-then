@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { isDecade } from '../cards/date-parts'
 import { apply, create, load, type ApplyResult, type CreateInput } from './machine'
-import { leftOf, startingFrom } from './seating'
+import { scenario } from './scenario'
+import { leftOf, rightOf, startingFrom } from './seating'
 import { fits, score, type DeckCard, type DrawOutcome, type GameState } from './state'
 import { redact } from './view'
 
@@ -1056,5 +1057,189 @@ describe('rounds and winning', () => {
     it('refuses the reseat once the game is over', () => {
         const won = turns(threePlayerGame(), 3, 0, 0)
         expect(setReseat(won, true)).toEqual({ ok: false, refusal: 'game_over' })
+    })
+})
+
+describe('skipping', () => {
+    // Scenario players are astrid, björn, cecilia… in seating order, astrid the host.
+    const skip = (state: GameState, playerId: string, by = 'astrid') =>
+        apply(state, { type: 'skip', by, playerId })
+
+    /** The active player's timeline with only what they had locked in. */
+    const keptOf = (state: GameState, id: string) =>
+        state.timelines[id].filter((entry) => entry.kind === 'anchor' || entry.locked)
+
+    /** The views of every seat on the card in play. */
+    const cardViews = (state: GameState) =>
+        state.seating.map((seat) => {
+            const view = redact(state, seat)
+            if (view.phase.name !== 'playing' || view.phase.play.step === 'picking') {
+                throw new Error('No card is in play.')
+            }
+            return { seat, ...view.phase.play.card }
+        })
+
+    it('of the active player while a card is in play discards it and ends the turn, the unlocked cards lost', () => {
+        const state = scenario().players(4).activePlayer(2).unlocked(2).build().state
+        const { activeId, cardId } = dealtPlay(state)
+        const next = ok(skip(state, activeId))
+        expect(next.discards).toEqual([...state.discards, cardId])
+        expect(next.timelines[activeId]).toEqual(keptOf(state, activeId))
+        expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
+        // The card left the game with its date revealed.
+        expect(redact(next, 'astrid').cards[cardId]).toEqual(state.cards[cardId])
+    })
+
+    it('of the active player at the lock-in choice ends the turn, the unlocked cards lost', () => {
+        const state = scenario()
+            .players(3)
+            .activePlayer(1)
+            .step('deciding')
+            .unlocked(2)
+            .build().state
+        const { activeId } = playOf(state)
+        const next = ok(skip(state, activeId))
+        expect(next.discards).toEqual(state.discards)
+        expect(next.timelines[activeId]).toEqual(keptOf(state, activeId))
+        expect(score(next, activeId)).toBe(score(state, activeId))
+        expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
+    })
+
+    it('of the active player at a Free choice ends the turn with nothing discarded', () => {
+        const state = scenario().players(3).step('freeChoice').build().state
+        const { activeId } = playOf(state)
+        const next = ok(skip(state, activeId))
+        expect(next.discards).toEqual(state.discards)
+        expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
+    })
+
+    it('of the current stealer passes the card to the next one, and is in the log', () => {
+        const state = scenario().players(4).step('stealing').build().state
+        const play = dealtPlay(state)
+        if (play.step !== 'stealing') throw new Error('Not stealing.')
+        const next = ok(skip(state, play.stealerId))
+        expect(dealtPlay(next)).toMatchObject({
+            step: 'stealing',
+            stealerId: leftOf(next.seating, play.stealerId),
+        })
+        expect(next.timelines).toEqual(state.timelines)
+        expect(next.log).toEqual([
+            ...state.log,
+            { kind: 'skip', playerId: play.stealerId, what: 'steal' },
+        ])
+    })
+
+    it('of the second stealer leaves the next one stealing, the reader last, and no view has the date', () => {
+        for (const players of [4, 5]) {
+            const state = scenario().players(players).step('stealing').missedSteal().build().state
+            const play = dealtPlay(state)
+            if (play.step !== 'stealing') throw new Error('Not stealing.')
+            const next = ok(skip(state, play.stealerId))
+            const after = dealtPlay(next)
+            if (after.step !== 'stealing') throw new Error('Not stealing.')
+            expect(after.stealerId).toBe(leftOf(next.seating, play.stealerId))
+            if (players === 4) expect(after.stealerId).toBe(play.readerId)
+            for (const view of cardViews(next)) expect(view.date).toBeNull()
+        }
+    })
+
+    it('of the last stealer discards the card, and the next player is up', () => {
+        const state = scenario().players(3).step('stealing').missedSteal().build().state
+        const { activeId, cardId, readerId } = dealtPlay(state)
+        const next = ok(skip(state, readerId))
+        expect(next.discards).toEqual([...state.discards, cardId])
+        expect(playOf(next).activeId).toBe(leftOf(next.seating, activeId))
+    })
+
+    it('of the reader moves the reading and the card text to the next player before the active one', () => {
+        const state = scenario().players(4).activePlayer(2).build().state
+        const { activeId, readerId } = dealtPlay(state)
+        const next = ok(skip(state, readerId))
+        const reader = rightOf(next.seating, readerId)
+        expect(dealtPlay(next)).toMatchObject({ activeId, step: 'placing', readerId: reader })
+        for (const view of cardViews(next)) {
+            expect(view.text !== null).toBe(view.seat === reader)
+            expect(view.date).toBeNull()
+        }
+        expect(next.log).toEqual([
+            ...state.log,
+            { kind: 'skip', playerId: readerId, what: 'reading' },
+        ])
+    })
+
+    it('of the reader goes round to the first reader again, never to the active player', () => {
+        const state = scenario().players(3).activePlayer(1).build().state
+        const { readerId } = dealtPlay(state)
+        const once = ok(skip(state, readerId))
+        const twice = ok(skip(once, dealtPlay(once).readerId))
+        expect(dealtPlay(once).readerId).not.toBe(dealtPlay(once).activeId)
+        expect(dealtPlay(twice).readerId).toBe(readerId)
+    })
+
+    it("of the reader passes a waiting Reader's choice to the new reader", () => {
+        const state = scenario().players(4).step('readersChoice').build().state
+        const { readerId } = playOf(state)
+        const next = ok(skip(state, readerId))
+        const reader = playOf(next).readerId
+        const pick = (by: string) =>
+            apply(next, { type: 'pickCategory', by, category: Object.keys(next.queues)[0] })
+        expect(pick(readerId)).toEqual({ ok: false, refusal: 'not_your_pick' })
+        expect(dealtPlay(ok(pick(reader)))).toMatchObject({ step: 'placing', readerId: reader })
+    })
+
+    it('of the reader is refused with nobody else to read', () => {
+        const state = scenario().players(2).build().state
+        expect(skip(state, dealtPlay(state).readerId)).toEqual({
+            ok: false,
+            refusal: 'no_other_reader',
+        })
+    })
+
+    it('is refused for anyone but the host', () => {
+        const placing = scenario().players(4).activePlayer(2).build().state
+        const stealing = scenario().players(4).activePlayer(2).step('stealing').build().state
+        const stealingPlay = dealtPlay(stealing)
+        if (stealingPlay.step !== 'stealing') throw new Error('Not stealing.')
+        const targets = [
+            [placing, dealtPlay(placing).activeId],
+            [placing, dealtPlay(placing).readerId],
+            [stealing, stealingPlay.stealerId],
+        ] as const
+        for (const [state, playerId] of targets) {
+            for (const by of state.seating.filter((id) => id !== 'astrid')) {
+                expect(skip(state, playerId, by)).toEqual({ ok: false, refusal: 'not_host' })
+            }
+            expect(skip(state, playerId).ok).toBe(true)
+        }
+    })
+
+    it('is refused for a player who is holding nothing up', () => {
+        const placing = scenario().players(4).activePlayer(2).build().state
+        const { activeId, readerId } = dealtPlay(placing)
+        const bystander = placing.seating.find((id) => id !== activeId && id !== readerId)!
+        expect(skip(placing, bystander)).toEqual({ ok: false, refusal: 'nothing_to_skip' })
+        expect(skip(placing, 'stranger')).toEqual({ ok: false, refusal: 'nothing_to_skip' })
+
+        const deciding = scenario().players(4).step('deciding').build().state
+        expect(skip(deciding, dealtPlay(deciding).readerId)).toEqual({
+            ok: false,
+            refusal: 'nothing_to_skip',
+        })
+
+        const stealing = scenario().players(4).step('stealing').build().state
+        expect(skip(stealing, dealtPlay(stealing).activeId)).toEqual({
+            ok: false,
+            refusal: 'nothing_to_skip',
+        })
+
+        const seating = create(fourPlayers())
+        expect(skip(seating, 'bjorn')).toEqual({ ok: false, refusal: 'nothing_to_skip' })
+    })
+
+    it('is refused once the game is over', () => {
+        const state = scenario().players(2).target(3).scores([3, 0]).activePlayer(2).build().state
+        const won = ok(skip(state, playOf(state).activeId))
+        expect(won.phase.name).toBe('finished')
+        expect(skip(won, 'astrid')).toEqual({ ok: false, refusal: 'game_over' })
     })
 })

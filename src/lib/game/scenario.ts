@@ -12,6 +12,7 @@ import { defaultTargetScore, isTargetScore, maxTargetScore, minTargetScore } fro
 import {
     categoriesLeft,
     fits,
+    holdingUp,
     pickerOf,
     score,
     type GameDate,
@@ -37,9 +38,10 @@ export type ScenarioStep = (typeof scenarioSteps)[number]
 
 /**
  * Exact moves a recipe plays, in order, once it has reached its step: the active player
- * misplaces the card in play, or the current stealer misses or steals it.
+ * misplaces the card in play, the current stealer misses or steals it, or the host skips an
+ * absent player holding up play.
  */
-export const helperSteps = ['misplace', 'missedSteal', 'correctSteal'] as const
+export const helperSteps = ['misplace', 'missedSteal', 'correctSteal', 'skip'] as const
 export type HelperStep = (typeof helperSteps)[number]
 
 /** A moment in a game, flat and serialisable. Players are numbered from 1 in seating order. */
@@ -69,6 +71,11 @@ export type Recipe = {
     helpers: HelperStep[]
     /** The player whose phone the view is for; null for the active player. */
     viewer: number | null
+    /**
+     * The players not at the table. Absence isn't part of the rules, so it's only an overlay
+     * beside the state and the view, as a phone adds it from presence; `skip` acts on it.
+     */
+    absent: number[]
 }
 
 export const defaultRecipe: Recipe = {
@@ -81,6 +88,7 @@ export const defaultRecipe: Recipe = {
     scores: null,
     helpers: [],
     viewer: null,
+    absent: [],
 }
 
 /** A recipe the rules can't reach. `field` is the recipe field at fault. */
@@ -94,8 +102,8 @@ export class ScenarioError extends Error {
     }
 }
 
-/** A built recipe: the full state, and the view for the viewer's seat. */
-export type Scenario = { recipe: Recipe; state: GameState; view: SeatView }
+/** A built recipe: the full state, the view for the viewer's seat, and who is absent. */
+export type Scenario = { recipe: Recipe; state: GameState; view: SeatView; absent: string[] }
 
 const names = [
     'Astrid',
@@ -126,13 +134,16 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
     misplace: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'misplace'] }),
     missedSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'missedSteal'] }),
     correctSteal: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'correctSteal'] }),
+    skip: () => scenario({ ...recipe, helpers: [...recipe.helpers, 'skip'] }),
+    absent: (absent: number[]) => scenario({ ...recipe, absent }),
     viewer: (viewer: number) => scenario({ ...recipe, viewer }),
     build: () => buildScenario(recipe),
 })
 
 /** Play the real game to the moment `recipe` describes. Throws a `ScenarioError` if it can't. */
 export function buildScenario(recipe: Recipe): Scenario {
-    const { seed, players, activePlayer, step, unlocked, target, scores, helpers, viewer } = recipe
+    const { seed, players, activePlayer, step, unlocked, target, scores, helpers, viewer, absent } =
+        recipe
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         throw new ScenarioError('seed', 'a whole number from 0 to 4294967295')
     }
@@ -176,6 +187,10 @@ export function buildScenario(recipe: Recipe): Scenario {
         }
     }
     checkPlayerNumber('viewer', viewer, players)
+    for (const n of absent) checkPlayerNumber('absent', n, players)
+    if (new Set(absent).size !== absent.length) {
+        throw new ScenarioError('absent', 'names each player once')
+    }
 
     const ids = names.slice(0, players).map((name) => name.toLowerCase())
     let state = create({
@@ -401,8 +416,25 @@ export function buildScenario(recipe: Recipe): Scenario {
         })
     }
 
+    const absentIds = absent.map((n) => ids[n - 1])
     for (const helper of helpers) {
         const current = playing(state, 'helpers')
+        if (helper === 'skip') {
+            // The first absent player holding up play: an absent active player before the
+            // reader, as a new reader wouldn't help them.
+            const { activeId, ...rest } = current
+            const playerId = holdingUp(rest, activeId)
+                .map((held) => held.playerId)
+                .find((id) => absentIds.includes(id))
+            if (playerId === undefined) {
+                throw new ScenarioError(
+                    'helpers',
+                    `skip needs an absent player holding up play at ${current.step}; name them in absent`,
+                )
+            }
+            play({ type: 'skip', by: ids[0], playerId }, 'helpers')
+            continue
+        }
         if (helper === 'misplace') {
             if (current.step !== 'placing') {
                 throw new ScenarioError(
@@ -443,11 +475,15 @@ export function buildScenario(recipe: Recipe): Scenario {
     }
 
     const seat = viewer === null ? playing(state, 'viewer').activeId : ids[viewer - 1]
-    return { recipe, state, view: redact(state, seat) }
+    return { recipe, state, view: redact(state, seat), absent: absentIds }
 }
 
 /** An error on `field` unless `n` is null or numbers one of the `players`. */
-function checkPlayerNumber(field: 'activePlayer' | 'viewer', n: number | null, players: number) {
+function checkPlayerNumber(
+    field: 'activePlayer' | 'viewer' | 'absent',
+    n: number | null,
+    players: number,
+) {
     if (n !== null && (!Number.isInteger(n) || n < 1 || n > players)) {
         throw new ScenarioError(field, `there is no player ${n}`)
     }

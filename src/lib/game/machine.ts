@@ -11,6 +11,7 @@ import {
     categoriesLeft,
     currentSchema,
     fits,
+    holdingUp,
     leaders,
     pickerOf,
     standardDate,
@@ -51,6 +52,8 @@ export type Command =
     | { type: 'continue'; by: string }
     /** The current stealer's go at the misplaced card, in a gap on their own timeline. */
     | { type: 'steal'; by: string; slot: number }
+    /** Move play past what absent `playerId` is holding up: their turn, steal or reading. */
+    | { type: 'skip'; by: string; playerId: string }
 
 /** The next state, or the code for why the command was refused. */
 export type ApplyResult = { ok: true; state: GameState } | { ok: false; refusal: GameRefusalCode }
@@ -269,6 +272,10 @@ export function apply(state: GameState, command: Command): ApplyResult {
             }
             return succeed({ ...state, reseat: command.reseat })
         }
+        case 'skip': {
+            if (!player.host) return refuse('not_host')
+            return skip(state, command.playerId)
+        }
     }
 
     if (state.phase.name !== 'playing') return refuse(unavailable[command.type])
@@ -355,6 +362,39 @@ const unavailable: Record<
     steal: 'not_stealing',
 }
 
+/**
+ * The host skips what `playerId` is holding up (`holdingUp`). A skipped turn ends with the
+ * active player's unlocked cards lost, and a card waiting to be placed is discarded. A skipped
+ * steal passes the card on as a miss would. A skipped reading, and with it a Reader's choice
+ * and the card text, moves to the next player before the active one, round again to the first.
+ */
+function skip(state: GameState, playerId: string): ApplyResult {
+    if (state.phase.name === 'seating') return refuse('nothing_to_skip')
+    if (state.phase.name !== 'playing') return refuse('game_over')
+    const { activeId, play } = state.phase
+    const what = holdingUp(play, activeId).find((held) => held.playerId === playerId)?.what
+    if (what === undefined) return refuse('nothing_to_skip')
+    const log = [...state.log, { kind: 'skip' as const, playerId, what }]
+
+    if (play.step === 'stealing') {
+        return succeed(toNextStealer({ ...state, log }, activeId, playerId))
+    }
+    if (what === 'turn') {
+        const next = { ...unlockedLost(state, activeId), log }
+        if (play.step !== 'placing') return succeed(endTurn(next, activeId))
+        return succeed(endTurn(discarded(next, play.cardId), activeId))
+    }
+    // To the right from the active player: the players who read in their place.
+    const readers = startingFrom(state.seating, activeId).slice(1).reverse()
+    if (readers.length < 2) return refuse('no_other_reader')
+    const readerId = readers[(readers.indexOf(playerId) + 1) % readers.length]
+    return succeed({
+        ...state,
+        log,
+        phase: { ...state.phase, play: { ...play, readerId } },
+    })
+}
+
 /** Whether `slot` is a gap on `timeline`: 0 before the first entry up to after the last. */
 const isSlot = (timeline: readonly TimelineEntry[], slot: number) =>
     Number.isInteger(slot) && slot >= 0 && slot <= timeline.length
@@ -381,13 +421,22 @@ const succeed = (state: GameState): ApplyResult => ({ ok: true, state })
  * game. The card passes round the table to steal, starting on the active player's left.
  */
 function misplaced(state: GameState, activeId: string): GameState {
-    const timeline = state.timelines[activeId].filter(
+    return toNextStealer(unlockedLost(state, activeId), activeId)
+}
+
+/** `state` with `cardId` out of the game, its date revealed. */
+const discarded = (state: GameState, cardId: string): GameState => ({
+    ...state,
+    discards: [...state.discards, cardId],
+    log: [...state.log, { kind: 'discard', cardId }],
+})
+
+/** `state` with `playerId`'s unlocked cards gone from their timeline, out of the game. */
+function unlockedLost(state: GameState, playerId: string): GameState {
+    const timeline = state.timelines[playerId].filter(
         (entry) => entry.kind === 'anchor' || entry.locked,
     )
-    return toNextStealer(
-        { ...state, timelines: { ...state.timelines, [activeId]: timeline } },
-        activeId,
-    )
+    return { ...state, timelines: { ...state.timelines, [playerId]: timeline } }
 }
 
 /**
@@ -403,14 +452,7 @@ function toNextStealer(state: GameState, activeId: string, from?: string): GameS
     const others = startingFrom(state.seating, activeId).slice(1)
     const order = [...others.filter((id) => id !== readerId), readerId]
     const stealerId = order[from === undefined ? 0 : order.indexOf(from) + 1]
-    if (stealerId === undefined) {
-        const next: GameState = {
-            ...state,
-            discards: [...state.discards, cardId],
-            log: [...state.log, { kind: 'discard', cardId }],
-        }
-        return endTurn(next, activeId)
-    }
+    if (stealerId === undefined) return endTurn(discarded(state, cardId), activeId)
     return {
         ...state,
         phase: {

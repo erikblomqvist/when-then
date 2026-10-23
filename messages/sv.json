@@ -77,6 +77,8 @@
     "refusal_not_stealing": "Det finns inget kort att stjäla just nu.",
     "refusal_not_your_steal": "Någon annan stjäl just nu.",
     "refusal_game_over": "Spelet är slut.",
+    "refusal_nothing_to_skip": "Den spelaren håller inte upp spelet just nu.",
+    "refusal_no_other_reader": "Det finns ingen annan som kan läsa kortet.",
     "player_icon_cat": "Katt",
     "player_icon_dog": "Hund",
     "player_icon_bird": "Fågel",

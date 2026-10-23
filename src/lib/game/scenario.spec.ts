@@ -63,6 +63,7 @@ describe('building a two-player scenario', () => {
             scores: null,
             helpers: [],
             viewer: 1,
+            absent: [],
         })
         expect(buildScenario(copy).state).toEqual(buildScenario(recipe).state)
     })
@@ -303,6 +304,55 @@ describe('helper steps', () => {
         expect(discarded.discards.at(-1)).toBe(dealtPlay(misplaced.build().state).cardId)
         expect(playOf(discarded).activeId).toBe(second)
         expect(discarded.log).toEqual([])
+    })
+})
+
+describe('absent players', () => {
+    it('are an overlay beside the state and the view, never in them', () => {
+        const built = scenario().players(4).activePlayer(2).absent([3, 1]).build()
+        expect(built.absent).toEqual(['cecilia', 'astrid'])
+        expect(JSON.stringify(built.state)).not.toMatch(/absent/i)
+        expect(JSON.stringify(built.view)).not.toMatch(/absent/i)
+        expect(built.state).toEqual(scenario().players(4).activePlayer(2).build().state)
+        expect(scenario().build().absent).toEqual([])
+    })
+
+    it('are skipped by the skip helper when they hold up play', () => {
+        // An absent reader: the reading moves on, and the new reader has the text.
+        const reading = scenario().players(4).activePlayer(2).absent([1]).skip().build()
+        const play = dealtPlay(reading.state)
+        expect(play).toMatchObject({ activeId: 'björn', step: 'placing', readerId: 'dag' })
+        expect(reading.state.log.at(-1)).toEqual({
+            kind: 'skip',
+            playerId: 'astrid',
+            what: 'reading',
+        })
+
+        // An absent stealer, mid-steal: the card passes on.
+        const steal = scenario().players(4).activePlayer(1).step('stealing').absent([2]).skip()
+        expect(dealtPlay(steal.build().state)).toMatchObject({ stealerId: 'cecilia' })
+
+        // An absent active player, and their reader: the turn is skipped.
+        const turn = scenario().players(4).activePlayer(2).absent([1, 2]).skip().build()
+        expect(playOf(turn.state).activeId).toBe('cecilia')
+    })
+
+    it('throw on a skip with nobody absent holding up play, naming helpers', () => {
+        const fieldOf = (build: () => unknown) => {
+            try {
+                build()
+            } catch (error) {
+                if (error instanceof ScenarioError) return error.field
+                throw error
+            }
+            throw new Error('It built.')
+        }
+        expect(fieldOf(() => scenario().players(4).activePlayer(2).skip().build())).toBe('helpers')
+        expect(
+            fieldOf(() => scenario().players(4).activePlayer(2).absent([4]).skip().build()),
+        ).toBe('helpers')
+        expect(fieldOf(() => scenario().players(4).absent([5]).build())).toBe('absent')
+        expect(fieldOf(() => scenario().players(4).absent([2, 2]).build())).toBe('absent')
     })
 })
 
