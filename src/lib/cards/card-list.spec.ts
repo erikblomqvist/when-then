@@ -80,6 +80,24 @@ describe('isFiltered', () => {
         expect(isFiltered({})).toBe(false)
         expect(isFiltered({ verified: false })).toBe(true)
     })
+
+    it('does not count the Archived tab as a filter', () => {
+        expect(isFiltered({ archived: true })).toBe(false)
+        expect(isFiltered({ archived: true, search: 'moon' })).toBe(true)
+    })
+})
+
+describe('the Archived tab', () => {
+    it('is ?tab=archived, and the old status=archived opens it too', () => {
+        expect(cardListHref({ filter: { archived: true } })).toBe('/admin/cards?tab=archived')
+        expect(parseCardListView(new URLSearchParams('tab=archived&q=moon')).filter).toEqual({
+            archived: true,
+            search: 'moon',
+        })
+        expect(parseCardListView(new URLSearchParams('status=archived')).filter).toEqual({
+            archived: true,
+        })
+    })
 })
 
 describe('translation filters', () => {

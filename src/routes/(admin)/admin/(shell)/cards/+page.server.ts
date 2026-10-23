@@ -14,10 +14,13 @@ export const config = { maxDuration: 300 }
 export const load: PageServerLoad = async ({ url }) => {
     const db = supabaseService()
     const view = parseCardListView(url.searchParams)
-    const [{ cards, total }, categories, ...queueSizes] = await Promise.all([
+    const [{ cards, total }, categories, active, archived, ...queueSizes] = await Promise.all([
         listCards(db, { ...view, pageSize }),
         listCategories(db, { includeArchived: true }),
-        // The review queues (saved filters): how many cards each holds.
+        // The tabs: drafts and published cards, and archived cards.
+        countMatchingCards(db, {}),
+        countMatchingCards(db, { archived: true }),
+        // The review queues (saved filters, on the Cards tab): how many cards each holds.
         ...translationLocales.map((locale) =>
             countMatchingCards(db, { translations: { [locale]: 'needs-review' } }),
         ),
@@ -26,6 +29,7 @@ export const load: PageServerLoad = async ({ url }) => {
         view,
         cards,
         total,
+        tabCounts: { active, archived },
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
         reviewQueues: Object.fromEntries(
             translationLocales.map((locale, index) => [locale, queueSizes[index]]),

@@ -40,6 +40,7 @@ const listColumns = `id, status, decade, year, month, day, verified_at, updated_
 const filterArgs = (filter: CardFilter) => ({
     search: filter.search,
     status: filter.status,
+    archived: filter.archived ?? false,
     category_id: filter.categoryId,
     verified: filter.verified,
     has_source: filter.hasSource,

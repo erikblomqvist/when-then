@@ -1,6 +1,6 @@
 // Exporting cards from the card list: the current filter or everything, as CSV or JSON, and
 // a selection of ids posted to the endpoint. Uses the seeded made-up cards ("Sample" matches
-// exactly three).
+// three, one of them archived, so the Cards tab exports two).
 
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
@@ -10,7 +10,6 @@ import { signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated } from '../../../../../lib/testing/e2e-hydration'
 
 const sampleby = '00000000-0000-4000-9000-000000000004'
-const balloonist = '00000000-0000-4000-9000-000000000005'
 const samplebridge = '00000000-0000-4000-9000-000000000006'
 
 async function exportFile(page: Page) {
@@ -31,7 +30,7 @@ test('an editor downloads the filtered cards as CSV in the import columns', asyn
 
     const exportForm = page.getByRole('form', { name: 'Export cards' })
     await expect(exportForm.getByLabel('Export')).toHaveValue('')
-    await expect(exportForm.getByLabel('Export')).toContainText('The 3 matching cards')
+    await expect(exportForm.getByLabel('Export')).toContainText('The 2 matching cards')
     const { name, text } = await exportFile(page)
 
     expect(name).toMatch(/^when-then-cards-\d{4}-\d{2}-\d{2}\.csv$/)
@@ -52,7 +51,7 @@ test('an editor downloads the filtered cards as CSV in the import columns', asyn
         'status',
         'id',
     ])
-    expect(records.map((record) => record.id)).toEqual([sampleby, balloonist, samplebridge])
+    expect(records.map((record) => record.id)).toEqual([sampleby, samplebridge])
     expect(records[0]).toEqual({
         text_en: 'The made-up port of Sampleby lights its first lighthouse',
         decade: '-49',
