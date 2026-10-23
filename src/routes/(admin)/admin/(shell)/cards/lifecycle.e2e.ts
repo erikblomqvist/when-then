@@ -1,5 +1,5 @@
 // The card editor's sidebar: Publish (the editor's, which saves too) / Archive / Unarchive,
-// Delete draft and verification.
+// Delete card and verification.
 
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Locator, type Page } from '@playwright/test'
@@ -165,44 +165,52 @@ test('Publish on a draft saves what was changed, then publishes', async ({ page 
     await expect(page.getByTestId('card-status')).toHaveText('Published')
 })
 
-test('an admin deletes a never-published draft; editors cannot', async ({
-    page,
-    browser,
-    baseURL,
-}) => {
+test('an admin deletes a card; editors cannot', async ({ page, browser, baseURL }) => {
     const { userId } = await signInAs(page, 'admin')
     const text = unique('A made-up draft to throw away')
     const id = await draft(userId, text, year1969)
 
-    // An editor sees no Delete draft.
+    // An editor sees no Delete card.
     const editorContext = await browser.newContext({ baseURL })
     const editorPage = await editorContext.newPage()
     await signInAs(editorPage, 'editor')
     await gotoHydrated(editorPage, `/admin/cards/${id}`)
     await expect(editorPage.getByTestId('card-status')).toHaveText('Draft')
-    await expect(sidebar(editorPage).getByRole('button', { name: 'Delete draft' })).toHaveCount(0)
+    await expect(sidebar(editorPage).getByRole('button', { name: 'Delete card' })).toHaveCount(0)
     await editorContext.close()
 
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await sidebar(page).getByRole('button', { name: 'Delete draft' }).click()
+    await sidebar(page).getByRole('button', { name: 'Delete card' }).click()
     // It asks first, saying what goes.
-    const confirm = page.getByRole('dialog', { name: 'Delete this draft?' })
+    const confirm = page.getByRole('dialog', { name: 'Delete this card?' })
     await expect(confirm).toContainText('deleted for good')
-    await confirm.getByRole('button', { name: 'Delete draft' }).click()
+    await confirm.getByRole('button', { name: 'Delete card' }).click()
     await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
     expect((await page.goto(`/admin/cards/${id}`))?.status()).toBe(404)
     expect((await auditedActions(id)).at(-1)).toEqual({ action: 'delete', actor_id: userId })
 })
 
-test('a published card cannot be deleted', async ({ page }) => {
+test('an archived card can be deleted, and saving one goes back to the Archived tab', async ({
+    page,
+}) => {
     const { userId } = await signInAs(page, 'admin')
     const id = await draft(userId, unique('A made-up statue is unveiled'), year1969)
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await sidebar(page).getByRole('button', { name: 'Publish' }).click()
-    await expect(page.getByRole('heading', { name: 'Cards', level: 1 })).toBeVisible()
+    await sidebar(page).getByRole('button', { name: 'Archive' }).click()
+    await expect(page.getByTestId('card-status')).toHaveText('Archived')
+
+    await page.getByLabel('English text').fill(unique('A made-up statue is toppled'))
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page).toHaveURL(/\/admin\/cards\?tab=archived$/)
+
     await gotoHydrated(page, `/admin/cards/${id}`)
-    await expect(page.getByTestId('card-status')).toHaveText('Published')
-    await expect(sidebar(page).getByRole('button', { name: 'Delete draft' })).toHaveCount(0)
+    await sidebar(page).getByRole('button', { name: 'Delete card' }).click()
+    await page
+        .getByRole('dialog', { name: 'Delete this card?' })
+        .getByRole('button', { name: 'Delete card' })
+        .click()
+    await expect(page).toHaveURL(/\/admin\/cards\?tab=archived$/)
+    expect((await page.goto(`/admin/cards/${id}`))?.status()).toBe(404)
 })
 
 test('marking the date verified, then changing the date asks to clear it', async ({ page }) => {

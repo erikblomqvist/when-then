@@ -4,6 +4,7 @@ import { publishBlockers } from '#lib/cards/publish-rule.js'
 import { auditNames } from '#lib/server/audit.js'
 import {
     cardLifecycleActions,
+    cardListFor,
     editorCategories,
     loadCard,
     saveAndPublishAction,
@@ -36,9 +37,11 @@ export const load: PageServerLoad = async ({ params }) => {
 export const actions: Actions = {
     createCategory: createCategoryAction,
     save: async (event) => {
-        const saved = await saveCardAction(event, await loadCard(event.params.id))
+        const card = await loadCard(event.params.id)
+        const saved = await saveCardAction(event, card)
         if (typeof saved !== 'string') return saved
-        redirect(303, '/admin/cards')
+        // Back to the tab the card is on, so editing an archived card stays on Archived.
+        redirect(303, cardListFor(card))
     },
     saveAndPublish: async (event) => saveAndPublishAction(event, await loadCard(event.params.id)),
     ...cardLifecycleActions,

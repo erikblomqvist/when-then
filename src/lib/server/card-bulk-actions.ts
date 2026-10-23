@@ -7,7 +7,7 @@ import { fail, type RequestEvent } from '@sveltejs/kit'
 import { readCardSelection } from '../cards/card-selection'
 import {
     archiveCards,
-    deleteDrafts,
+    deleteCards,
     moveCards,
     publishCards,
     type BulkResult,
@@ -56,12 +56,12 @@ export const cardBulkActions = {
         const result = await archiveCards(supabaseService(), selected.user.id, selected.ids)
         return report(result, (count) => `Archived ${count}.`)
     },
-    /** Deletes the selected drafts; admin-only, like Delete draft in the editor. */
+    /** Deletes the selected cards; admin-only, like Delete card in the editor. */
     delete: async (event: RequestEvent) => {
         await requireRole(event, 'admin')
         const selected = await selectedCardIds(event)
         if ('failure' in selected) return selected.failure
-        const result = await deleteDrafts(supabaseService(), selected.user.id, selected.ids)
+        const result = await deleteCards(supabaseService(), selected.user.id, selected.ids)
         return report(result, (count) => `Deleted ${count}.`)
     },
     move: async (event: RequestEvent) => {

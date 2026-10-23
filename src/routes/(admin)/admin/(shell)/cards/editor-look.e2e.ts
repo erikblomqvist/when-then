@@ -51,7 +51,7 @@ for (const [screen, size] of [
             /^\s*Mark date verified\b/,
             /^\s*Publish\b/,
             /^\s*Archive\s*$/,
-            /^\s*Delete draft\s*$/,
+            /^\s*Delete card\s*$/,
         ])
 
         // Each row fills the menu's width, stacked top to bottom.
@@ -73,12 +73,12 @@ for (const [screen, size] of [
             (saveBox?.x ?? 0) + (saveBox?.width ?? 0) - (keysBox?.x ?? 0) - (keysBox?.width ?? 0),
         ).toBeLessThan(16)
 
-        // Tones: Publish constructive, Archive caution, Delete draft destructive.
+        // Tones: Publish constructive, Archive caution, Delete card destructive.
         await expect(menu.getByRole('button', { name: 'Publish' })).toHaveClass(
             /text-tone-constructive/,
         )
         await expect(menu.getByRole('button', { name: 'Archive' })).toHaveClass(/text-tone-caution/)
-        await expect(menu.getByRole('button', { name: 'Delete draft' })).toHaveClass(
+        await expect(menu.getByRole('button', { name: 'Delete card' })).toHaveClass(
             /text-tone-destructive/,
         )
     })

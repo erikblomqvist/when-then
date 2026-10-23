@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { parseCsvRecords } from '../../../../../lib/cards/card-csv'
 import type { ExportedCard } from '../../../../../lib/cards/card-export'
 import type { DateParts } from '../../../../../lib/cards/date-parts'
-import { publishCards } from '../../../../../lib/server/card-bulk'
+import { archiveCards, publishCards } from '../../../../../lib/server/card-bulk'
 import { getCard, saveCard } from '../../../../../lib/server/cards'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
@@ -163,20 +163,33 @@ test('an admin deletes picked drafts after confirming; a published one is skippe
     })
     await bulkBar(page).getByRole('button', { name: 'Delete' }).click()
     await expect.poll(() => messages).toHaveLength(1)
-    expect(messages[0]).toContain('Delete the drafts among 3 cards for good?')
+    expect(messages[0]).toContain('Delete 3 cards for good?')
     await expect(bulkBar(page)).toContainText('3 selected')
     expect(await getCard(db, ids[0])).not.toBeNull()
 
     page.once('dialog', (dialog) => void dialog.accept())
     await bulkBar(page).getByRole('button', { name: 'Delete' }).click()
     const report = page.getByRole('status')
-    await expect(report).toContainText('Deleted 2 cards.')
-    await expect(report.getByRole('listitem')).toHaveText(
-        `${glider}: Only a never-published draft can be deleted.`,
-    )
+    await expect(report).toContainText('Deleted 3 cards.')
+    await expect(report.getByRole('listitem')).toHaveCount(0)
     await expect(page.getByRole('row').filter({ hasText: kite })).toHaveCount(0)
     for (const id of ids) expect(await getCard(db, id)).toBeNull()
     expect(await auditedActions(ids)).toEqual(ids.map((id) => [id, 'delete', userId]))
+})
+
+test('on the Archived tab the bulk actions offer no Publish or Archive', async ({ page }) => {
+    const { userId } = await signInAs(page, 'admin')
+    const unique = word()
+    const kite = `A made-up ${unique} kite`
+    const id = await draft(userId, kite)
+    await archiveCards(db, userId, [id])
+
+    await gotoHydrated(page, `/admin/cards?tab=archived&q=${unique}`)
+    await pick(page, kite)
+    await expect(bulkBar(page)).toContainText('1 selected')
+    await expect(bulkBar(page).getByRole('button', { name: 'Archive' })).toHaveCount(0)
+    await expect(bulkBar(page).getByRole('button', { name: 'Publish' })).toHaveCount(0)
+    await expect(bulkBar(page).getByRole('button', { name: 'Delete' })).toBeVisible()
 })
 
 test('an editor is not offered bulk Delete', async ({ page }) => {

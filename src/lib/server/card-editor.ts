@@ -1,6 +1,6 @@
 // The card editor's server side, shared by /admin/cards/new and /admin/cards/[id]: what the
 // editor loads next to a card, the save action, and the sidebar's lifecycle actions
-// (publish, archive, unarchive, delete draft, verification). The locale tabs (sv, nb) post
+// (publish, archive, unarchive, delete, verification). The locale tabs (sv, nb) post
 // with the card, so `saveCardAction` saves translations too.
 
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit'
@@ -11,7 +11,7 @@ import {
     archiveCard,
     CardLifecycleError,
     clearVerification,
-    deleteDraft,
+    deleteCard,
     markVerified,
     publishCard,
     unarchiveCard,
@@ -134,10 +134,14 @@ async function lifecycleStep(
     return null
 }
 
+/** The card list tab a card is on: the Archived tab for an archived card. */
+export const cardListFor = (card: Pick<Card, 'status'>) =>
+    card.status === 'archived' ? '/admin/cards?tab=archived' : '/admin/cards'
+
 /**
  * The sidebar's form actions for /admin/cards/[id], to spread into the route's `actions`.
- * Publish and Delete draft go back to the card list; Delete draft is admin-only (403 for an
- * editor).
+ * Publish and Delete card go back to the card list, on the card's tab; Delete card is
+ * admin-only (403 for an editor).
  */
 export const cardLifecycleActions = {
     publish: async (event: RequestEvent) => {
@@ -149,9 +153,10 @@ export const cardLifecycleActions = {
     unarchive: (event: RequestEvent) => lifecycleStep(event, unarchiveCard, { checkRule: true }),
     verify: (event: RequestEvent) => lifecycleStep(event, markVerified),
     unverify: (event: RequestEvent) => lifecycleStep(event, clearVerification),
-    deleteDraft: async (event: RequestEvent) => {
-        const failed = await lifecycleStep(event, deleteDraft, { role: 'admin' })
+    deleteCard: async (event: RequestEvent) => {
+        const card = await loadCard(event.params.id ?? '')
+        const failed = await lifecycleStep(event, deleteCard, { role: 'admin' })
         if (failed) return failed
-        redirect(303, '/admin/cards')
+        redirect(303, cardListFor(card))
     },
 }

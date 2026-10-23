@@ -1,4 +1,4 @@
-// The card page's status actions (archive, unarchive, delete draft) and date verification, as
+// The card page's status actions (archive, unarchive, delete) and date verification, as
 // rows for the card editor's `ContextMenu`. Each row submits a small form of its own that `CardLifecycle` renders
 // (by id: `lifecycleForm(name)`), posting to an action from `cardLifecycleActions`
 // (#lib/server/card-editor.js). They go in the editor's menu: verification after Save, the
@@ -19,7 +19,7 @@ import type { Card } from '#lib/cards/card.js'
 import type { AppRole } from '#lib/server/roles.js'
 import type { ContextMenuAction } from '../context-menu'
 
-export type LifecycleStep = 'archive' | 'unarchive' | 'deleteDraft' | 'verify' | 'unverify'
+export type LifecycleStep = 'archive' | 'unarchive' | 'deleteCard' | 'verify' | 'unverify'
 
 /** The id of the form a step's row submits. */
 export const lifecycleForm = (step: LifecycleStep) => `lifecycle-${step}`
@@ -66,7 +66,7 @@ export class CardLifecycleActions {
         const { card, role } = this.#props()
         return [
             card.status === 'archived' ? 'unarchive' : 'archive',
-            ...(card.status === 'draft' && role === 'admin' ? (['deleteDraft'] as const) : []),
+            ...(role === 'admin' ? (['deleteCard'] as const) : []),
             card.verifiedAt ? 'unverify' : 'verify',
         ]
     }
@@ -106,18 +106,19 @@ export class CardLifecycleActions {
                 describedBy: why,
             })
         }
-        if (card.status === 'draft' && role === 'admin') {
+        // Any card, whatever its status; admins only.
+        if (role === 'admin') {
             actions.push({
-                label: 'Delete draft',
+                label: 'Delete card',
                 icon: TrashIcon,
                 tone: 'destructive',
-                form: lifecycleForm('deleteDraft'),
+                form: lifecycleForm('deleteCard'),
                 disabled: this.busy,
                 confirm: {
-                    title: 'Delete this draft?',
+                    title: 'Delete this card?',
                     message:
                         'The card and its translations are deleted for good. Its history stays in the audit log. This cannot be undone.',
-                    confirmLabel: 'Delete draft',
+                    confirmLabel: 'Delete card',
                 },
             })
         }

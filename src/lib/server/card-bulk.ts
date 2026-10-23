@@ -1,6 +1,6 @@
-// Bulk lifecycle steps over many cards (publish, archive, move to category, delete drafts), one
+// Bulk lifecycle steps over many cards (publish, archive, move to category, delete), one
 // rpc per call (`public.bulk_card_action`, migrations `20261023004600_bulk_card_actions.sql`
-// and `20261023006600_bulk_delete_drafts.sql`). Each card
+// and `20261023006600_bulk_delete_drafts.sql`, `20261023011200_delete_any_card.sql`). Each card
 // goes through the same single-card rpc as the editor's sidebar, in its own savepoint: a
 // card the rule refuses is skipped with the reason, the rest still happen, and the audit log
 // gets one row per affected card, naming the actor.
@@ -51,9 +51,6 @@ export const archiveCards = (db: Db, actorId: string, cardIds: string[]) =>
 export const moveCards = (db: Db, actorId: string, cardIds: string[], categoryId: string) =>
     bulk(db, actorId, 'move', cardIds, categoryId)
 
-/**
- * Deletes the never-published drafts (admins only, as from the editor); skips the rest, saying
- * why. An editor's call skips every card.
- */
-export const deleteDrafts = (db: Db, actorId: string, cardIds: string[]) =>
+/** Deletes the cards, whatever their status (admins only, as from the editor). An editor's call skips every card. */
+export const deleteCards = (db: Db, actorId: string, cardIds: string[]) =>
     bulk(db, actorId, 'delete', cardIds)
