@@ -33,6 +33,7 @@ describe('a recipe as URL query parameters', () => {
             scenario().players(3).step('placing').misplace().skip().endEarly().recipe,
             scenario().step('readersChoice').recipe,
             scenario().step('freeChoice').absent([1]).recipe,
+            scenario().cardLanguage('nb').recipe,
             // Recipes the builder refuses are still recipes, so a link can show the error.
             scenario().players(-1).activePlayer(0).unlocked(-2).scores([]).recipe,
             scenario().players(2.5).target(0).seed(-3).recipe,
@@ -74,6 +75,7 @@ describe('a recipe as URL query parameters', () => {
             ['target=Infinity', 'target'],
             ['activePlayer=', 'activePlayer'],
             ['step=dancing', 'step'],
+            ['cardLanguage=fi', 'cardLanguage'],
             ['helpers=misplace,dance', 'helpers'],
             ['absent=2,,3', 'absent'],
             ['scores=1,x', 'scores'],

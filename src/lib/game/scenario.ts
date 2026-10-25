@@ -4,6 +4,7 @@
 //
 //     scenario().players(4).activePlayer(2).unlocked(2).scores([7, 9, 10, 3]).misplace().build()
 
+import { cardLocales, type CardLocale } from '../cards/card'
 import { apply, create, type Command } from './machine'
 import { invariantProblems } from './invariants'
 import { maxPlayers, playerIcons } from './player'
@@ -84,6 +85,8 @@ export type Recipe = {
      * numbers, listed as removed, with no seat or timeline. Never the host, player 1.
      */
     removed: number[]
+    /** The language the cards are dealt in; the game is the same in each. */
+    cardLanguage: CardLocale
 }
 
 export const defaultRecipe: Recipe = {
@@ -98,6 +101,7 @@ export const defaultRecipe: Recipe = {
     viewer: null,
     absent: [],
     removed: [],
+    cardLanguage: 'en',
 }
 
 /** A recipe the rules can't reach. `field` is the recipe field at fault. */
@@ -112,10 +116,24 @@ export class ScenarioError extends Error {
 }
 
 /**
- * How one recipe field is spelled as a URL query parameter. `decode` returns the value, or a
- * `ParamProblem` saying why the text is malformed.
+ * What kind of value a recipe field holds, for tools that edit a recipe field by field without
+ * knowing its fields, like Storybook's controls (`./scenario-story`).
  */
-type ParamCodec<T> = { encode: (value: T) => string; decode: (text: string) => T | ParamProblem }
+export type FieldShape =
+    | { kind: 'number' }
+    | { kind: 'option'; options: readonly string[] }
+    | { kind: 'list'; item: FieldShape }
+    | { kind: 'nullable'; value: FieldShape }
+
+/**
+ * How one recipe field is spelled as a URL query parameter, and its shape. `decode` returns the
+ * value, or a `ParamProblem` saying why the text is malformed.
+ */
+type ParamCodec<T> = {
+    encode: (value: T) => string
+    decode: (text: string) => T | ParamProblem
+    shape: FieldShape
+}
 
 class ParamProblem {
     constructor(readonly reason: string) {}
@@ -129,6 +147,7 @@ const numberParam: ParamCodec<number> = {
         /^-?\d+(\.\d+)?(e[+-]?\d+)?$/.test(text)
             ? Number(text)
             : new ParamProblem(`a number, not "${text}"`),
+    shape: { kind: 'number' },
 }
 
 const optionParam = <T extends string>(options: readonly T[]): ParamCodec<T> => ({
@@ -137,6 +156,7 @@ const optionParam = <T extends string>(options: readonly T[]): ParamCodec<T> => 
         options.includes(text as T)
             ? (text as T)
             : new ParamProblem(`one of ${options.join(', ')}, not "${text}"`),
+    shape: { kind: 'option', options },
 })
 
 /** A comma-separated list; an empty parameter is an empty list. */
@@ -147,12 +167,14 @@ const listParam = <T>(item: ParamCodec<T>): ParamCodec<T[]> => ({
         const values = text.split(',').map(item.decode)
         return values.find((value) => value instanceof ParamProblem) ?? (values as T[])
     },
+    shape: { kind: 'list', item: item.shape },
 })
 
 /** `none` for null. */
 const nullableParam = <T>(codec: ParamCodec<T>): ParamCodec<T | null> => ({
     encode: (value) => (value === null ? 'none' : codec.encode(value)),
     decode: (text) => (text === 'none' ? null : codec.decode(text)),
+    shape: { kind: 'nullable', value: codec.shape },
 })
 
 /**
@@ -171,6 +193,7 @@ const recipeParams: { [K in keyof Recipe]-?: ParamCodec<Recipe[K]> } = {
     viewer: nullableParam(numberParam),
     absent: listParam(numberParam),
     removed: listParam(numberParam),
+    cardLanguage: optionParam(cardLocales),
 }
 
 /** A query parameter that isn't a recipe field, or is malformed. `param` is its name. */
@@ -184,7 +207,13 @@ export class RecipeParamError extends Error {
     }
 }
 
-const recipeFields = Object.keys(recipeParams) as (keyof Recipe)[]
+/** The recipe's fields, in its order. */
+export const recipeFields = Object.keys(recipeParams) as (keyof Recipe)[]
+
+/** Each recipe field's shape. */
+export const recipeShapes = Object.fromEntries(
+    recipeFields.map((field) => [field, recipeParams[field].shape]),
+) as Record<keyof Recipe, FieldShape>
 
 /** `recipe` as URL query parameters, leaving out the fields at their defaults. */
 export function recipeToParams(recipe: Recipe): URLSearchParams {
@@ -257,6 +286,7 @@ export const scenario = (recipe: Recipe = defaultRecipe) => ({
     absent: (absent: number[]) => scenario({ ...recipe, absent }),
     removed: (removed: number[]) => scenario({ ...recipe, removed }),
     viewer: (viewer: number) => scenario({ ...recipe, viewer }),
+    cardLanguage: (cardLanguage: CardLocale) => scenario({ ...recipe, cardLanguage }),
     build: () => buildScenario(recipe),
 })
 
@@ -274,6 +304,7 @@ export function buildScenario(recipe: Recipe): Scenario {
         viewer,
         absent,
         removed,
+        cardLanguage,
     } = recipe
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         throw new ScenarioError('seed', 'a whole number from 0 to 4294967295')
@@ -284,6 +315,9 @@ export function buildScenario(recipe: Recipe): Scenario {
     checkPlayerNumber('activePlayer', activePlayer, players)
     if (!scenarioSteps.includes(step)) {
         throw new ScenarioError('step', `one of ${scenarioSteps.join(', ')}`)
+    }
+    if (!cardLocales.includes(cardLanguage)) {
+        throw new ScenarioError('cardLanguage', `one of ${cardLocales.join(', ')}`)
     }
     if (unlocked !== null && (!Number.isInteger(unlocked) || unlocked < 0)) {
         throw new ScenarioError('unlocked', 'a whole number from 0')
@@ -344,14 +378,14 @@ export function buildScenario(recipe: Recipe): Scenario {
             icon: playerIcons[i],
             host: i === 0,
         })),
-        settings: { targetScore: target, exactYear: false, cardLanguage: 'en' },
+        settings: { targetScore: target, exactYear: false, cardLanguage },
         seating: ids,
         // Waiting for a choice can take many turns, since continuing until one comes would add
         // unlocked cards: enough copies of the deck that it doesn't run dry first, and more for
         // the scores.
         cards: syntheticDeck(
             seed,
-            'en',
+            cardLanguage,
             2 * players +
                 Math.ceil(
                     (scores ?? []).reduce((sum, n) => sum + n, 0) /

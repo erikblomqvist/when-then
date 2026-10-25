@@ -65,6 +65,7 @@ describe('building a two-player scenario', () => {
             viewer: 1,
             absent: [],
             removed: [],
+            cardLanguage: 'en',
         })
         expect(buildScenario(copy).state).toEqual(buildScenario(recipe).state)
     })
@@ -452,6 +453,24 @@ describe('target and scores', () => {
     })
 })
 
+describe('the card language', () => {
+    it('plays the same game with the cards in that language, the reader seeing their text', () => {
+        const english = scenario().players(3).viewer(2).build()
+        const swedish = scenario().players(3).viewer(2).cardLanguage('sv').build()
+        expect(swedish.state.settings.cardLanguage).toBe('sv')
+        expect(swedish.view.settings.cardLanguage).toBe('sv')
+        expect(swedish.state.seating).toEqual(english.state.seating)
+        const { cardId, readerId } = dealtPlay(swedish.state)
+        expect(cardId).toBe(dealtPlay(english.state).cardId)
+        const svText = syntheticDeck(1, 'sv').find((card) => card.id === cardId)!.text
+        const reader = buildScenario({
+            ...swedish.recipe,
+            viewer: swedish.state.seating.indexOf(readerId) + 1,
+        })
+        expect(reader.view.phase).toMatchObject({ play: { card: { text: svText } } })
+    })
+})
+
 describe('an impossible recipe', () => {
     const fieldOf = (build: () => unknown) => {
         try {
@@ -480,6 +499,13 @@ describe('an impossible recipe', () => {
                     .build(),
             ),
         ).toBe('step')
+        expect(
+            fieldOf(() =>
+                scenario()
+                    .cardLanguage('fi' as never)
+                    .build(),
+            ),
+        ).toBe('cardLanguage')
     })
 
     it('throws on unlocked cards the step can’t have, naming unlocked', () => {
