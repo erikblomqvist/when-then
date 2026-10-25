@@ -32,6 +32,11 @@ export const variables = defineEnvVars({
         description:
             'Override for the Wikidata API (https://www.wikidata.org/w/api.php), used by date suggestions. Leave unset in production; e2e points it at a local stub.',
     },
+    SCENARIO_PAGE: {
+        schema: (value) => value === 'on',
+        description:
+            'Set to "on" to open the dev-only /scenario page in a build; `vp dev` always has it. Leave unset in production; e2e sets it.',
+    },
     PUBLIC_SUPABASE_URL: {
         public: true,
         schema: optional,

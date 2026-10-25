@@ -111,6 +111,115 @@ export class ScenarioError extends Error {
     }
 }
 
+/**
+ * How one recipe field is spelled as a URL query parameter. `decode` returns the value, or a
+ * `ParamProblem` saying why the text is malformed.
+ */
+type ParamCodec<T> = { encode: (value: T) => string; decode: (text: string) => T | ParamProblem }
+
+class ParamProblem {
+    constructor(readonly reason: string) {}
+}
+
+const numberParam: ParamCodec<number> = {
+    encode: String,
+    // Any decimal, so a recipe the builder will refuse (2.5 players) still round-trips and gets
+    // the builder's error, naming its field.
+    decode: (text) =>
+        /^-?\d+(\.\d+)?(e[+-]?\d+)?$/.test(text)
+            ? Number(text)
+            : new ParamProblem(`a number, not "${text}"`),
+}
+
+const optionParam = <T extends string>(options: readonly T[]): ParamCodec<T> => ({
+    encode: (value) => value,
+    decode: (text) =>
+        options.includes(text as T)
+            ? (text as T)
+            : new ParamProblem(`one of ${options.join(', ')}, not "${text}"`),
+})
+
+/** A comma-separated list; an empty parameter is an empty list. */
+const listParam = <T>(item: ParamCodec<T>): ParamCodec<T[]> => ({
+    encode: (values) => values.map(item.encode).join(','),
+    decode: (text) => {
+        if (text === '') return []
+        const values = text.split(',').map(item.decode)
+        return values.find((value) => value instanceof ParamProblem) ?? (values as T[])
+    },
+})
+
+/** `none` for null. */
+const nullableParam = <T>(codec: ParamCodec<T>): ParamCodec<T | null> => ({
+    encode: (value) => (value === null ? 'none' : codec.encode(value)),
+    decode: (text) => (text === 'none' ? null : codec.decode(text)),
+})
+
+/**
+ * Each recipe field as a query parameter of its own name. A new field needs its spelling here;
+ * `recipeToParams` and `recipeFromParams` then carry it as they are.
+ */
+const recipeParams: { [K in keyof Recipe]-?: ParamCodec<Recipe[K]> } = {
+    seed: numberParam,
+    players: numberParam,
+    activePlayer: nullableParam(numberParam),
+    step: optionParam(scenarioSteps),
+    unlocked: nullableParam(numberParam),
+    target: numberParam,
+    scores: nullableParam(listParam(numberParam)),
+    helpers: listParam(optionParam(helperSteps)),
+    viewer: nullableParam(numberParam),
+    absent: listParam(numberParam),
+    removed: listParam(numberParam),
+}
+
+/** A query parameter that isn't a recipe field, or is malformed. `param` is its name. */
+export class RecipeParamError extends Error {
+    constructor(
+        readonly param: string,
+        reason: string,
+    ) {
+        super(`${param}: ${reason}`)
+        this.name = new.target.name
+    }
+}
+
+const recipeFields = Object.keys(recipeParams) as (keyof Recipe)[]
+
+/** `recipe` as URL query parameters, leaving out the fields at their defaults. */
+export function recipeToParams(recipe: Recipe): URLSearchParams {
+    const params = new URLSearchParams()
+    for (const field of recipeFields) {
+        const codec = recipeParams[field] as ParamCodec<Recipe[typeof field]>
+        const text = codec.encode(recipe[field])
+        if (text !== codec.encode(defaultRecipe[field])) params.set(field, text)
+    }
+    return params
+}
+
+/**
+ * The recipe in `params`, with the defaults for the fields left out. Throws a
+ * `RecipeParamError` for a parameter that isn't a recipe field, is given twice, or is malformed.
+ * Whether the rules can reach the recipe is for `buildScenario` to say.
+ */
+export function recipeFromParams(params: URLSearchParams): Recipe {
+    const recipe: Record<string, unknown> = { ...defaultRecipe }
+    for (const param of new Set(params.keys())) {
+        if (!recipeFields.includes(param as keyof Recipe)) {
+            throw new RecipeParamError(
+                param,
+                `not a recipe field; one of ${recipeFields.join(', ')}`,
+            )
+        }
+        const texts = params.getAll(param)
+        if (texts.length > 1) throw new RecipeParamError(param, 'given more than once')
+        const value = recipeParams[param as keyof Recipe].decode(texts[0])
+        if (value instanceof ParamProblem) throw new RecipeParamError(param, value.reason)
+        recipe[param] = value
+    }
+    return recipe as Recipe
+}
+
 /** A built recipe: the full state, the view for the viewer's seat, and who is absent. */
 export type Scenario = { recipe: Recipe; state: GameState; view: SeatView; absent: string[] }
 

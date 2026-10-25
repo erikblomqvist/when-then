@@ -25,6 +25,8 @@ vpr build-storybook       # static Storybook in storybook-static/
 
 In a terminal, `vp dev` greets you with a banner in place of Vite's URL list: the wordmark and a timeline with a card dealt onto it, its year turning over a moment later (`src/dev-banner/`). `NO_COLOR` drops the colours; piped output gets Vite's plain lines.
 
+Under `vp dev`, `/scenario` shows a moment in a game from a scenario recipe in its query parameters, seen from one seat, e.g. `/scenario?players=4&step=stealing&helpers=missedSteal&absent=3&viewer=2` (fields and helper steps in `src/lib/game/scenario.ts`; `recipeToParams` writes the URL for a builder chain). It's not found in production; a build opens it only with `SCENARIO_PAGE=on`, as e2e does.
+
 ### Dependencies
 
 Manage packages through `vp`, not `pnpm` or `npm` directly. `vp` always runs the pinned pnpm, while a plain `pnpm` may be a different version on someone else's machine.

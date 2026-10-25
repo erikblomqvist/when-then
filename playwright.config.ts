@@ -27,6 +27,8 @@ export default defineConfig({
                 ANTHROPIC_API_KEY: 'e2e-stub-key',
                 ANTHROPIC_BASE_URL: `http://127.0.0.1:${anthropicStubPort}`,
                 WIKIDATA_API_URL: `http://127.0.0.1:${anthropicStubPort}/w/api.php`,
+                // The dev-only /scenario page, in this preview build.
+                SCENARIO_PAGE: 'on',
             },
         },
     ],
