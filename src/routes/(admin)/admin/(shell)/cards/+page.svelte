@@ -9,6 +9,7 @@
     import * as Table from '#lib/components/ui/table/index.js'
     import AddFromPhoto from '#lib/admin/cards/AddFromPhoto.svelte'
     import ExportCards from '#lib/admin/cards/ExportCards.svelte'
+    import InlineTranslation from '#lib/admin/cards/InlineTranslation.svelte'
     import TranslationBadge from '#lib/admin/cards/TranslationBadge.svelte'
     import { cardLocales, cardStatusLabel, type CardStatus } from '#lib/cards/card.js'
     import {
@@ -17,7 +18,9 @@
         isFiltered,
         parseCardListView,
         parseFilter,
+        reviewParam,
         reviewQueueHref,
+        reviewSwitchFilter,
         translationFilterLabel,
         translationFilters,
         type CardEra,
@@ -274,10 +277,15 @@
     {/each}
 </nav>
 
-<!-- A segment of the review mode switch: a link keeping the filter and sort. -->
+<!-- A segment of the review mode switch: a link keeping the sort, and the filter but for what
+     switching the locale changes (`reviewSwitchFilter`). -->
 {#snippet segment(label: string, to: CardReview | undefined, current: boolean)}
     <a
-        href={cardListHref({ filter, sort: data.view.sort, review: to })}
+        href={cardListHref({
+            filter: reviewSwitchFilter(filter, review?.locale, to?.locale),
+            sort: data.view.sort,
+            review: to,
+        })}
         aria-current={current ? 'true' : undefined}
         class={[
             'rounded-[5px] px-2.5 py-1',
@@ -361,11 +369,7 @@
         <input
             type="hidden"
             name="review"
-            value={review.locale} />
-        <input
-            type="hidden"
-            name="ref"
-            value={review.reference} />
+            value={reviewParam(review)} />
     {/if}
     <div class="flex flex-wrap items-center gap-2">
         <Label
@@ -609,21 +613,13 @@
                                 <abbr
                                     class="w-5 shrink-0 pt-0.5 text-xs text-muted-foreground uppercase no-underline"
                                     title={localeName[review.locale]}>{review.locale}</abbr>
-                                <div class="flex flex-col items-start gap-1.5">
-                                    {#if translation}
-                                        <span class="font-medium">{translation}</span>
-                                    {/if}
-                                    {#if state === 'reviewed'}
-                                        <span
-                                            class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                            <CheckIcon
-                                                class="size-3.5"
-                                                aria-hidden="true" />
-                                            Reviewed
-                                        </span>
-                                    {:else}
-                                        <TranslationBadge {state} />
-                                    {/if}
+                                <div class="flex min-w-0 grow flex-col items-start gap-1.5">
+                                    <InlineTranslation
+                                        cardId={card.id}
+                                        locale={review.locale}
+                                        text={translation}
+                                        translationState={state}
+                                        of={card.text ?? 'card without English text'} />
                                 </div>
                             </div>
                         </div>

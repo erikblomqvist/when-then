@@ -3,8 +3,10 @@
 // the server turns the same typed filter into its query (`matchingCards` in
 // `#lib/server/cards.js`, backed by `public.cards_matching`).
 //
-// The review mode (`review`) doesn't narrow the list: it shows one locale's translations next
-// to a reference language, for reading through and marking them reviewed in bulk.
+// The review mode (`review`) shows one locale's translations next to a reference language, for
+// reading through, editing in place and marking reviewed in bulk. It doesn't narrow the list by
+// itself, but switching it on filters the locale to what still needs review
+// (`reviewSwitchFilter`), a filter like any other that can be changed or removed.
 //
 // Adding a filter: a field on `CardFilter`, its URL key in `parseFilter` / `filterParams`,
 // its key in the server's `filterArgs`, and its clause in `public.cards_matching`.
@@ -116,13 +118,22 @@ export function parseFilter(params: URLSearchParams): CardFilter {
     return filter
 }
 
-/** Review mode in a URL: `review=<locale>`, and `ref=<locale>` unless the reference is English. */
+/**
+ * Review mode in a URL: `review=<locale>`, or `review=<locale>-<reference>` when the reference
+ * isn't English (`review=sv-nb`: the Swedish next to the Norwegian). An unknown reference, or
+ * the locale itself, is English.
+ */
 export function parseReview(params: URLSearchParams): CardReview | undefined {
-    const locale = oneOf(translationLocales, params.get('review'))
+    const [target, base = null, ...extra] = (params.get('review') ?? '').split('-')
+    const locale = oneOf(translationLocales, target)
     if (!locale) return undefined
-    const reference = oneOf(cardLocales, params.get('ref'))
+    const reference = extra.length === 0 ? oneOf(cardLocales, base) : undefined
     return { locale, reference: reference && reference !== locale ? reference : 'en' }
 }
+
+/** The `review` URL value for a review mode, leaving out an English reference. */
+export const reviewParam = ({ locale, reference }: CardReview) =>
+    reference === 'en' ? locale : `${locale}-${reference}`
 
 /** The list view in a URL (`/admin/cards?…`). */
 export function parseCardListView(params: URLSearchParams): CardListView {
@@ -167,10 +178,7 @@ export function cardListHref({
     review,
 }: Partial<CardListView>) {
     const params = filterParams(filter)
-    if (review) {
-        params.set('review', review.locale)
-        if (review.reference !== 'en') params.set('ref', review.reference)
-    }
+    if (review) params.set('review', reviewParam(review))
     if (sort !== defaultCardSort) params.set('sort', sort)
     if (page > 1) params.set('page', String(page))
     const query = params.toString()
@@ -181,6 +189,25 @@ export function cardListHref({
 /** Whether the filter narrows the tab it is in. */
 export const isFiltered = (filter: CardFilter) =>
     filterParams({ ...filter, archived: undefined }).size > 0
+
+/**
+ * The filter after switching review mode from locale `from` to `to` (absent: off). Entering a
+ * locale filters it to `needs-review`, unless a state is chosen for it already; the locale left
+ * loses a `needs-review` filter, which the switch is most likely to have added. Staying in the
+ * same locale (another reference language) leaves the filter as it is.
+ */
+export function reviewSwitchFilter(
+    filter: CardFilter,
+    from: TranslationLocale | undefined,
+    to: TranslationLocale | undefined,
+): CardFilter {
+    if (from === to) return filter
+    const { translations: chosen, ...rest } = filter
+    const translations = { ...chosen }
+    if (from && translations[from] === 'needs-review') delete translations[from]
+    if (to) translations[to] ??= 'needs-review'
+    return Object.keys(translations).length > 0 ? { ...rest, translations } : rest
+}
 
 /**
  * The review queue for a locale: cards whose translation there is machine or stale, in review

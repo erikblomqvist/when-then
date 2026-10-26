@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { cardListHref, isFiltered, parseCardListView, reviewQueueHref } from './card-list'
+import {
+    cardListHref,
+    isFiltered,
+    parseCardListView,
+    reviewQueueHref,
+    reviewSwitchFilter,
+} from './card-list'
 
 const categoryId = '6f1c1d5e-8f0a-4c43-9d1e-2b7a0f6c1a01'
 
@@ -121,26 +127,63 @@ describe('translation filters', () => {
         expect(reviewQueueHref('sv')).toBe('/admin/cards?sv=needs-review&review=sv')
     })
 
+    it('filters to what needs review on entering review mode, and drops it on leaving', () => {
+        expect(reviewSwitchFilter({ search: 'kite' }, undefined, 'sv')).toEqual({
+            search: 'kite',
+            translations: { sv: 'needs-review' },
+        })
+        // A state chosen for the locale already stays.
+        expect(reviewSwitchFilter({ translations: { sv: 'reviewed' } }, undefined, 'sv')).toEqual({
+            translations: { sv: 'reviewed' },
+        })
+        // Another locale: its own needs-review, the other locale's goes, other states stay.
+        expect(reviewSwitchFilter({ translations: { sv: 'needs-review' } }, 'sv', 'nb')).toEqual({
+            translations: { nb: 'needs-review' },
+        })
+        expect(reviewSwitchFilter({ translations: { sv: 'machine' } }, 'sv', 'nb')).toEqual({
+            translations: { sv: 'machine', nb: 'needs-review' },
+        })
+        // Off.
+        expect(
+            reviewSwitchFilter(
+                { search: 'kite', translations: { sv: 'needs-review' } },
+                'sv',
+                undefined,
+            ),
+        ).toEqual({ search: 'kite' })
+        // The same locale (another reference): unchanged, even with the filter removed.
+        expect(reviewSwitchFilter({ search: 'kite' }, 'sv', 'sv')).toEqual({ search: 'kite' })
+    })
+
     it('round-trips review mode, English as the reference unless another is given', () => {
         expect(parseCardListView(params('review=nb')).review).toEqual({
             locale: 'nb',
             reference: 'en',
         })
         const sv = { locale: 'sv' as const, reference: 'nb' as const }
-        expect(cardListHref({ review: sv })).toBe('/admin/cards?review=sv&ref=nb')
-        expect(parseCardListView(params('review=sv&ref=nb')).review).toEqual(sv)
+        expect(cardListHref({ review: sv })).toBe('/admin/cards?review=sv-nb')
+        expect(parseCardListView(params('review=sv-nb')).review).toEqual(sv)
         expect(cardListHref({ review: { locale: 'sv', reference: 'en' } })).toBe(
             '/admin/cards?review=sv',
         )
+        // English given explicitly is the same, and its link leaves it out.
+        expect(parseCardListView(params('review=nb-en')).review).toEqual({
+            locale: 'nb',
+            reference: 'en',
+        })
     })
 
     it('drops a review mode that is not one: English, an unknown locale, itself as reference', () => {
         expect(parseCardListView(params('review=en')).review).toBeUndefined()
         expect(parseCardListView(params('review=fi')).review).toBeUndefined()
         expect(parseCardListView(params('')).review).toBeUndefined()
-        expect(parseCardListView(params('review=sv&ref=sv')).review).toEqual({
-            locale: 'sv',
-            reference: 'en',
-        })
+        expect(parseCardListView(params('review=en-sv')).review).toBeUndefined()
+        // An unknown reference, or the locale itself, is English.
+        for (const value of ['sv-sv', 'sv-fi', 'sv-', 'sv-nb-en']) {
+            expect(parseCardListView(params(`review=${value}`)).review).toEqual({
+                locale: 'sv',
+                reference: 'en',
+            })
+        }
     })
 })

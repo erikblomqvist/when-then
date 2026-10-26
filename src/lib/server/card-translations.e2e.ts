@@ -8,6 +8,7 @@ import type { CardInput } from '../cards/card'
 import { localServiceClient, newPerson } from '../testing/e2e-auth'
 import { cardHistory, getCard, matchingCardIds, saveCard } from './cards'
 import { listCategories } from './categories'
+import { editTranslation } from './edit-translation'
 
 const db = localServiceClient()
 
@@ -148,4 +149,39 @@ test('the list filters by translation state per locale, and by the review queue'
     expect(await ids({ sv: 'needs-review' })).toEqual([machine])
     expect(await ids({ nb: 'needs-review' })).toEqual([])
     expect(await ids({ sv: 'reviewed', nb: 'reviewed' })).toEqual([reviewed])
+})
+
+test('a translation edited in place is saved reviewed, unless it changed since', async () => {
+    const { id, actor } = await newCard({
+        sv: { text: 'En påhittad bro öppnaz', status: 'machine' },
+    })
+
+    await editTranslation(db, actor, {
+        cardId: id,
+        locale: 'sv',
+        text: ' En påhittad bro öppnas ',
+        was: 'En påhittad bro öppnaz',
+    })
+    expect((await getCard(db, id))?.translations.sv).toMatchObject({
+        text: 'En påhittad bro öppnas',
+        status: 'reviewed',
+    })
+
+    // A missing one is added, reviewed.
+    await editTranslation(db, actor, { cardId: id, locale: 'nb', text: 'En bro', was: null })
+    expect(await statuses(id)).toMatchObject({ sv: 'reviewed', nb: 'reviewed' })
+
+    const refused = (edit: Partial<Parameters<typeof editTranslation>[2]>) =>
+        editTranslation(db, actor, { cardId: id, locale: 'sv', text: 'Ny', was: null, ...edit })
+    await expect(refused({ was: 'En påhittad bro öppnaz' })).rejects.toMatchObject({
+        code: 'changed',
+    })
+    await expect(refused({ was: 'En påhittad bro öppnas', text: '  ' })).rejects.toMatchObject({
+        code: 'empty_text',
+    })
+    await expect(refused({ locale: 'en' as 'sv' })).rejects.toMatchObject({
+        code: 'invalid_locale',
+    })
+    await expect(refused({ cardId: randomUUID() })).rejects.toMatchObject({ code: 'not_found' })
+    expect((await getCard(db, id))?.translations.sv?.text).toBe('En påhittad bro öppnas')
 })

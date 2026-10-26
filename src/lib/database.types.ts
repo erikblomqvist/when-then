@@ -510,6 +510,16 @@ export type Database = {
                 Args: { actor: string; category_id: string }
                 Returns: undefined
             }
+            edit_translation: {
+                Args: {
+                    actor: string
+                    card_id: string
+                    locale: Database['public']['Enums']['card_locale']
+                    text: string
+                    was?: string
+                }
+                Returns: undefined
+            }
             import_cards: {
                 Args: { actor: string; cards: Json; file_name?: string }
                 Returns: string[]

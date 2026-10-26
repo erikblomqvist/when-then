@@ -1,9 +1,11 @@
 // Translating a card by hand: the sv and nb tabs, staleness after an English edit, the list's
-// badges, the review queue, and the list's review mode (read and mark reviewed in bulk).
+// badges, the review queue, and the list's review mode (read, edit in place and mark reviewed in
+// bulk).
 
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { getCard, saveCard } from '../../../../../lib/server/cards'
+import { editTranslation } from '../../../../../lib/server/edit-translation'
 import { listCategories } from '../../../../../lib/server/categories'
 import { localServiceClient, signInAs } from '../../../../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated } from '../../../../../lib/testing/e2e-hydration'
@@ -164,8 +166,10 @@ test('review mode shows a language next to a reference, and marks the selected c
         'aria-current',
         'true',
     )
+    // Entering review mode shows what still needs review there: the untranslated card waits.
     await switcher.getByRole('link', { name: 'Swedish' }).click()
-    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&sv=needs-review&review=sv`)
+    await expect(page.getByLabel('Swedish', { exact: true })).toHaveValue('needs-review')
 
     // The English with the Swedish under it, to read through.
     await expect(page.getByRole('columnheader', { name: 'English and Swedish' })).toBeVisible()
@@ -175,37 +179,110 @@ test('review mode shows a language next to a reference, and marks the selected c
     await expect(kiteRow.getByTestId('reference')).toHaveText(`en A made-up kite flies ${tag}`)
     await expect(kiteRow.getByTestId('translation')).toContainText('En påhittad drake flyger')
     await expect(kiteRow.getByTestId('translation')).toContainText('Machine')
-    await expect(row(`A made-up canoe sinks ${tag}`).getByTestId('translation')).toContainText(
-        'Missing',
-    )
+    await expect(row(`A made-up canoe sinks ${tag}`)).toHaveCount(0)
 
-    // Another reference language: Norwegian next to the Swedish; the search stays.
+    // Another reference language: Norwegian next to the Swedish; the search and filter stay.
     const reference = page.getByRole('group', { name: 'Next to' })
     await reference.getByRole('link', { name: 'Norwegian' }).click()
-    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv&ref=nb`)
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&sv=needs-review&review=sv-nb`)
     await expect(page.getByRole('columnheader', { name: 'Norwegian and Swedish' })).toBeVisible()
     await expect(row('En påhittad drake flyger').getByTestId('reference')).toHaveText(
         'nb En oppdiktet drage flyr',
     )
     await reference.getByRole('link', { name: 'English' }).click()
-    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&sv=needs-review&review=sv`)
 
-    // Select them all and mark the Swedish reviewed; the untranslated one is skipped.
+    // Select them all and mark the Swedish reviewed; done, they leave the list.
     await page.getByLabel('Select all cards on this page').check()
     const bar = page.getByRole('region', { name: 'Bulk actions' })
     await bar.getByRole('button', { name: 'Mark Swedish reviewed' }).click()
     await expect(page.getByRole('status')).toContainText('Marked Swedish reviewed on 2 cards.')
-    await expect(page.getByRole('status')).toContainText('There is no translation to review.')
-    await expect(kiteRow.getByTestId('translation')).toContainText('Reviewed')
-    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+    await expect(page.getByText('No cards match these filters.')).toBeVisible()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&sv=needs-review&review=sv`)
 
     const saved = await getCard(db, kite)
     expect(saved?.translations.sv?.status).toBe('reviewed')
     expect(saved?.translations.nb?.status).toBe('machine')
     expect((await getCard(db, untranslated))?.translations.sv).toBeUndefined()
 
-    // Off: the usual columns again.
+    // Without the filter, every card in review mode.
+    await page.getByRole('link', { name: 'Remove Swedish filter' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&review=sv`)
+    await expect(kiteRow.getByTestId('translation')).toContainText('Reviewed')
+    await expect(row(`A made-up canoe sinks ${tag}`).getByTestId('translation')).toContainText(
+        'Missing',
+    )
+
+    // Norwegian: its own filter.
+    await switcher.getByRole('link', { name: 'Norwegian' }).click()
+    await expect(page).toHaveURL(`/admin/cards?q=${tag}&nb=needs-review&review=nb`)
+    await expect(kiteRow.getByTestId('translation')).toContainText('En oppdiktet drage flyr')
+
+    // Off: the usual columns again, without the filter review mode added.
     await switcher.getByRole('link', { name: 'Off' }).click()
     await expect(page).toHaveURL(`/admin/cards?q=${tag}`)
     await expect(page.getByRole('columnheader', { name: 'Translations' })).toBeVisible()
+})
+
+test('review mode edits a translation in place, and the edit counts as review', async ({
+    page,
+}) => {
+    const { userId } = await signInAs(page, 'editor')
+    const db = localServiceClient()
+    const [category] = await listCategories(db)
+    const tag = randomUUID().slice(0, 8)
+    const card = (en: string, sv?: string) =>
+        saveCard(db, userId, {
+            categoryId: category.id,
+            date: { decade: 1890, year: 1895, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: {
+                en: { text: `${en} ${tag}` },
+                ...(sv && { sv: { text: sv, status: 'machine' as const } }),
+            },
+        })
+    const kite = await card('A made-up kite flies', 'En påhittad drake flygger')
+    const canoe = await card('A made-up canoe sinks')
+    const raft = await card('A made-up raft floats', 'En påhittad flotte flyter')
+
+    await gotoHydrated(page, `/admin/cards?q=${tag}&review=sv`)
+    const field = (en: string) =>
+        page.getByRole('textbox', { name: `Swedish text of ${en} ${tag}` })
+    const row = (en: string) => page.getByRole('row').filter({ hasText: `${en} ${tag}` })
+
+    // A typo fixed; Enter saves it, reviewed.
+    await field('A made-up kite flies').fill('En påhittad drake flyger')
+    await field('A made-up kite flies').press('Enter')
+    await expect(row('A made-up kite flies').getByTestId('translation')).toContainText('Reviewed')
+    await expect
+        .poll(async () => (await getCard(db, kite))?.translations.sv)
+        .toMatchObject({ text: 'En påhittad drake flyger', status: 'reviewed' })
+
+    // A missing one added; leaving the field saves it.
+    await field('A made-up canoe sinks').fill('En påhittad kanot sjunker')
+    await field('A made-up canoe sinks').press('Tab')
+    await expect
+        .poll(async () => (await getCard(db, canoe))?.translations.sv)
+        .toMatchObject({ text: 'En påhittad kanot sjunker', status: 'reviewed' })
+
+    // Escape puts the saved text back, saving nothing.
+    await field('A made-up raft floats').fill('Något helt annat')
+    await field('A made-up raft floats').press('Escape')
+    await expect(field('A made-up raft floats')).toHaveText('En påhittad flotte flyter')
+    await expect(row('A made-up raft floats').getByTestId('translation')).toContainText('Machine')
+
+    // Changed by someone else since the list loaded: refused, nothing overwritten.
+    await editTranslation(db, userId, {
+        cardId: raft,
+        locale: 'sv',
+        text: 'En påhittad flotte flyter iväg',
+        was: 'En påhittad flotte flyter',
+    })
+    await field('A made-up raft floats').fill('En påhittad flotte guppar')
+    await field('A made-up raft floats').press('Enter')
+    await expect(row('A made-up raft floats').getByRole('alert')).toContainText(
+        'Someone changed this translation',
+    )
+    expect((await getCard(db, raft))?.translations.sv?.text).toBe('En påhittad flotte flyter iväg')
 })
