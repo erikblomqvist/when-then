@@ -4,21 +4,26 @@
     import { Button, Surface, Text } from '#lib'
     import { refusalMessage } from '#lib/game/refusals.js'
     import type { Seating } from '#lib/game/seating.js'
+    import type { GamePlayer } from '#lib/game/state.js'
     import { seatingWords } from '#lib/game/seating-words.js'
     import { m } from '#lib/paraglide/messages.js'
     import SeatingEditor from '#lib/ui/SeatingEditor.svelte'
     import SeatingTable from '#lib/ui/SeatingTable.svelte'
+    import AbsentPlayers from './AbsentPlayers.svelte'
     import type { ActionData, PageData } from './$types'
 
     /**
      * The game in seating, as this seat sees it. The host arranges everyone and confirms the
-     * seating; every other phone shows the table from its own seat, following the host live.
+     * seating, seeing who is absent (`absentPlayers`, empty on other phones); every other phone
+     * shows the table from its own seat, following the host live.
      */
     let {
         game,
+        absentPlayers,
         form,
     }: {
         game: Extract<PageData['game'], { started: true }>
+        absentPlayers: GamePlayer[]
         form: ActionData
     } = $props()
 
@@ -76,6 +81,7 @@
         <Text role="heading-1">{m.seating_title()}</Text>
         {#if isHost}
             <p class="hint">{m.seating_host_hint()}</p>
+            <AbsentPlayers players={absentPlayers} />
             <SeatingEditor
                 players={seated}
                 bind:seating={() => seating, moveTo}

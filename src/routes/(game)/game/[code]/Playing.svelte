@@ -1,13 +1,21 @@
 <script lang="ts">
     import { PlayerIcon, Surface, Text } from '#lib'
+    import type { GamePlayer } from '#lib/game/state.js'
     import { m } from '#lib/paraglide/messages.js'
+    import AbsentPlayers from './AbsentPlayers.svelte'
     import type { PageData } from './$types'
 
     /**
      * The game from Confirm seating on. Until the phone views per role (#16) take its place, it
-     * shows only whose turn it is.
+     * shows only whose turn it is, and to the host, who is absent.
      */
-    let { game }: { game: Extract<PageData['game'], { started: true }> } = $props()
+    let {
+        game,
+        absentPlayers,
+    }: {
+        game: Extract<PageData['game'], { started: true }>
+        absentPlayers: GamePlayer[]
+    } = $props()
 
     const view = $derived(game.view)
     const activeId = $derived(view.phase.name === 'playing' ? view.phase.activeId : undefined)
@@ -33,6 +41,7 @@
         {:else}
             <Text role="heading-1">{m.game_under_way()}</Text>
         {/if}
+        <AbsentPlayers players={absentPlayers} />
     </div>
 </Surface>
 

@@ -1,6 +1,7 @@
-// The phone's own Supabase client, for its session and the nudge channel only: the browser
-// never reads or writes tables (ADR 0002). Its session lives in the same auth cookies
-// the server's client reads in `hooks.server.ts`, so a server route sees who signed in here.
+// The phone's own Supabase client, for its session and the game's channel (nudges and presence)
+// only: the browser never reads or writes tables (ADR 0002). Its session lives in the same auth
+// cookies the server's client reads in `hooks.server.ts`, so a server route sees who signed in
+// here.
 
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -37,22 +38,32 @@ export async function ensureSession(): Promise<void> {
 /**
  * Listens on a game's channel and calls `refetch` for each nudge newer than `shownVersion()`
  * (the version the page shows), and each time the channel connects or reconnects, since
- * nudges sent while it was down are lost. Returns the function that stops listening, for an
- * `$effect` to return.
+ * nudges sent while it was down are lost. With `presence`, it also shows `seat` as present on
+ * the same channel, and calls `onChange` with every seat present each time that changes.
+ * Presence carries the seat id alone, which every player in the game already sees. Returns the
+ * function that stops listening, for an `$effect` to return.
  */
 export function watchGame(
     gameId: string,
     shownVersion: () => number,
     refetch: () => void,
+    presence?: { seat: string; onChange: (present: Set<string>) => void },
 ): () => void {
     const supabase = supabaseBrowser()
     const channel = supabase
-        .channel(nudgeTopic(gameId))
+        .channel(nudgeTopic(gameId), presence && { config: { presence: { key: presence.seat } } })
         .on('broadcast', { event: nudgeEvent }, ({ payload }) => {
             if ((payload as Nudge).version > shownVersion()) refetch()
         })
-        .subscribe((status) => {
-            if (status === 'SUBSCRIBED') refetch()
+    if (presence) {
+        channel.on('presence', { event: 'sync' }, () => {
+            presence.onChange(new Set(Object.keys(channel.presenceState())))
         })
+    }
+    channel.subscribe((status) => {
+        if (status !== 'SUBSCRIBED') return
+        if (presence) void channel.track({})
+        refetch()
+    })
     return () => void supabase.removeChannel(channel)
 }

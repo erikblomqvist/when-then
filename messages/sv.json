@@ -117,6 +117,8 @@
     "seating_confirm": "Bekräfta placeringen",
     "play_your_turn": "Din tur",
     "play_their_turn": "{name} spelar",
+    "absent": "Frånvarande",
+    "absent_players": "Frånvarande spelare",
     "seating_you_object": "dig",
     "seating_turns_go_left": "Turen går åt vänster",
     "seating_undo": "Ångra",

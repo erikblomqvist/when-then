@@ -7,7 +7,7 @@
 // player, who joins again. The host starts the game, and every phone moves to seating: the host
 // arranges the table and the others follow it live from their own seats. The host confirms the
 // seating, every phone moves to play, and a player who reloads is back in their seat. The screen
-// stays awake through seating and play.
+// stays awake through seating and play. A player whose phone drops out shows as absent to the host.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -535,7 +535,22 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(bo.page.getByRole('heading', { name: theirTurn('Bo') })).toBeVisible()
     await expect.poll(() => wakeLocks(bo.page)).toEqual({ asked: 1, held: 1 })
 
-    await Promise.all(
-        [hostContext, bo.context, caro.context, lateContext].map((context) => context.close()),
-    )
+    // Caro's phone drops out. Through the grace period nobody is absent; after it, the host
+    // sees Caro as absent, Bo's phone shows nothing, and the game hasn't moved. The wait for
+    // the grace period gets its own time.
+    test.info().setTimeout(test.info().timeout + 30_000)
+    const savedVersion = async () =>
+        (await db.from('games').select('version').eq('code', code).single()).data?.version
+    const version = await savedVersion()
+    const hostAbsent = host.getByRole('list', { name: 'Absent players' })
+    await caro.context.close()
+    await host.waitForTimeout(10_000)
+    await expect(hostAbsent).toHaveCount(0)
+    await expect(hostAbsent).toContainText('Caro', { timeout: 20_000 })
+    await expect(hostAbsent).toContainText('Absent')
+    await expect(hostAbsent).not.toContainText('Bo')
+    await expect(bo.page.getByRole('list', { name: 'Absent players' })).toHaveCount(0)
+    expect(await savedVersion()).toBe(version)
+
+    await Promise.all([hostContext, bo.context, lateContext].map((context) => context.close()))
 })

@@ -175,7 +175,7 @@ test('archived cards are on the Archived tab, not the Cards tab', async ({ page 
         'page',
     )
     // The search carries over to the tab.
-    await expect(page.getByLabel('Search')).toHaveValue(text)
+    await expect(page.getByRole('searchbox', { name: 'Search' })).toHaveValue(text)
     await expect(cardRow(page, text)).toHaveCount(1)
 })
 

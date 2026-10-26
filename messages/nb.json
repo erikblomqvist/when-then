@@ -117,6 +117,8 @@
     "seating_confirm": "Bekreft plasseringen",
     "play_your_turn": "Din tur",
     "play_their_turn": "{name} spiller",
+    "absent": "Fraværende",
+    "absent_players": "Fraværende spillere",
     "seating_you_object": "deg",
     "seating_turns_go_left": "Turen går til venstre",
     "seating_undo": "Angre",
