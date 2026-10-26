@@ -1,7 +1,7 @@
 <script lang="ts">
     import { tick } from 'svelte'
     import { enhance, type SubmitFunction } from '$app/forms'
-    import { Surface, Text } from '#lib'
+    import { Button, Surface, Text } from '#lib'
     import { refusalMessage } from '#lib/game/refusals.js'
     import type { Seating } from '#lib/game/seating.js'
     import { seatingWords } from '#lib/game/seating-words.js'
@@ -11,8 +11,8 @@
     import type { ActionData, PageData } from './$types'
 
     /**
-     * The game from Start on, as this seat sees it. In seating the host arranges everyone and
-     * every other phone shows the table from its own seat, following the host live.
+     * The game in seating, as this seat sees it. The host arranges everyone and confirms the
+     * seating; every other phone shows the table from its own seat, following the host live.
      */
     let {
         game,
@@ -52,6 +52,16 @@
             else if (unsaved) void moveTo(unsaved)
         }
     }
+
+    // Confirm is off until the last move has saved, so it confirms the seating the host sees.
+    let confirming = $state(false)
+    const confirmingSeating: SubmitFunction = () => {
+        confirming = true
+        return async ({ update }) => {
+            await update({ reset: false })
+            confirming = false
+        }
+    }
 </script>
 
 <svelte:head>
@@ -63,47 +73,55 @@
     grain
     class="seating-page">
     <div class="seating">
-        {#if view.phase.name === 'seating'}
-            <Text role="heading-1">{m.seating_title()}</Text>
-            {#if isHost}
-                <p class="hint">{m.seating_host_hint()}</p>
-                <SeatingEditor
-                    players={seated}
-                    bind:seating={() => seating, moveTo}
-                    anchor={view.seat}
-                    {words} />
-                <form
-                    method="post"
-                    action="?/seating"
-                    bind:this={seatForm}
-                    use:enhance={savingSeating}>
-                    <input
-                        type="hidden"
-                        name="seating"
-                        value={JSON.stringify(seating)} />
-                    <input
-                        type="hidden"
-                        name="version"
-                        value={game.version} />
-                </form>
-            {:else}
-                <p class="hint">{m.seating_player_hint()}</p>
-                <SeatingTable
-                    players={seated}
-                    seating={view.seating}
-                    me={view.seat}
-                    {words}>{words.turnsGoLeft}</SeatingTable>
-            {/if}
-            {#if error}
-                <p
-                    class="error"
-                    role="alert">
-                    {error}
-                </p>
-            {/if}
+        <Text role="heading-1">{m.seating_title()}</Text>
+        {#if isHost}
+            <p class="hint">{m.seating_host_hint()}</p>
+            <SeatingEditor
+                players={seated}
+                bind:seating={() => seating, moveTo}
+                anchor={view.seat}
+                {words} />
+            <form
+                method="post"
+                action="?/seating"
+                bind:this={seatForm}
+                use:enhance={savingSeating}>
+                <input
+                    type="hidden"
+                    name="seating"
+                    value={JSON.stringify(seating)} />
+                <input
+                    type="hidden"
+                    name="version"
+                    value={game.version} />
+            </form>
+            <form
+                method="post"
+                action="?/confirm"
+                use:enhance={confirmingSeating}>
+                <input
+                    type="hidden"
+                    name="version"
+                    value={game.version} />
+                <Button
+                    type="submit"
+                    size="lg"
+                    disabled={confirming || unsaved !== undefined}>{m.seating_confirm()}</Button>
+            </form>
         {:else}
-            <!-- Play comes with Confirm seating (#71); a two-player game skips straight to it. -->
-            <Text role="heading-1">{m.game_under_way()}</Text>
+            <p class="hint">{m.seating_player_hint()}</p>
+            <SeatingTable
+                players={seated}
+                seating={view.seating}
+                me={view.seat}
+                {words}>{words.turnsGoLeft}</SeatingTable>
+        {/if}
+        {#if error}
+            <p
+                class="error"
+                role="alert">
+                {error}
+            </p>
         {/if}
     </div>
 </Surface>

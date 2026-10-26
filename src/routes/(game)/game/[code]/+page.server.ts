@@ -3,6 +3,7 @@ import { normaliseGameCode } from '#lib/game/game-code.js'
 import { refusalMessage } from '#lib/game/refusals.js'
 import {
     changePlayer,
+    confirmSeating,
     GameRefusal,
     getGame,
     leaveGame,
@@ -125,6 +126,14 @@ export const actions: Actions = {
             (userId) =>
                 setSeating(supabaseService(), { userId, code: params.code, version, seating }),
             { seating: true as const },
+        )
+    },
+
+    // Confirm seating: anchors are dealt and the first turn starts, from the version the host saw.
+    confirm: async ({ request, locals, params }) => {
+        const version = Number(field(await request.formData(), 'version'))
+        return asPlayer(locals, (userId) =>
+            confirmSeating(supabaseService(), { userId, code: params.code, version }),
         )
     },
 }

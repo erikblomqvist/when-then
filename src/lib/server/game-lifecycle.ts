@@ -478,6 +478,24 @@ export async function setSeating(
 }
 
 /**
+ * Confirm seating: the host `userId` fixes the seating of the running game with `code` (any
+ * case), and play starts or resumes. The first time it deals everyone their anchor year and
+ * starts the first turn. `version` is the version the host's phone showed: see `play`. `now`
+ * gives the year the anchors stop at (tests fix it).
+ */
+export async function confirmSeating(
+    db: Db,
+    input: { userId: string; code: string; version?: number },
+    { now = () => new Date() }: { now?: () => Date } = {},
+): Promise<void> {
+    await play(db, input, (by) => ({
+        type: 'confirmSeating',
+        by,
+        currentYear: now().getFullYear(),
+    }))
+}
+
+/**
  * Plays the game machine command `command` makes for the asking player's seat on the running
  * game with `code` (any case), saves the next state where the version is still the one it
  * loaded, and nudges everyone. When another save got in first it reads the game again and

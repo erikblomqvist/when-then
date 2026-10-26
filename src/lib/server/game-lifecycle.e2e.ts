@@ -14,6 +14,7 @@ import { saveCard } from './cards'
 import { listCategories } from './categories'
 import {
     changePlayer,
+    confirmSeating,
     createGame,
     findMySeat,
     getGame,
@@ -802,6 +803,49 @@ test('only the host seats, every player exactly once, and only once the game has
         })
     }
     expect((await viewOf(host, code)).view.seating).toEqual([seats.astrid, seats.bo, seats.caro])
+})
+
+test('the host confirms the seating, which deals the anchors and starts the first turn', async () => {
+    const { host, bo, code, seats } = await lobbyOfThree()
+    await startGame(db, { userId: host, code })
+    const seating = [seats.astrid, seats.caro, seats.bo]
+    await setSeating(db, { userId: host, code, seating })
+    const { version } = await viewOf(host, code)
+
+    await confirmSeating(db, { userId: host, code, version }, { now: () => new Date('1999-06-01') })
+
+    const game = await viewOf(bo, code)
+    expect(game.version).toBe(version + 1)
+    const { view } = game
+    expect(view.seating).toEqual(seating)
+    expect(view.phase).toMatchObject({ name: 'playing', activeId: expect.any(String) })
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    expect(seating).toContain(view.phase.activeId)
+    // One anchor each, all different, none past the year the confirm came in.
+    const anchors = seating.map((seat) => view.timelines[seat])
+    for (const timeline of anchors) {
+        expect(timeline).toEqual([{ kind: 'anchor', date: expect.any(Number) }])
+        expect(timeline[0].date).toBeLessThanOrEqual(1999)
+    }
+    expect(new Set(anchors.map((timeline) => timeline[0].date)).size).toBe(3)
+})
+
+test('only the host confirms the seating, and only while the game is in seating', async () => {
+    const { host, bo, code } = await lobbyOfThree()
+    await expect(confirmSeating(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'not_started',
+    })
+    await startGame(db, { userId: host, code })
+
+    await expect(confirmSeating(db, { userId: bo, code })).rejects.toMatchObject({
+        code: 'not_host',
+    })
+    expect((await viewOf(host, code)).view.phase.name).toBe('seating')
+
+    await confirmSeating(db, { userId: host, code })
+    await expect(confirmSeating(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'not_seating',
+    })
 })
 
 test('of two host commands from the same version, one lands and the other is refused for a refetch', async () => {

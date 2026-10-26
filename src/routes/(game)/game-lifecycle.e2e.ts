@@ -5,14 +5,50 @@
 // the home page, the join link and a switch of app language, with no install prompt meanwhile.
 // In the lobby a player changes their name and icon, another leaves, and the host removes a
 // player, who joins again. The host starts the game, and every phone moves to seating: the host
-// arranges the table and the others follow it live from their own seats.
+// arranges the table and the others follow it live from their own seats. The host confirms the
+// seating, every phone moves to play, and a player who reloads is back in their seat. The screen
+// stays awake through seating and play.
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated, waitForHydration } from '../../lib/testing/e2e-hydration'
 import { qrPath } from '../../lib/ui/qr-path'
 
 const db = localServiceClient()
+
+/**
+ * Stands in for Screen Wake Lock on every page in `context`: `window.wakeLocks` lists each lock
+ * the page asked for, and `hidden()` lets go of them all the way the browser does when the page
+ * is hidden.
+ */
+async function fakeWakeLock(context: BrowserContext) {
+    await context.addInitScript(() => {
+        const locks: { released: boolean; release: () => Promise<void> }[] = []
+        Object.assign(window, {
+            wakeLocks: locks,
+            hidden: () => locks.forEach((lock) => (lock.released = true)),
+        })
+        Object.defineProperty(navigator, 'wakeLock', {
+            configurable: true,
+            value: {
+                request: async () => {
+                    const lock = {
+                        released: false,
+                        release: async () => void (lock.released = true),
+                    }
+                    locks.push(lock)
+                    return lock
+                },
+            },
+        })
+    })
+}
+type WithWakeLocks = { wakeLocks: { released: boolean }[]; hidden: () => void }
+const wakeLocks = (page: Page) =>
+    page.evaluate(() => {
+        const locks = (window as unknown as WithWakeLocks).wakeLocks
+        return { asked: locks.length, held: locks.filter((lock) => !lock.released).length }
+    })
 
 test('a typed score and a stepper tap are kept when a refetch of the lobby lands before their save', async ({
     page,
@@ -363,10 +399,11 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     )
 })
 
-test('the host starts the game, and every phone moves to seating and follows the host live', async ({
+test('the host starts the game, every phone follows seating live, and confirming it starts play', async ({
     browser,
 }) => {
     const hostContext = await browser.newContext()
+    await fakeWakeLock(hostContext)
     const host = await hostContext.newPage()
     await gotoHydrated(host, '/new')
     await host.getByLabel('Your name').fill('Astrid')
@@ -385,6 +422,7 @@ test('the host starts the game, and every phone moves to seating and follows the
 
     const join = async (name: string, icon: string) => {
         const context = await browser.newContext()
+        await fakeWakeLock(context)
         const page = await context.newPage()
         await gotoHydrated(page, `/join/${code}`)
         await page.getByLabel('Your name').fill(name)
@@ -396,6 +434,9 @@ test('the host starts the game, and every phone moves to seating and follows the
     }
     const bo = await join('Bo', 'Dog')
     const caro = await join('Caro', 'Fish')
+
+    // The lobby lets the screen sleep.
+    expect(await wakeLocks(bo.page)).toEqual({ asked: 0, held: 0 })
 
     // Only the host sees Start game; the others wait for it.
     await expect(bo.page.getByRole('button', { name: 'Start game' })).toHaveCount(0)
@@ -453,6 +494,46 @@ test('the host starts the game, and every phone moves to seating and follows the
     const late = await lateContext.newPage()
     await gotoHydrated(late, `/join/${code}`)
     await expect(late.getByText('This game has already started.')).toBeVisible()
+
+    // Seating keeps the screen awake, and asks again when the page comes back into view.
+    await expect.poll(() => wakeLocks(bo.page)).toEqual({ asked: 1, held: 1 })
+    await bo.page.evaluate(() => {
+        ;(window as unknown as WithWakeLocks).hidden()
+        document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await expect.poll(() => wakeLocks(bo.page)).toEqual({ asked: 2, held: 1 })
+
+    // Only the host confirms the seating; then every phone moves to play, showing whose turn it
+    // is, and keeps the screen awake from seating into play.
+    await expect(bo.page.getByRole('button', { name: 'Confirm seating' })).toHaveCount(0)
+    await host.getByRole('button', { name: 'Confirm seating' }).click()
+    const turn = /^(Your turn|(Astrid|Bo|Caro) is playing)$/
+    for (const page of [host, bo.page, caro.page]) {
+        await expect(page.getByRole('heading', { name: turn })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'Seating' })).toHaveCount(0)
+    }
+    expect(await wakeLocks(bo.page)).toEqual({ asked: 2, held: 1 })
+    // Everyone has their anchor year, and one player is the first to play.
+    const { data } = await db.from('games').select('state').eq('code', code).single()
+    const state = data?.state as {
+        players: { id: string; name: string }[]
+        phase: { name: string; activeId: string }
+        timelines: Record<string, { kind: string }[]>
+    }
+    expect(state.phase.name).toBe('playing')
+    expect(
+        Object.values(state.timelines).map((timeline) => timeline.map(({ kind }) => kind)),
+    ).toEqual([['anchor'], ['anchor'], ['anchor']])
+    const active = state.players.find((player) => player.id === state.phase.activeId)!.name
+    const theirTurn = (name: string) => (name === active ? 'Your turn' : `${active} is playing`)
+    await expect(host.getByRole('heading', { name: theirTurn('Astrid') })).toBeVisible()
+    await expect(bo.page.getByRole('heading', { name: theirTurn('Bo') })).toBeVisible()
+    await expect(caro.page.getByRole('heading', { name: theirTurn('Caro') })).toBeVisible()
+
+    // Bo's phone reloads, and Bo is back in their seat, the screen kept awake again.
+    await reloadHydrated(bo.page)
+    await expect(bo.page.getByRole('heading', { name: theirTurn('Bo') })).toBeVisible()
+    await expect.poll(() => wakeLocks(bo.page)).toEqual({ asked: 1, held: 1 })
 
     await Promise.all(
         [hostContext, bo.context, caro.context, lateContext].map((context) => context.close()),
