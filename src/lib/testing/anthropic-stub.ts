@@ -13,7 +13,8 @@
 // - "[web]": stub Wikidata finds nothing, so the web search step submits 14 June 1923 from
 //   https://example.com/made-up-history (one search);
 // - "[unsourced]": submits a source that was never retrieved.
-// Reading a photo (`#lib/server/ai-read-photo`), whatever the image: three cards. The first
+// Reading a photo (`#lib/server/ai-read-photo`), whatever the image: three cards, their texts
+// ending in a mark unique to the reading ("A made-up warship sinks (<run>-<n>)"). The first
 // goes in the first category listed, dated 1628 from the photo; the second fits no category,
 // so it suggests a new one named "Photo finds <n>" (unique per stub run and call), dated 1609
 // by the AI; the third has no date and is Sweden-specific. The duplicate check finds no repeats.
@@ -162,6 +163,8 @@ function suggestDate(body: Body) {
 }
 
 let photoReads = 0
+// Marks each reading's cards, so the drafts one test saves aren't duplicates in the next.
+const stubRun = Date.now().toString(36)
 
 function readPhoto(body: Body) {
     const content = body.messages[0].content as { type: string; text?: string }[]
@@ -171,17 +174,20 @@ function readPhoto(body: Body) {
         categories: string[]
     }
     photoReads += 1
-    const card = (en: string, date: Record<string, number | null>, fromPhoto: boolean) => ({
-        source_language: 'sv',
-        texts: { en, sv: `SV: ${en}`, nb: `NB: ${en}` },
-        source_quote: `The photo says: ${en}`,
-        date: { decade: null, year: null, month: null, day: null, ...date },
-        date_from_photo: fromPhoto,
-        difficulty: 2,
-        country_specific: '',
-        category: '',
-        new_category: null,
-    })
+    const card = (text: string, date: Record<string, number | null>, fromPhoto: boolean) => {
+        const en = `${text} (${stubRun}-${photoReads})`
+        return {
+            source_language: 'sv',
+            texts: { en, sv: `SV: ${en}`, nb: `NB: ${en}` },
+            source_quote: `The photo says: ${en}`,
+            date: { decade: null, year: null, month: null, day: null, ...date },
+            date_from_photo: fromPhoto,
+            difficulty: 2,
+            country_specific: '',
+            category: '',
+            new_category: null,
+        }
+    }
     const cards = [
         { ...card('A made-up warship sinks', { year: 1628 }, true), category: categories[0] },
         {

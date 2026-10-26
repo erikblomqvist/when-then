@@ -24,7 +24,8 @@ export type SuggestedCategory = {
 }
 
 /** An existing card a candidate probably repeats. */
-export type PossibleDuplicate = { id: string; text: string }
+/** An existing card a candidate may repeat: by the same text, or as the AI judged it. */
+export type PossibleDuplicate = { id: string; text: string; sameText: boolean }
 
 /** One card the AI read from a photo, before the admin edits it. */
 export type PhotoCandidate = {

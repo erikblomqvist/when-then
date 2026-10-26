@@ -140,6 +140,12 @@
                 { value: 'none', label: 'Not country-specific' },
             ],
         },
+        {
+            name: 'duplicates',
+            label: 'Duplicates',
+            value: filter.duplicates ? 'yes' : '',
+            choices: [{ value: 'yes', label: 'Suspected duplicates' }],
+        },
         ...translationLocales.map((locale) => ({
             name: locale,
             label: localeName[locale],

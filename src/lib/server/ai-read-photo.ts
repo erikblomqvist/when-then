@@ -6,9 +6,10 @@
 //    up to 15 candidates, each written in the photo's language and translated into the other
 //    card languages, with a date (said whether the photo prints it), a difficulty, whether it is
 //    country-specific, and either an existing category or a suggested new one.
-// 2. When existing cards sit near a candidate's year, a second, text-only call says which
-//    candidates repeat one of them. Only those nearby cards are sent, so the request stays
-//    small however many cards there are.
+// 2. A candidate with the same English text as an existing card is marked a duplicate of it
+//    straight away. For the others, when existing cards sit near a candidate's year, a second,
+//    text-only call says which repeat one of them in other words. Only those nearby cards are
+//    sent (closest in date first), so the request stays small however many cards there are.
 //
 // Nothing is saved: the admin ticks and edits the candidates and saves them as drafts. The
 // photo itself is not stored; the passage the AI read goes into each card's source quote.
@@ -31,6 +32,7 @@ import { quotationMarksRule, withQuotationMarks } from '../cards/quotation-marks
 import { categoryColours, categoryIcons } from '../categories/look'
 import { englishNameKey } from '../categories/category-form'
 import { AiAnswerRejectedError, replyText, runModel, type AiDeps, type AiRequest } from './ai'
+import type { SameTextCard } from './duplicate-cards'
 
 /** An existing card near a candidate's date, for the duplicate check. */
 export type NearbyCard = { id: string; text: string; year: number | null; decade: number | null }
@@ -38,6 +40,8 @@ export type NearbyCard = { id: string; text: string; year: number | null; decade
 export type ReadPhotoDeps = AiDeps & {
     /** Existing cards whose year (or decade) is near any of these years. */
     findNearbyCards: (years: number[]) => Promise<NearbyCard[]>
+    /** Per English text, the existing cards with the same text (`cardsWithSameText`). */
+    findSameText: (texts: string[]) => Promise<SameTextCard[][]>
 }
 
 export type PhotoImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
@@ -270,7 +274,12 @@ export async function readCardsFromPhoto(
     }
 
     let candidates: PhotoCandidate[] = []
+    let unchecked: number[] = []
     let nearby = new Map<string, string>()
+    const checkDetails = () => ({
+        candidates: candidates.length,
+        duplicates: candidates.filter((candidate) => candidate.duplicateOf).length,
+    })
 
     const { value, auditId } = await runModel<PhotoCandidate[]>(
         deps,
@@ -295,10 +304,21 @@ export async function readCardsFromPhoto(
                             'The AI found nothing in the photo to make a card of.',
                     )
                 }
-                const years = candidates.flatMap((candidate) => yearOf(candidate) ?? [])
+                const sameText = await deps.findSameText(
+                    candidates.map((candidate) => candidate.texts.en),
+                )
+                candidates.forEach((candidate, index) => {
+                    const [same] = sameText[index] ?? []
+                    if (same) candidate.duplicateOf = { ...same, sameText: true }
+                })
+                // The AI checks the rest, by index into `candidates`.
+                unchecked = candidates.flatMap((candidate, index) =>
+                    candidate.duplicateOf ? [] : [index],
+                )
+                const years = unchecked.flatMap((index) => yearOf(candidates[index]!) ?? [])
                 const existing = years.length > 0 ? await deps.findNearbyCards(years) : []
                 if (existing.length === 0) {
-                    return { done: candidates, details: { candidates: candidates.length } }
+                    return { done: candidates, details: checkDetails() }
                 }
                 nearby = new Map(existing.map((card) => [card.id, card.text]))
                 return {
@@ -309,10 +329,10 @@ export async function readCardsFromPhoto(
                             {
                                 role: 'user',
                                 content: JSON.stringify({
-                                    new_cards: candidates.map((candidate, index) => ({
+                                    new_cards: unchecked.map((index) => ({
                                         index,
-                                        text: candidate.texts.en,
-                                        year: yearOf(candidate),
+                                        text: candidates[index]!.texts.en,
+                                        year: yearOf(candidates[index]!),
                                     })),
                                     existing_cards: existing.map(({ id, text, year, decade }) => ({
                                         id,
@@ -332,18 +352,15 @@ export async function readCardsFromPhoto(
             const answer = parse(replyText(reply)) as { duplicates?: unknown }
             const found = Array.isArray(answer?.duplicates) ? answer.duplicates : []
             for (const entry of found as { index?: unknown; card_id?: unknown }[]) {
-                const candidate = typeof entry.index === 'number' ? candidates[entry.index] : null
+                const index = typeof entry.index === 'number' ? entry.index : -1
+                const candidate = unchecked.includes(index) ? candidates[index] : null
                 const id = str(entry.card_id)
                 const text = nearby.get(id)
-                if (candidate && text !== undefined) candidate.duplicateOf = { id, text }
+                if (candidate && text !== undefined) {
+                    candidate.duplicateOf = { id, text, sameText: false }
+                }
             }
-            return {
-                done: candidates,
-                details: {
-                    candidates: candidates.length,
-                    duplicates: candidates.filter((candidate) => candidate.duplicateOf).length,
-                },
-            }
+            return { done: candidates, details: checkDetails() }
         },
     )
     return { candidates: value, requestId: auditId }

@@ -100,11 +100,17 @@ test('an admin photographs a page on their phone, finds a missing date, creates 
     expect(savedWarship).toMatchObject({
         status: 'draft',
         date: { decade: 1620, year: 1628, month: null, day: null },
-        sourceQuote: 'The photo says: A made-up warship sinks',
+        sourceQuote: expect.stringMatching(/^The photo says: A made-up warship sinks \(/),
         translations: {
-            sv: { text: 'SV: A made-up warship sinks', status: 'reviewed' },
-            en: { text: 'A made-up warship sinks', status: 'reviewed' },
-            nb: { text: 'NB: A made-up warship sinks', status: 'machine' },
+            sv: {
+                text: expect.stringMatching(/^SV: A made-up warship sinks \(/),
+                status: 'reviewed',
+            },
+            en: { text: expect.stringMatching(/^A made-up warship sinks \(/), status: 'reviewed' },
+            nb: {
+                text: expect.stringMatching(/^NB: A made-up warship sinks \(/),
+                status: 'machine',
+            },
         },
     })
     expect(savedWarship?.countrySpecific).toBeNull()
@@ -270,6 +276,27 @@ test('Find date says so when its source has nothing the card has not got', async
 
     // No second lookup either: it costs another AI call and rarely finds more.
     await expect(kingdom.getByRole('button', { name: /Try again|Find date/ })).toHaveCount(0)
+})
+
+test('a card with the same text as another in the list is marked, and starts unticked when read', async ({
+    page,
+}) => {
+    await signInAs(page, 'admin')
+    await gotoHydrated(page, '/admin/cards/photo')
+    await page.getByLabel('Take photo').setInputFiles(photo())
+    await page.getByRole('button', { name: 'Read 1 photo' }).click()
+    const candidates = page.getByTestId('candidate')
+    await expect(candidates).toHaveCount(3)
+    const [warship, , kingdom] = [candidates.nth(0), candidates.nth(1), candidates.nth(2)]
+    await expect(page.getByText('Same text as another card here')).toHaveCount(0)
+
+    // Typed into the same text as the warship, case and punctuation aside: marked.
+    const warshipText = await warship.getByLabel(/^English text/).inputValue()
+    await kingdom.getByText('Edit').click()
+    await kingdom.getByLabel(/^English text/).fill(`${warshipText.toUpperCase()}!`)
+    await expect(kingdom).toContainText(`Same text as another card here: ${warshipText}`)
+    await expect(kingdom).toContainText('Duplicate')
+    await expect(warship).not.toContainText('Same text as')
 })
 
 test('an editor has no way in', async ({ page }) => {

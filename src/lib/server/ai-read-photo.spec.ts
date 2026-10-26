@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { AiAnswerRejectedError, type AiAuditRecord, type CreateMessage } from './ai'
 import { readCardsFromPhoto, type NearbyCard, type ReadPhotoDeps } from './ai-read-photo'
+import type { SameTextCard } from './duplicate-cards'
 
 type Params = Parameters<CreateMessage>[0]
 type Message = Awaited<ReturnType<CreateMessage>>
@@ -24,7 +25,11 @@ const reply = (answer: unknown): Message =>
         },
     }) as Message
 
-function fakeDeps(answers: unknown[], nearby: NearbyCard[] = []) {
+function fakeDeps(
+    answers: unknown[],
+    nearby: NearbyCard[] = [],
+    sameText: Record<string, SameTextCard[]> = {},
+) {
     const sent: Params[] = []
     const records: AiAuditRecord[] = []
     const askedYears: number[][] = []
@@ -38,6 +43,7 @@ function fakeDeps(answers: unknown[], nearby: NearbyCard[] = []) {
             askedYears.push(years)
             return nearby
         },
+        findSameText: async (texts) => texts.map((text) => sameText[text] ?? []),
     }
     return { deps, sent, records, askedYears }
 }
@@ -145,11 +151,45 @@ describe('readCardsFromPhoto', () => {
             { id: 'card-9', text: 'The warship Vasa sinks', year: 1628 },
         ])
         expect(candidates.map((candidate) => candidate.duplicateOf)).toEqual([
-            { id: 'card-9', text: 'The warship Vasa sinks' },
+            { id: 'card-9', text: 'The warship Vasa sinks', sameText: false },
             null,
         ])
         expect(records).toHaveLength(1)
         expect(records[0].details).toMatchObject({ calls: 2, candidates: 2, duplicates: 1 })
+    })
+
+    it('marks a card with the same text as an existing one, and asks the AI about the rest only', async () => {
+        const nearby = [
+            { id: 'card-9', text: 'Galileo makes a telescope', year: 1609, decade: 1600 },
+        ]
+        const { deps, sent, askedYears } = fakeDeps(
+            [
+                { message: '', cards: [vasa, telescope] },
+                { duplicates: [{ index: 0, card_id: 'card-9' }] },
+            ],
+            nearby,
+            { 'The Vasa sinks': [{ id: 'card-1', text: 'The Vasa sinks.' }] },
+        )
+        const { candidates } = await readCardsFromPhoto(deps, input)
+
+        expect(askedYears).toEqual([[1609]])
+        expect(JSON.parse(sent[1].messages[0].content as string).new_cards).toEqual([
+            { index: 1, text: 'Galileo builds a telescope', year: 1609 },
+        ])
+        // The AI's answer about index 0, which it wasn't asked about, is ignored.
+        expect(candidates.map((candidate) => candidate.duplicateOf)).toEqual([
+            { id: 'card-1', text: 'The Vasa sinks.', sameText: true },
+            null,
+        ])
+    })
+
+    it('needs no second call when every card has an existing card with the same text', async () => {
+        const { deps, sent } = fakeDeps([{ message: '', cards: [vasa] }], [], {
+            'The Vasa sinks': [{ id: 'card-1', text: 'The Vasa sinks' }],
+        })
+        const { candidates } = await readCardsFromPhoto(deps, input)
+        expect(sent).toHaveLength(1)
+        expect(candidates[0].duplicateOf).toMatchObject({ id: 'card-1', sameText: true })
     })
 
     it('asks for each language’s quotation marks, and fixes straight ones it gets', async () => {

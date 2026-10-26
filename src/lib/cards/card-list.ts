@@ -60,6 +60,11 @@ export type CardFilter = {
     country?: string
     /** By each locale's translation state (URL keys `sv`, `nb`). */
     translations?: Partial<Record<TranslationLocale, TranslationFilter>>
+    /**
+     * Suspected duplicates: cards whose English text another card (not archived) has too,
+     * case, punctuation and spacing aside (`public.card_text_key`).
+     */
+    duplicates?: true
 }
 
 /** Sort key, `-` for descending. Date sorts undated cards last either way. */
@@ -115,6 +120,7 @@ export function parseFilter(params: URLSearchParams): CardFilter {
         const state = oneOf(translationFilters, params.get(locale))
         if (state) filter.translations = { ...filter.translations, [locale]: state }
     }
+    if (params.get('duplicates') === 'yes') filter.duplicates = true
     return filter
 }
 
@@ -164,6 +170,7 @@ export function filterParams(filter: CardFilter): URLSearchParams {
         const state = filter.translations?.[locale]
         if (state) params.set(locale, state)
     }
+    if (filter.duplicates) params.set('duplicates', 'yes')
     return params
 }
 

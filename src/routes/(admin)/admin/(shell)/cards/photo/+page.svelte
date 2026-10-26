@@ -6,7 +6,8 @@
     web), create a suggested category where none fits, and save the
     ticked ones as drafts. More photos can be added under the list; their cards join it. What
     the AI inferred rather than read (a date not in the photo, the difficulty, the translations)
-    is marked, and likely repeats of existing cards start unticked.
+    is marked, and likely repeats of existing cards (the same text, or the AI's judgement) and of
+    other cards in the list start unticked.
 
     On a phone the page only takes photos with the camera; the "Add from photo" link opens the
     camera itself and hands the photo over (`#lib/admin/cards/photo-handoff.ts`).
@@ -43,6 +44,7 @@
         type PhotoDraft,
         type SuggestedCategory,
     } from '#lib/cards/photo-import.js'
+    import { earlierSameText } from '#lib/cards/card-text-key.js'
     import { localeName } from '#lib/cards/translation.js'
     import { englishNameKey, type CategoryFormValues } from '#lib/categories/category-form.js'
     import type { DateSuggestion } from '#lib/server/ai-suggest-date.js'
@@ -111,17 +113,23 @@
         untrack(() => {
             if (!reading || reading === shownReading) return
             shownReading = reading
-            rows = [
-                ...rows,
-                ...reading.readings.flatMap((one) =>
-                    one.candidates.map((candidate) => toRow(candidate, one)),
-                ),
-            ]
+            const added = reading.readings.flatMap((one) =>
+                one.candidates.map((candidate) => toRow(candidate, one)),
+            )
+            // A card another photo (or this one) gave already starts unticked, like a duplicate.
+            const earlier = earlierSameText([...rows, ...added].map((row) => row.texts.en))
+            added.forEach((row, index) => {
+                if (earlier[rows.length + index] !== null) row.ticked = false
+            })
+            rows = [...rows, ...added]
             photosRead += reading.readings.length
         })
     })
 
     const reviewing = $derived(rows.length > 0)
+
+    // Per row: the earlier row with the same English text, as typed now, or null.
+    const repeats = $derived(earlierSameText(rows.map((row) => row.texts.en)))
 
     const whole = (value: string) => (/^-?\d+$/.test(value.trim()) ? Number(value) : null)
 
@@ -510,7 +518,8 @@
     <ul
         class="mt-4 flex flex-col gap-3"
         aria-label="Cards found in the photos">
-        {#each rows as row (row.id)}
+        {#each rows as row, index (row.id)}
+            {@const repeated = repeats[index] === null ? null : rows[repeats[index]]}
             {@const date = shownDate(row)}
             {@const candidate = row.candidate}
             {@const found = foundDate(row)}
@@ -555,8 +564,12 @@
                                         : ''}
                                 </Badge>
                             {/if}
-                            {#if candidate.duplicateOf}
-                                <Badge variant="destructive">Possible duplicate</Badge>
+                            {#if candidate.duplicateOf || repeated}
+                                <Badge variant="destructive">
+                                    {candidate.duplicateOf?.sameText || repeated
+                                        ? 'Duplicate'
+                                        : 'Possible duplicate'}
+                                </Badge>
                             {/if}
                         </span>
                     </span>
@@ -613,9 +626,16 @@
                     </div>
                 {/if}
 
+                {#if repeated}
+                    <p class="mt-2 text-sm text-muted-foreground">
+                        Same text as another card here: {repeated.texts.en}
+                    </p>
+                {/if}
                 {#if candidate.duplicateOf}
                     <p class="mt-2 text-sm text-muted-foreground">
-                        Possible duplicate of:
+                        {candidate.duplicateOf.sameText
+                            ? 'Same text as:'
+                            : 'Possible duplicate of:'}
                         <a
                             href="/admin/cards/{candidate.duplicateOf.id}"
                             target="_blank"

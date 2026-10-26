@@ -445,6 +445,7 @@ export type Database = {
                 Returns: boolean
             }
             card_publish_blockers: { Args: { card_id: string }; Returns: string[] }
+            card_text_key: { Args: { text: string }; Returns: string }
             cards_matching: {
                 Args: { filter?: Json }
                 Returns: {
@@ -476,6 +477,23 @@ export type Database = {
                     isOneToOne: false
                     isSetofReturn: true
                 }
+            }
+            cards_near_years: {
+                Args: { per_year: number; years: number[] }
+                Returns: {
+                    card_id: string
+                    card_text: string
+                    decade: number
+                    year: number
+                }[]
+            }
+            cards_with_text: {
+                Args: { except_card?: string; texts: string[] }
+                Returns: {
+                    card_id: string
+                    card_text: string
+                    text_index: number
+                }[]
             }
             change_player: {
                 Args: {

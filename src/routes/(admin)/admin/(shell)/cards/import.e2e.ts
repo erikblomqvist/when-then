@@ -78,6 +78,63 @@ test('an admin previews a CSV with per-row errors, then imports the valid rows a
     expect(await cardsWith(walls)).toHaveLength(1)
 })
 
+test('rows with the same text as a card, or as an earlier row, are marked and left out unless kept', async ({
+    page,
+}) => {
+    await signInAs(page, 'admin')
+    const tag = `Import${randomUUID().slice(0, 8)}`
+    const canal = `A made-up canal opens ${tag}`
+    const lock = `A made-up lock is built ${tag}`
+    const upload = async (rows: string[]) => {
+        await gotoHydrated(page, '/admin/cards/import')
+        await page.getByLabel('CSV file').setInputFiles({
+            name: 'synthetic-cards.csv',
+            mimeType: 'text/csv',
+            buffer: Buffer.from([header, ...rows].join('\r\n')),
+        })
+        await page.getByRole('button', { name: 'Preview' }).click()
+    }
+
+    await upload([`${canal},,1822,,,Events,,,,,`])
+    await page.getByRole('button', { name: 'Import 1 card as drafts' }).click()
+    const [existing] = await cardsWith(canal)
+
+    // The canal again (in other case and punctuation), and the lock twice.
+    await upload([
+        `${canal.toUpperCase()}!,,1822,,,Events,,,,,`,
+        `${lock},,1823,,,Events,,,,,`,
+        `"${lock}.",,1823,,,Events,,,,,`,
+    ])
+    await expect(page.getByTestId('import-summary')).toContainText(
+        '3 rows, 3 ready to import (2 of them suspected duplicates)',
+    )
+    const first = page.getByTestId('import-row-1')
+    await expect(first).toContainText('Suspected duplicate')
+    await expect(first.getByRole('link', { name: canal })).toHaveAttribute(
+        'href',
+        `/admin/cards/${existing.card_id}`,
+    )
+    await expect(page.getByTestId('import-row-2')).toContainText('Ready')
+    await expect(page.getByTestId('import-row-3')).toContainText('Same text as row 2')
+
+    // Left out by default; unticked, they'd all go in.
+    const leaveOut = page.getByLabel('Leave out 2 rows that look like duplicates')
+    await expect(leaveOut).toBeChecked()
+    await leaveOut.uncheck()
+    await expect(page.getByRole('button', { name: 'Import 3 cards as drafts' })).toBeVisible()
+    await leaveOut.check()
+    await page.getByRole('button', { name: 'Import 1 card as drafts' }).click()
+
+    await expect(page.getByRole('status')).toContainText(
+        'Imported 1 card as drafts. Left out 2 rows that looked like duplicates.',
+    )
+    await expect(
+        page.getByRole('region', { name: 'Left out as suspected duplicates' }),
+    ).toContainText('Row 3')
+    expect(await cardsWith(canal)).toHaveLength(1)
+    expect(await cardsWith(lock)).toHaveLength(1)
+})
+
 test('a file the import cannot read is reported, with nothing to confirm', async ({ page }) => {
     await signInAs(page, 'admin')
     await gotoHydrated(page, '/admin/cards/import')

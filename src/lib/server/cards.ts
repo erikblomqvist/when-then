@@ -47,6 +47,7 @@ const filterArgs = (filter: CardFilter) => ({
     era: filter.era,
     country: filter.country,
     translations: filter.translations,
+    duplicates: filter.duplicates,
 })
 
 /**

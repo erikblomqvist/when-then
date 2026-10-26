@@ -14,14 +14,20 @@
     const cards = (count: number) => `${count} ${count === 1 ? 'card' : 'cards'}`
     const rowsWord = (count: number) => `${count} ${count === 1 ? 'row' : 'rows'}`
 
-    const resultMessage = (created: number, skipped: number) =>
+    const resultMessage = (created: number, skipped: number, leftOut: number) =>
         `Imported ${cards(created)} as drafts.` +
-        (skipped > 0 ? ` Skipped ${rowsWord(skipped)} with errors.` : '')
+        (skipped > 0 ? ` Skipped ${rowsWord(skipped)} with errors.` : '') +
+        (leftOut > 0 ? ` Left out ${rowsWord(leftOut)} that looked like duplicates.` : '')
 
     const preview = $derived(form?.stage === 'preview' ? form : null)
     const imported = $derived(form?.stage === 'imported' ? form : null)
     const ready = $derived(preview?.rows.filter((row) => row.card).length ?? 0)
     const withErrors = $derived((preview?.rows.length ?? 0) - ready)
+    // Suspected duplicates: left out unless the admin unticks "Leave out".
+    const suspected = $derived(Object.keys(preview?.duplicates ?? {}).length)
+    // Ticked again for each new preview.
+    let skipDuplicates = $derived(preview !== null)
+    const importing = $derived(ready - (skipDuplicates ? suspected : 0))
 </script>
 
 <svelte:head>
@@ -55,7 +61,7 @@
     <p
         role="status"
         class="mt-4 rounded-md border bg-muted px-3 py-2 text-sm">
-        {resultMessage(imported.created.length, imported.skipped.length)}
+        {resultMessage(imported.created.length, imported.skipped.length, imported.leftOut.length)}
     </p>
 
     {#if imported.created.length > 0}
@@ -99,6 +105,23 @@
         </section>
     {/if}
 
+    {#if imported.leftOut.length > 0}
+        <section
+            aria-labelledby="left-out-heading"
+            class="mt-6">
+            <h2
+                id="left-out-heading"
+                class="text-lg font-semibold">
+                Left out as suspected duplicates
+            </h2>
+            <ul class="mt-2 flex flex-col gap-1 text-sm">
+                {#each imported.leftOut as row (row.row)}
+                    <li>Row {row.row}: {row.text}</li>
+                {/each}
+            </ul>
+        </section>
+    {/if}
+
     <p class="mt-6">
         <Button
             href="/admin/cards/import"
@@ -108,9 +131,10 @@
     <p
         class="mt-4 text-sm"
         data-testid="import-summary">
-        {preview.fileName}: {rowsWord(preview.rows.length)}, {ready} ready to import{withErrors > 0
-            ? `, ${withErrors} with errors (skipped)`
-            : ''}. Nothing is saved until you import.
+        {preview.fileName}: {rowsWord(preview.rows.length)}, {ready} ready to import{suspected > 0
+            ? ` (${suspected} of them suspected duplicates)`
+            : ''}{withErrors > 0 ? `, ${withErrors} with errors (skipped)` : ''}. Nothing is saved
+        until you import.
     </p>
 
     <form
@@ -126,9 +150,19 @@
             type="hidden"
             name="file_name"
             value={preview.fileName} />
+        {#if suspected > 0}
+            <label class="flex items-center gap-2 text-sm">
+                <input
+                    type="checkbox"
+                    name="skip_duplicates"
+                    class="size-4 accent-primary"
+                    bind:checked={skipDuplicates} />
+                Leave out {rowsWord(suspected)} that look like duplicates
+            </label>
+        {/if}
         <Button
             type="submit"
-            disabled={ready === 0}>Import {cards(ready)} as drafts</Button>
+            disabled={importing === 0}>Import {cards(importing)} as drafts</Button>
         <a
             href="/admin/cards/import"
             class="text-sm underline underline-offset-4">Choose another file</a>
@@ -153,7 +187,24 @@
                     <Table.Cell>{row.category}</Table.Cell>
                     <Table.Cell>{row.card ? formatCardDate(row.card.date) : ''}</Table.Cell>
                     <Table.Cell class="whitespace-normal">
-                        {#if row.card}
+                        {@const duplicate = preview.duplicates[row.row]}
+                        {#if row.card && duplicate}
+                            <div class="flex flex-col items-start gap-1">
+                                <Badge variant="destructive">Suspected duplicate</Badge>
+                                {#each duplicate.cards as card (card.id)}
+                                    <span>
+                                        Same text as
+                                        <a
+                                            href="/admin/cards/{card.id}"
+                                            target="_blank"
+                                            class="underline underline-offset-4">{card.text}</a>
+                                    </span>
+                                {/each}
+                                {#if duplicate.earlierRow !== null}
+                                    <span>Same text as row {duplicate.earlierRow}</span>
+                                {/if}
+                            </div>
+                        {:else if row.card}
                             <Badge variant="secondary">Ready</Badge>
                         {:else}
                             {@render errorList(row)}

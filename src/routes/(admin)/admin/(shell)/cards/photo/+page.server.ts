@@ -12,6 +12,7 @@ import {
 import { listCategories } from '#lib/server/categories.js'
 import { createCategoryAction } from '#lib/server/category-editor.js'
 import { requireRole } from '#lib/server/guard.js'
+import { cardsWithSameText } from '#lib/server/duplicate-cards.js'
 import { findNearbyCards, importPhotoCards, PhotoImportError } from '#lib/server/photo-import.js'
 import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
@@ -84,7 +85,11 @@ export const actions: Actions = {
             photos.map(async (photo) => {
                 const requestKey = randomUUID()
                 const reading: PhotoReading = await readCardsFromPhoto(
-                    { ...aiDeps(), findNearbyCards: (years) => findNearbyCards(db, years) },
+                    {
+                        ...aiDeps(),
+                        findNearbyCards: (years) => findNearbyCards(db, years),
+                        findSameText: (texts) => cardsWithSameText(db, texts),
+                    },
                     {
                         actorId: user.id,
                         requestKey,

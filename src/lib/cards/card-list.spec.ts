@@ -106,6 +106,17 @@ describe('the Archived tab', () => {
     })
 })
 
+describe('suspected duplicates filter', () => {
+    it('round-trips duplicates=yes, after the translation filters, and drops other values', () => {
+        expect(parseCardListView(params('duplicates=yes')).filter).toEqual({ duplicates: true })
+        expect(parseCardListView(params('duplicates=no')).filter).toEqual({})
+        expect(
+            cardListHref({ filter: { duplicates: true, translations: { sv: 'machine' } } }),
+        ).toBe('/admin/cards?sv=machine&duplicates=yes')
+        expect(isFiltered({ duplicates: true })).toBe(true)
+    })
+})
+
 describe('translation filters', () => {
     it('reads a translation state per locale, dropping unknown states and locales', () => {
         expect(parseCardListView(params('sv=machine&nb=needs-review')).filter).toEqual({

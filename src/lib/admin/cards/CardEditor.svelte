@@ -20,6 +20,7 @@
     - Difficulty: optional, 1 (most people know it) to 4 (obscure), as "Add from photo" sets it.
     - Country-specific: the country whose deep local knowledge the card takes, or none
       (`#lib/cards/country.js`); "Add from photo" has the AI guess it.
+    - English text: `SameTextWarning` under it names the other cards with the same text.
     - Date: `dateActions` renders under the date fields with `{ english, apply }`; `apply` puts a
       suggested year (and its source) into the form, unsaved (AI date suggestion, #42).
 -->
@@ -51,6 +52,7 @@
     import { yearRequiredFrom } from '#lib/cards/publish-rule.js'
     import type { Category } from '#lib/server/categories.js'
     import PublishChecklist from './PublishChecklist.svelte'
+    import SameTextWarning from './SameTextWarning.svelte'
     import TranslationTabs, { type TranslationActions } from './TranslationTabs.svelte'
     import NewCategoryDialog from '../categories/NewCategoryDialog.svelte'
     import SaveIcon from '@lucide/svelte/icons/save'
@@ -314,6 +316,9 @@
                 aria-invalid={shown.text_en ? 'true' : undefined}
                 aria-describedby={describedBy('text_en')} />
             {@render error('text_en')}
+            <SameTextWarning
+                text={values.text_en}
+                exceptId={card?.id} />
             <Label
                 for="note_en"
                 class="mt-2">English note (optional)</Label>
