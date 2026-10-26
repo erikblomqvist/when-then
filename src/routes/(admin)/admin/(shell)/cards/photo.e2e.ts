@@ -268,8 +268,8 @@ test('Find date says so when its source has nothing the card has not got', async
     await expect(kingdom.getByRole('link', { name: 'en.wikipedia.org' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /exact date/ })).toHaveCount(0)
 
-    await kingdom.getByRole('button', { name: 'Try again' }).click()
-    await expect(kingdom).toContainText('No exact day found online; the date stays 1908.')
+    // No second lookup either: it costs another AI call and rarely finds more.
+    await expect(kingdom.getByRole('button', { name: /Try again|Find date/ })).toHaveCount(0)
 })
 
 test('an editor has no way in', async ({ page }) => {

@@ -232,7 +232,8 @@
     // "Find date": the editor's sourced lookup, for a card without an exact date. The date it
     // finds (the year, and the month and day when its source states them) goes straight in, with
     // its source; Undo puts the AI's own date back. A date that adds nothing to the card's (the
-    // same year, no month or day it hasn't got) leaves the card alone and says so.
+    // same year, no month or day it hasn't got) leaves the card alone and says so, with no
+    // second try: another AI call rarely finds more.
     async function findDate(row: Row) {
         row.finding = true
         row.noMore = false
@@ -583,10 +584,6 @@
                 {:else if row.noMore && !row.finding}
                     <p class="mt-2 text-sm text-muted-foreground">
                         No exact day found online; the date stays {date}.
-                        <button
-                            type="button"
-                            class="cursor-pointer underline underline-offset-4"
-                            onclick={() => findDate(row)}>Try again</button>
                     </p>
                 {:else if exactDateMissing(row) || row.finding}
                     <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
