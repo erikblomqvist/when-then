@@ -37,6 +37,9 @@ export type GameRefusalCode =
     | 'nothing_to_skip'
     | 'no_other_reader'
     | 'not_system'
+    | 'too_few_players'
+    | 'stale_version'
+    | 'not_started'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -70,6 +73,9 @@ const words: Record<GameRefusalCode, () => string> = {
     nothing_to_skip: m.refusal_nothing_to_skip,
     no_other_reader: m.refusal_no_other_reader,
     not_system: m.refusal_not_system,
+    too_few_players: m.refusal_too_few_players,
+    stale_version: m.refusal_stale_version,
+    not_started: m.refusal_not_started,
 }
 
 /** The message for a refusal, in the current locale. */

@@ -321,6 +321,7 @@ export type Database = {
                     last_active_at: string
                     left_out_countries: string[]
                     started_at: string | null
+                    state: Json | null
                     target_score: number
                     version: number
                 }
@@ -334,6 +335,7 @@ export type Database = {
                     last_active_at?: string
                     left_out_countries?: string[]
                     started_at?: string | null
+                    state?: Json | null
                     target_score?: number
                     version?: number
                 }
@@ -347,6 +349,7 @@ export type Database = {
                     last_active_at?: string
                     left_out_countries?: string[]
                     started_at?: string | null
+                    state?: Json | null
                     target_score?: number
                     version?: number
                 }
@@ -568,7 +571,9 @@ export type Database = {
                     exact_year: boolean
                     id: string
                     last_active_at: string
+                    left_out_countries: string[]
                     started_at: string | null
+                    state: Json | null
                     target_score: number
                     version: number
                 }
@@ -671,6 +676,13 @@ export type Database = {
                     person_id: string
                 }
                 Returns: undefined
+            }
+            start_game: {
+                Args: { code: string; host: string; lobby_version: number; state: Json }
+                Returns: {
+                    game_version: number
+                    started_game: string
+                }[]
             }
             sweep_games: {
                 Args: { now: string }

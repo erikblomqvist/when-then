@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Snippet } from 'svelte'
     import { seatPoint, startingFrom, type Seating, type SeatedPlayer } from '../game/seating'
+    import { englishSeatingWords, type SeatingWords } from './seating-words'
 
     /**
      * A round table seen from above, drawn from `me`'s seat: "You" at the bottom and the
@@ -11,12 +12,14 @@
         seating,
         me,
         size = 240,
+        words = englishSeatingWords,
         children,
     }: {
         players: readonly SeatedPlayer[]
         seating: Seating
         me: string
         size?: number
+        words?: SeatingWords
         /** Shown in the middle of the table. */
         children?: Snippet
     } = $props()
@@ -37,7 +40,7 @@
         <span
             class={['ui-chip', 'seating-table__seat', id === me && 'ui-chip--active']}
             style:left="{p.x * 100}%"
-            style:top="{p.y * 100}%">{id === me ? 'You' : name(id)}</span>
+            style:top="{p.y * 100}%">{id === me ? words.you : name(id)}</span>
     {/each}
 </div>
 

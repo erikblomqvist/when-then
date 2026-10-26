@@ -13,6 +13,7 @@
         type SeatTarget,
     } from '../game/seating'
     import Button from './Button.svelte'
+    import { englishSeatingWords, type SeatingWords } from './seating-words'
 
     /**
      * The host's seating editor: a round table drawn from `anchor`'s seat, with "You" fixed at
@@ -25,12 +26,14 @@
         seating = $bindable(),
         anchor,
         size = 260,
+        words = englishSeatingWords,
     }: {
         players: readonly SeatedPlayer[]
         seating: Seating
         /** The player holding the phone. Stays at the bottom and can't be dragged. */
         anchor: string
         size?: number
+        words?: SeatingWords
     } = $props()
 
     // How far above the finger the lifted name is drawn, so the finger doesn't hide it.
@@ -44,7 +47,7 @@
     let drag = $state<{ id: string; pointer: number; x: number; y: number }>()
 
     const name = (id: string) => players.find((p) => p.id === id)?.name ?? id
-    const you = (id: string) => (id === anchor ? 'you' : name(id))
+    const you = (id: string) => (id === anchor ? words.youObject : name(id))
 
     const target = $derived.by((): SeatTarget | undefined => {
         if (!drag) return undefined
@@ -70,14 +73,14 @@
     const status = $derived.by(() => {
         if (drag) {
             const who = name(drag.id)
-            if (!target) return 'Let go off the table to cancel'
-            if (target.kind === 'seat') return `Swap ${who} and ${name(seats[target.seat])}`
+            if (!target) return words.letGoToCancel
+            if (target.kind === 'seat') return words.swap(who, name(seats[target.seat]))
             const after = seats[target.after]
-            return `Move ${who} between ${you(after)} and ${you(leftOf(seats, after))}`
+            return words.moveBetween(who, you(after), you(leftOf(seats, after)))
         }
-        if (seats.length === 2) return `${name(seats[1])} sits across from you.`
+        if (seats.length === 2) return words.acrossFromYou(name(seats[1]))
         if (seats.length > 2)
-            return `${name(leftOf(seats, anchor))} is on your left, ${name(rightOf(seats, anchor))} on your right.`
+            return words.yourNeighbours(name(leftOf(seats, anchor)), name(rightOf(seats, anchor)))
         return ''
     })
 
@@ -127,7 +130,7 @@
         bind:this={table}
         style:width="{size}px"
         style:height="{size}px">
-        <div class="seating-editor__top">Turns go<br />to the left</div>
+        <div class="seating-editor__top">{words.turnsGoLeft}</div>
         <!-- Stable DOM order, so dragging never reorders the elements under the pointer. -->
         {#each seats.toSorted() as id (id)}
             {@const dragging = drag?.id === id}
@@ -142,7 +145,7 @@
                 <span
                     class="ui-chip ui-chip--active seating-editor__seat"
                     style:left="{p.x * 100}%"
-                    style:top="{p.y * 100}%">You</span>
+                    style:top="{p.y * 100}%">{words.you}</span>
             {:else}
                 <button
                     type="button"
@@ -169,11 +172,11 @@
         <Button
             variant="ghost"
             disabled={!history.length}
-            onclick={undo}>Undo</Button>
+            onclick={undo}>{words.undo}</Button>
         {#if seats.length > 2}
             <Button
                 variant="ghost"
-                onclick={() => commit(reversed(seats, anchor))}>Reverse</Button>
+                onclick={() => commit(reversed(seats, anchor))}>{words.reverse}</Button>
         {/if}
     </div>
 </div>
@@ -192,6 +195,8 @@
         inset: 26%;
         display: grid;
         place-items: center;
+        padding: var(--space-3);
+        text-wrap: balance;
         border-radius: var(--radius-round);
         background: var(--surface-table-inset);
         box-shadow: var(--shadow-outline-on-table);

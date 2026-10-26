@@ -4,7 +4,8 @@
 // The host changes the settings, which the others see live. A player finds their seat again from
 // the home page, the join link and a switch of app language, with no install prompt meanwhile.
 // In the lobby a player changes their name and icon, another leaves, and the host removes a
-// player, who joins again.
+// player, who joins again. The host starts the game, and every phone moves to seating: the host
+// arranges the table and the others follow it live from their own seats.
 
 import { expect, test } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -359,5 +360,101 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
 
     await Promise.all(
         [hostContext, boContext, caroContext, strangerContext].map((context) => context.close()),
+    )
+})
+
+test('the host starts the game, and every phone moves to seating and follows the host live', async ({
+    browser,
+}) => {
+    const hostContext = await browser.newContext()
+    const host = await hostContext.newPage()
+    await gotoHydrated(host, '/new')
+    await host.getByLabel('Your name').fill('Astrid')
+    await host.getByRole('radio', { name: 'Cat' }).check()
+    await host.getByRole('button', { name: 'Create game' }).click()
+    await host.waitForURL(/\/game\/[A-HJ-NP-Z]{4}$/)
+    await waitForHydration(host)
+    const code = new URL(host.url()).pathname.split('/').pop()!
+
+    // Alone, the host can't start yet, and is told why.
+    const start = host.getByRole('button', { name: 'Start game' })
+    await expect(start).toBeDisabled()
+    await expect(
+        host.getByText('You can start once at least one more player has joined.'),
+    ).toBeVisible()
+
+    const join = async (name: string, icon: string) => {
+        const context = await browser.newContext()
+        const page = await context.newPage()
+        await gotoHydrated(page, `/join/${code}`)
+        await page.getByLabel('Your name').fill(name)
+        await page.getByRole('radio', { name: icon }).check()
+        await page.getByRole('button', { name: 'Join game' }).click()
+        await page.waitForURL(new RegExp(`/game/${code}$`))
+        await waitForHydration(page)
+        return { context, page }
+    }
+    const bo = await join('Bo', 'Dog')
+    const caro = await join('Caro', 'Fish')
+
+    // Only the host sees Start game; the others wait for it.
+    await expect(bo.page.getByRole('button', { name: 'Start game' })).toHaveCount(0)
+    await expect(bo.page.getByText('Waiting for the host to start the game.')).toBeVisible()
+    await expect(start).toBeEnabled()
+    await start.click()
+    // The saved game's seating, by name.
+    const savedSeating = async () => {
+        const { data } = await db
+            .from('games')
+            .select('state')
+            .eq('code', code)
+            .is('ended_at', null)
+            .single()
+        const state = data?.state as {
+            players: { id: string; name: string }[]
+            seating: string[]
+        } | null
+        const name = (id: string) => state?.players.find((player) => player.id === id)?.name
+        return state?.seating.map(name)
+    }
+    await expect.poll(savedSeating).toEqual(['Astrid', 'Bo', 'Caro'])
+
+    // Every phone moves to seating without a reload: the host gets the editor in join order,
+    // the others the table from their own seat, "You" first and then clockwise.
+    for (const page of [host, bo.page, caro.page]) {
+        await expect(page.getByRole('heading', { name: 'Seating' })).toBeVisible()
+    }
+    await expect(host.getByText('Bo is on your left, Caro on your right.')).toBeVisible()
+    const boTable = bo.page.locator('.seating-table__seat')
+    await expect(boTable).toHaveText(['You', 'Caro', 'Astrid'])
+    await expect(caro.page.locator('.seating-table__seat')).toHaveText(['You', 'Astrid', 'Bo'])
+    await expect(bo.page.getByRole('button', { name: 'Undo' })).toHaveCount(0)
+
+    // The host turns the table round, and Bo's phone follows.
+    await host.getByRole('button', { name: 'Reverse' }).click()
+    await expect(host.getByText('Caro is on your left, Bo on your right.')).toBeVisible()
+    await expect(boTable).toHaveText(['You', 'Astrid', 'Caro'])
+
+    // Quick moves while a save is on its way: the last one is what lands, and none is refused.
+    await host.getByRole('button', { name: 'Reverse' }).click()
+    await host.getByRole('button', { name: 'Undo' }).click()
+    await host.getByRole('button', { name: 'Undo' }).click()
+    await expect(host.getByText('Bo is on your left, Caro on your right.')).toBeVisible()
+    await expect.poll(savedSeating).toEqual(['Astrid', 'Bo', 'Caro'])
+    await expect(boTable).toHaveText(['You', 'Caro', 'Astrid'])
+    await expect(host.getByRole('alert')).toHaveCount(0)
+
+    // The seating is saved: a reload shows it again.
+    await reloadHydrated(host)
+    await expect(host.getByText('Bo is on your left, Caro on your right.')).toBeVisible()
+
+    // The game is closed to newcomers.
+    const lateContext = await browser.newContext()
+    const late = await lateContext.newPage()
+    await gotoHydrated(late, `/join/${code}`)
+    await expect(late.getByText('This game has already started.')).toBeVisible()
+
+    await Promise.all(
+        [hostContext, bo.context, caro.context, lateContext].map((context) => context.close()),
     )
 })

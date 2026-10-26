@@ -1,4 +1,4 @@
--- The lobby (#64 to #67, #69): the browser's roles can't touch games or players or sweep them,
+-- The lobby (#64 to #67, #69, #70): the browser's roles can't touch games or players or sweep them,
 -- only the server can (ADR 0002), a game's code is unique among games that haven't ended, and
 -- the database itself holds the target score to its limits.
 -- Run with `vpr test:db` against the local stack. Everything is rolled back.
@@ -6,7 +6,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(23);
 
 insert into auth.users (id, is_anonymous) values
     ('00000000-0000-0000-0000-0000000064a1', true),
@@ -115,6 +115,12 @@ select throws_ok(
     '42501',
     null,
     'a player cannot call update_settings'
+);
+select throws_ok(
+    $$ select public.start_game('00000000-0000-0000-0000-0000000064a1', 'QQQQ', 1, '{}') $$,
+    '42501',
+    null,
+    'a player cannot call start_game'
 );
 select throws_ok(
     $$ select public.sweep_games(now() + interval '1 year') $$,

@@ -4,15 +4,28 @@
 // throws a `GameRefusal` whose code the phone turns into a message (`#lib/game/refusals.js`).
 //
 // Before Start a game is rows (migration `20261023006400_lobby.sql`, ADR 0002): the game and
-// one row per player.
+// one row per player. Start adds the one versioned jsonb game state (`20261025220800_start_game.sql`),
+// and from then on every command is a game machine command (`#lib/game/machine.js`), saved where
+// the version is still the one it loaded.
 
 import { isCardLocale, type CardLocale } from '../cards/card'
 import { isCountryCode } from '../cards/country'
+import type { Json } from '../database.types'
+import { deckFromRows, type DeckRow } from '../game/deck'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
+import { apply, create, load, type Command } from '../game/machine'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
-import { isPlayerIcon, maxPlayers, normalisePlayerName, type PlayerIcon } from '../game/player'
+import {
+    isPlayerIcon,
+    maxPlayers,
+    minPlayers,
+    normalisePlayerName,
+    type PlayerIcon,
+} from '../game/player'
 import type { GameRefusalCode } from '../game/refusals'
 import { isTargetScore, maxTargetScore, minTargetScore } from '../game/settings'
+import type { DeckCard } from '../game/state'
+import { redact, type SeatView } from '../game/view'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
@@ -49,6 +62,9 @@ const refusals = {
     nothing_to_skip: 'That player is not holding up play: no turn, steal or reading of theirs.',
     no_other_reader: 'Nobody else can read the card.',
     not_system: 'Only the system abandons a game.',
+    too_few_players: 'A game needs at least two players.',
+    stale_version: 'The game has moved on since the phone last fetched it.',
+    not_started: 'The game has not started yet.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */
@@ -121,18 +137,15 @@ export async function createGame(
     throw new Error(`No free game code after ${maxCodeDraws} draws`)
 }
 
-/**
- * The lobby of the running game with `code` (any case), for a player seated in it. Refused
- * with `not_found` when no running game has the code, `no_seat` when `userId` isn't in it.
- */
-export async function getLobby(db: Db, userId: string, code: string): Promise<Lobby> {
+/** The running game with `code` (any case) and its players, and the asking player's own row. */
+async function readGame(db: Db, userId: string, code: string) {
     const normalised = normaliseGameCode(code)
     if (!isGameCode(normalised)) refuse('not_found')
 
     const { data: game, error } = await db
         .from('games')
         .select(
-            'id, version, code, target_score, exact_year, card_language, left_out_countries, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
+            'id, version, code, target_score, exact_year, card_language, left_out_countries, started_at, state, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
         )
         .eq('code', normalised)
         .is('ended_at', null)
@@ -140,10 +153,21 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
         .maybeSingle()
     if (error) throw new Error(error.message, { cause: error })
     if (!game) return refuse('not_found')
-    if (!game.game_players.some((player) => player.user_id === userId)) {
-        refuse((await wasRemoved(db, game.id, userId)) ? 'removed' : 'no_seat')
-    }
+    const you = game.game_players.find((player) => player.user_id === userId)
+    if (!you) return refuse((await wasRemoved(db, game.id, userId)) ? 'removed' : 'no_seat')
+    return { game, you }
+}
 
+/**
+ * The lobby of the running game with `code` (any case), for a player seated in it. Refused
+ * with `not_found` when no running game has the code, `no_seat` when `userId` isn't in it.
+ */
+export async function getLobby(db: Db, userId: string, code: string): Promise<Lobby> {
+    const { game } = await readGame(db, userId, code)
+    return lobbyOf(game, userId)
+}
+
+function lobbyOf(game: Awaited<ReturnType<typeof readGame>>['game'], userId: string): Lobby {
     return {
         gameId: game.id,
         version: game.version,
@@ -160,6 +184,33 @@ export async function getLobby(db: Db, userId: string, code: string): Promise<Lo
             isHost: player.is_host,
             isYou: player.user_id === userId,
         })),
+    }
+}
+
+/**
+ * The running game with `code` (any case) as a player seated in it sees it: its lobby until
+ * Start, then the game state redacted for their seat (ADR 0002). `gameId` and `version` match
+ * its nudges either way. Refused like `getLobby`.
+ */
+export async function getGame(
+    db: Db,
+    userId: string,
+    code: string,
+): Promise<
+    | { started: false; gameId: string; version: number; code: string; lobby: Lobby }
+    | { started: true; gameId: string; version: number; code: string; view: SeatView }
+> {
+    const { game, you } = await readGame(db, userId, code)
+    const { id: gameId, version } = game
+    if (game.state === null) {
+        return { started: false, gameId, version, code: game.code, lobby: lobbyOf(game, userId) }
+    }
+    return {
+        started: true,
+        gameId,
+        version,
+        code: game.code,
+        view: redact(load(game.state), you.seat_id),
     }
 }
 
@@ -346,6 +397,167 @@ export async function updateSettings(
     if (!data) throw new Error('update_settings returned no game')
 
     await nudge(db, { gameId: data.updated_game, version: data.game_version })
+}
+
+// How many times Start or a command reads the game again when another change got in first.
+const maxAttempts = 5
+
+const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]
+
+/**
+ * Start game: the host `userId` closes the lobby of the running game with `code` (any case) to
+ * new players and creates its game state (ADR 0004) from the lobby's players in join order, its
+ * settings and a snapshot of the deck, then nudges everyone into seating. A player's id in the
+ * state is their seat id. With two players the machine goes straight on to play. Refused with
+ * `not_host` for anyone else, `too_few_players` with fewer than two, `game_started` after
+ * Start. A lobby that changes while the state is built (a join, a leave) is read again.
+ * `seed` picks the game's seed and `now` gives the year the anchors stop at (tests fix them).
+ */
+export async function startGame(
+    db: Db,
+    input: { userId: string; code: string },
+    { seed = randomSeed, now = () => new Date() }: { seed?: () => number; now?: () => Date } = {},
+): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const { game, you } = await readGame(db, input.userId, input.code)
+        if (game.started_at) refuse('game_started')
+        if (!you.is_host) refuse('not_host')
+        if (game.game_players.length < minPlayers) refuse('too_few_players')
+
+        const state = create({
+            players: game.game_players.map((player) => ({
+                id: player.seat_id,
+                name: player.name,
+                // Only icons from the set get in; the database checks the shape only.
+                icon: player.icon as PlayerIcon,
+                host: player.is_host,
+            })),
+            settings: {
+                targetScore: game.target_score,
+                exactYear: game.exact_year,
+                cardLanguage: game.card_language,
+            },
+            // Join order; a rematch will start from its previous game's seating (#76).
+            seating: game.game_players.map((player) => player.seat_id),
+            cards: await readDeck(db, game.card_language, game.left_out_countries),
+            seed: seed(),
+            currentYear: now().getFullYear(),
+        })
+        const { data, error } = await db
+            .rpc('start_game', {
+                host: input.userId,
+                code: game.code,
+                lobby_version: game.version,
+                state: state as unknown as Json,
+            })
+            .single()
+        if (error?.message === 'version_conflict') continue
+        checkRpc(error, refusals, GameRefusal)
+        if (!data) throw new Error('start_game returned no game')
+
+        await nudge(db, { gameId: data.started_game, version: data.game_version })
+        return
+    }
+    throw new Error(`The lobby kept changing during ${maxAttempts} tries to start it`)
+}
+
+/**
+ * Set seating: the host `userId` seats everyone in the running game with `code` (any case)
+ * clockwise in `seating`, by their seat ids, while the game is in seating. Everyone's phone
+ * follows live. `version` is the version the host's phone showed: see `play`.
+ */
+export async function setSeating(
+    db: Db,
+    input: { userId: string; code: string; version?: number; seating: unknown },
+): Promise<void> {
+    const { seating } = input
+    if (!Array.isArray(seating) || !seating.every((id) => typeof id === 'string')) {
+        refuse('invalid_seating')
+    }
+    await play(db, input, (by) => ({ type: 'setSeating', by, seating: seating as string[] }))
+}
+
+/**
+ * Plays the game machine command `command` makes for the asking player's seat on the running
+ * game with `code` (any case), saves the next state where the version is still the one it
+ * loaded, and nudges everyone. When another save got in first it reads the game again and
+ * plays the command on that. `version`, when given, is the version the phone showed: a command
+ * based on an older one is refused with `stale_version`, and the phone refetches. Refused with
+ * `not_started` before Start, and with the machine's refusals.
+ */
+async function play(
+    db: Db,
+    input: { userId: string; code: string; version?: number },
+    command: (by: string) => Command,
+): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const { game, you } = await readGame(db, input.userId, input.code)
+        if (game.state === null) refuse('not_started')
+        if (input.version !== undefined && input.version !== game.version) {
+            refuse('stale_version')
+        }
+        const result = apply(load(game.state), command(you.seat_id))
+        if (!result.ok) return refuse(result.refusal)
+
+        const { data, error } = await db
+            .from('games')
+            .update({ state: result.state as unknown as Json, version: game.version + 1 })
+            .eq('id', game.id)
+            .eq('version', game.version)
+            .select('version')
+        if (error) throw new Error(error.message, { cause: error })
+        if (data.length === 0) continue
+
+        await nudge(db, { gameId: game.id, version: data[0].version })
+        return
+    }
+    throw new Error(`The game kept changing during ${maxAttempts} tries to play a command`)
+}
+
+// The Data API returns at most `max_rows` (supabase/config.toml) rows per request.
+const deckBatch = 1000
+
+/**
+ * The deck for a game in `cardLanguage` (ADR 0004): every published card in a category that
+ * isn't archived, except those specific to a country in `leftOutCountries`.
+ */
+async function readDeck(
+    db: Db,
+    cardLanguage: CardLocale,
+    leftOutCountries: readonly string[],
+): Promise<DeckCard[]> {
+    // Country codes are two capital letters (`isCountryCode`), safe inside the filter.
+    const countries = leftOutCountries.filter(isCountryCode).join(',')
+    const rows: DeckRow[] = []
+    for (;;) {
+        let query = db
+            .from('cards')
+            .select(
+                'id, category_id, year, decade, categories!inner (position, archived_at), card_translations (locale, text)',
+            )
+            .eq('status', 'published')
+            .is('categories.archived_at', null)
+        if (countries) {
+            query = query.or(`country_specific.is.null,country_specific.not.in.(${countries})`)
+        }
+        const { data, error } = await query
+            .order('id')
+            .range(rows.length, rows.length + deckBatch - 1)
+        if (error) throw new Error(error.message, { cause: error })
+        rows.push(
+            ...data.map((card) => ({
+                id: card.id,
+                categoryId: card.category_id,
+                categoryPosition: card.categories.position,
+                year: card.year,
+                decade: card.decade,
+                texts: Object.fromEntries(
+                    card.card_translations.map(({ locale, text }) => [locale, text]),
+                ),
+            })),
+        )
+        if (data.length < deckBatch) return deckFromRows(rows, cardLanguage)
+    }
 }
 
 /** A player's seat in a running game: the game, its code and the seat. */

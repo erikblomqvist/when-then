@@ -4,6 +4,8 @@
 
 export const playerNameMaxLength = 16
 
+/** A game starts with at least this many players (Start game). */
+export const minPlayers = 2
 /** The most players a game takes. */
 export const maxPlayers = 10
 

@@ -1,21 +1,29 @@
 // The game lifecycle service against the local database (run through with-db.sh / CI's
 // stack): creating and joining a game and opening its lobby, changing a name or icon, leaving
-// and removing, the host's settings, finding your seat again, the code rules and the refusals.
+// and removing, the host's settings, starting the game and seating it, finding your seat
+// again, the code rules and the refusals.
 
+import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { isGameCode, randomGameCode } from '../game/game-code'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
 import { playerIcons } from '../game/player'
 import { localPublicClient, localServiceClient, newPerson } from '../testing/e2e-auth'
+import { publishCard } from './card-lifecycle'
+import { saveCard } from './cards'
+import { listCategories } from './categories'
 import {
     changePlayer,
     createGame,
     findMySeat,
+    getGame,
     getJoinStep,
     getLobby,
     joinGame,
     leaveGame,
     removePlayer,
+    setSeating,
+    startGame,
     sweep,
     updateSettings,
 } from './game-lifecycle'
@@ -284,19 +292,14 @@ test('a game takes 10 players at most, even when they all join at once', async (
 
 test('nobody new can join a game that has started', async () => {
     const { host, code } = await newLobby()
-    // Start game arrives with the game state; until then, mark the game started directly.
-    const started = await db
-        .from('games')
-        .update({ started_at: new Date().toISOString() })
-        .eq('code', code)
-        .is('ended_at', null)
-    expect(started.error).toBeNull()
-    const bo = await newPlayer()
+    await joinGame(db, { userId: await newPlayer(), code, name: 'Bo', icon: 'dog' })
+    await startGame(db, { userId: host, code })
+    const caro = await newPlayer()
 
-    await expect(getJoinStep(db, bo, code)).rejects.toMatchObject({ code: 'game_started' })
-    await expect(joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })).rejects.toMatchObject(
-        { code: 'game_started' },
-    )
+    await expect(getJoinStep(db, caro, code)).rejects.toMatchObject({ code: 'game_started' })
+    await expect(
+        joinGame(db, { userId: caro, code, name: 'Caro', icon: 'fish' }),
+    ).rejects.toMatchObject({ code: 'game_started' })
     // A player who already has a seat isn't turned away.
     expect(await getJoinStep(db, host, code)).toMatchObject({ seated: true })
 })
@@ -389,15 +392,8 @@ async function lobbyWithBo() {
     return { host, bo, code }
 }
 
-// Start game arrives with the game state; until then, mark the game started directly.
-async function markStarted(code: string) {
-    const started = await db
-        .from('games')
-        .update({ started_at: new Date().toISOString() })
-        .eq('code', code)
-        .is('ended_at', null)
-    expect(started.error).toBeNull()
-}
+/** The host starts the game. */
+const start = (host: string, code: string) => startGame(db, { userId: host, code })
 
 test('a player changes their name and icon, and everyone sees it in a new version', async () => {
     const { host, bo, code } = await lobbyWithBo()
@@ -434,12 +430,12 @@ test('a change to a name or icon someone else has is refused with the usual refu
 })
 
 test('only a player with a seat can change, and only before the game starts', async () => {
-    const { bo, code } = await lobbyWithBo()
+    const { host, bo, code } = await lobbyWithBo()
 
     await expect(
         changePlayer(db, { userId: await newPlayer(), code, name: 'Caro', icon: 'fish' }),
     ).rejects.toMatchObject({ code: 'no_seat' })
-    await markStarted(code)
+    await start(host, code)
     await expect(
         changePlayer(db, { userId: bo, code, name: 'Bosse', icon: 'dog' }),
     ).rejects.toMatchObject({ code: 'game_started' })
@@ -468,7 +464,7 @@ test('the host can’t leave the lobby, nor can anyone once the game has started
     await expect(leaveGame(db, { userId: await newPlayer(), code })).rejects.toMatchObject({
         code: 'no_seat',
     })
-    await markStarted(code)
+    await start(host, code)
     await expect(leaveGame(db, { userId: bo, code })).rejects.toMatchObject({
         code: 'game_started',
     })
@@ -530,7 +526,7 @@ test('a removal from a stale list never takes out whoever has the name now', asy
 test('nobody is removed from the lobby once the game has started', async () => {
     const { host, code } = await lobbyWithBo()
     const seatId = await seatOf(host, code, 'Bo')
-    await markStarted(code)
+    await start(host, code)
 
     await expect(removePlayer(db, { userId: host, code, seatId })).rejects.toMatchObject({
         code: 'game_started',
@@ -608,9 +604,240 @@ test('only the host changes the settings, and only before the game starts', asyn
     await expect(update(await newPlayer())).rejects.toMatchObject({ code: 'not_host' })
     expect((await getLobby(db, host, code)).targetScore).toBe(10)
 
-    await markStarted(code)
+    await start(host, code)
     await expect(update(host)).rejects.toMatchObject({ code: 'game_started' })
     expect((await getLobby(db, host, code)).targetScore).toBe(10)
+})
+
+// Start game and seating -------------------------------------------------------------------
+
+/** A lobby with the host Astrid, Bo and Caro, in that join order, and their seats. */
+async function lobbyOfThree() {
+    const { host, bo, code } = await lobbyWithBo()
+    const caro = await newPlayer()
+    await joinGame(db, { userId: caro, code, name: 'Caro', icon: 'fish' })
+    const { players } = await getLobby(db, host, code)
+    const [astridSeat, boSeat, caroSeat] = players.map((player) => player.seatId)
+    return { host, bo, caro, code, seats: { astrid: astridSeat, bo: boSeat, caro: caroSeat } }
+}
+
+/** The game as `userId`'s phone sees it, failing the test while it's still a lobby. */
+async function viewOf(userId: string, code: string) {
+    const game = await getGame(db, userId, code)
+    if (!game.started) throw new Error('The game has not started')
+    return game
+}
+
+test('the host starts the game, and every phone sees seating in join order from its own seat', async () => {
+    const { host, bo, caro, code, seats } = await lobbyOfThree()
+    await updateSettings(db, { userId: host, code, ...settings, targetScore: 15 })
+    const lobby = await getLobby(db, host, code)
+
+    await startGame(db, { userId: host, code })
+
+    const players = [
+        { id: seats.astrid, name: 'Astrid', icon: 'cat', host: true, removed: false },
+        { id: seats.bo, name: 'Bo', icon: 'dog', host: false, removed: false },
+        { id: seats.caro, name: 'Caro', icon: 'fish', host: false, removed: false },
+    ]
+    for (const [userId, seat] of [
+        [host, seats.astrid],
+        [bo, seats.bo],
+        [caro, seats.caro],
+    ]) {
+        const game = await viewOf(userId, code)
+        expect(game).toMatchObject({ gameId: lobby.gameId, version: lobby.version + 1, code })
+        expect(game.view).toMatchObject({
+            seat,
+            players,
+            settings: { targetScore: 15, exactYear: false, cardLanguage: 'en' },
+            seating: [seats.astrid, seats.bo, seats.caro],
+            phase: { name: 'seating' },
+        })
+        // The seed, the dice and the queued cards never reach a phone.
+        expect(Object.keys(game.view)).not.toEqual(expect.arrayContaining(['rng']))
+        expect(Object.keys(game.view)).not.toEqual(expect.arrayContaining(['queues']))
+    }
+})
+
+test('with two players the game goes straight past seating to play', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+
+    await startGame(db, { userId: host, code })
+
+    const { view } = await viewOf(bo, code)
+    expect(view.phase.name).toBe('playing')
+    expect(Object.values(view.timelines).map((timeline) => timeline[0].kind)).toEqual([
+        'anchor',
+        'anchor',
+    ])
+})
+
+test('only the host starts, with at least two players, and only once', async () => {
+    const { host, code } = await newLobby()
+    await expect(startGame(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'too_few_players',
+    })
+
+    const bo = await newPlayer()
+    await joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })
+    await expect(startGame(db, { userId: bo, code })).rejects.toMatchObject({ code: 'not_host' })
+    await expect(startGame(db, { userId: await newPlayer(), code })).rejects.toMatchObject({
+        code: 'no_seat',
+    })
+    expect((await getGame(db, host, code)).started).toBe(false)
+
+    await startGame(db, { userId: host, code })
+    await expect(startGame(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'game_started',
+    })
+})
+
+test('a join racing the start either gets in before it or is refused as game started', async () => {
+    const { host, code } = await lobbyWithBo()
+    const caro = await newPlayer()
+
+    const [started, joined] = await Promise.allSettled([
+        startGame(db, { userId: host, code }),
+        joinGame(db, { userId: caro, code, name: 'Caro', icon: 'fish' }),
+    ])
+
+    expect(started.status).toBe('fulfilled')
+    const names = (await viewOf(host, code)).view.players.map((player) => player.name)
+    if (joined.status === 'fulfilled') expect(names).toEqual(['Astrid', 'Bo', 'Caro'])
+    else {
+        expect(joined.reason).toMatchObject({ code: 'game_started' })
+        expect(names).toEqual(['Astrid', 'Bo'])
+    }
+})
+
+test('Start snapshots the published deck in the card language, without left-out countries', async () => {
+    const actor = (await newPerson()).id
+    const events = (await listCategories(db)).find((category) => category.name === 'Events')!
+    const newCard = async (
+        text: string,
+        { swedish, country = null }: { swedish?: string; country?: string | null } = {},
+    ) =>
+        saveCard(db, actor, {
+            categoryId: events.id,
+            date: { decade: 1960, year: 1969, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            countrySpecific: country,
+            translations: { en: { text }, ...(swedish && { sv: { text: swedish } }) },
+        })
+    const tag = randomUUID()
+    const translated = await newCard(`Translated ${tag}`, { swedish: `Översatt ${tag}` })
+    const english = await newCard(`English only ${tag}`)
+    const swedishOnly = await newCard(`Swedish knowledge ${tag}`, { country: 'SE' })
+    const draft = await newCard(`Draft ${tag}`)
+    for (const id of [translated, english, swedishOnly]) await publishCard(db, actor, id)
+
+    const { host, code } = await lobbyWithBo()
+    await updateSettings(db, {
+        userId: host,
+        code,
+        ...settings,
+        cardLanguage: 'sv',
+        leftOutCountries: ['SE'],
+    })
+    await startGame(db, { userId: host, code })
+    const deck = async () => {
+        const { data, error } = await db
+            .from('games')
+            .select('state')
+            .eq('code', code)
+            .is('ended_at', null)
+            .single()
+        expect(error).toBeNull()
+        return (data!.state as { cards: Record<string, { text: string; date: number }> }).cards
+    }
+
+    expect((await deck())[translated]).toMatchObject({ text: `Översatt ${tag}`, date: 1969 })
+    expect((await deck())[english]).toMatchObject({ text: `English only ${tag}` })
+    expect(await deck()).not.toHaveProperty(swedishOnly)
+    expect(await deck()).not.toHaveProperty(draft)
+
+    // Editing a card after Start leaves the game's copy as it was.
+    await saveCard(
+        db,
+        actor,
+        {
+            categoryId: events.id,
+            date: { decade: 1960, year: 1969, month: null, day: null },
+            sourceUrl: null,
+            sourceQuote: null,
+            translations: { en: { text: `Edited ${tag}` }, sv: { text: `Ändrad ${tag}` } },
+        },
+        translated,
+    )
+    expect((await deck())[translated]).toMatchObject({ text: `Översatt ${tag}` })
+})
+
+test('the host seats everyone, and every phone sees the new seating', async () => {
+    const { host, bo, code, seats } = await lobbyOfThree()
+    await startGame(db, { userId: host, code })
+    const { version } = await viewOf(host, code)
+    const seating = [seats.astrid, seats.caro, seats.bo]
+
+    await setSeating(db, { userId: host, code, version, seating })
+
+    expect(await viewOf(bo, code)).toMatchObject({ version: version + 1, view: { seating } })
+})
+
+test('only the host seats, every player exactly once, and only once the game has started', async () => {
+    const { host, bo, code, seats } = await lobbyOfThree()
+    const seating = [seats.astrid, seats.caro, seats.bo]
+    await expect(setSeating(db, { userId: host, code, seating })).rejects.toMatchObject({
+        code: 'not_started',
+    })
+    await startGame(db, { userId: host, code })
+
+    await expect(setSeating(db, { userId: bo, code, seating })).rejects.toMatchObject({
+        code: 'not_host',
+    })
+    for (const wrong of [[seats.astrid, seats.bo], [...seating, seats.bo], 'everyone', [1, 2, 3]]) {
+        await expect(setSeating(db, { userId: host, code, seating: wrong })).rejects.toMatchObject({
+            code: 'invalid_seating',
+        })
+    }
+    expect((await viewOf(host, code)).view.seating).toEqual([seats.astrid, seats.bo, seats.caro])
+})
+
+test('of two host commands from the same version, one lands and the other is refused for a refetch', async () => {
+    const { host, code, seats } = await lobbyOfThree()
+    await startGame(db, { userId: host, code })
+    const { version } = await viewOf(host, code)
+    const seatings = [
+        [seats.astrid, seats.caro, seats.bo],
+        [seats.bo, seats.astrid, seats.caro],
+    ]
+
+    const results = await Promise.allSettled(
+        seatings.map((seating) => setSeating(db, { userId: host, code, version, seating })),
+    )
+
+    expect(fulfilled(results)).toBe(1)
+    expect(refusedWith(results)).toEqual(['stale_version'])
+    const landed = seatings[results.findIndex((result) => result.status === 'fulfilled')]
+    expect(await viewOf(host, code)).toMatchObject({
+        version: version + 1,
+        view: { seating: landed },
+    })
+})
+
+test('commands that name no version are played again on a conflict, so they all land', async () => {
+    const { host, code, seats } = await lobbyOfThree()
+    await startGame(db, { userId: host, code })
+    const { version } = await viewOf(host, code)
+    const seating = [seats.astrid, seats.caro, seats.bo]
+
+    const results = await Promise.allSettled(
+        [1, 2, 3].map(() => setSeating(db, { userId: host, code, seating })),
+    )
+
+    expect(fulfilled(results)).toBe(3)
+    expect((await viewOf(host, code)).version).toBe(version + 3)
 })
 
 // Find my seat ---------------------------------------------------------------------------
@@ -625,7 +852,7 @@ test('a player finds their seat again on every reload, before and after Start', 
     expect(await findMySeat(db, bo)).toEqual(boSeat)
     expect(await findMySeat(db, bo)).toEqual(boSeat)
 
-    await markStarted(code)
+    await start(host, code)
     expect(await findMySeat(db, bo)).toEqual(boSeat)
 })
 
@@ -792,10 +1019,10 @@ for (const [activity, act] of activities) {
 }
 
 test('a game that has started is not expired as a lobby', async () => {
-    const { host, code } = await newLobby()
+    const { host, code } = await lobbyWithBo()
     const { gameId } = await getLobby(db, host, code)
     const now = await lastActive(gameId)
-    await markStarted(code)
+    await start(host, code)
     await moveBack(gameId, 'last_active_at', now, 3 * hour)
 
     await sweep(db, now)

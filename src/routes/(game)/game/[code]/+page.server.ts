@@ -4,24 +4,27 @@ import { refusalMessage } from '#lib/game/refusals.js'
 import {
     changePlayer,
     GameRefusal,
-    getLobby,
+    getGame,
     leaveGame,
     removePlayer,
+    setSeating,
+    startGame,
     updateSettings,
 } from '#lib/server/game-lifecycle.js'
 import { field } from '#lib/server/people-form.js'
 import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
 
-// The lobby of a game, for players seated in it. Reloading lands here again. A player the host
-// removed goes to the join step, which tells them and lets them join again.
+// A game, for players seated in it: its lobby, then from Start what their seat may see of it.
+// Reloading lands here again. A player the host removed goes to the join step, which tells them
+// and lets them join again.
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const { user } = await locals.safeGetSession()
     if (!user) error(403, refusalMessage('no_seat'))
 
     try {
-        const lobby = await getLobby(supabaseService(), user.id, params.code)
-        return { lobby, joinUrl: new URL(`/join/${lobby.code}`, url.origin).href }
+        const game = await getGame(supabaseService(), user.id, params.code)
+        return { game, joinUrl: new URL(`/join/${game.code}`, url.origin).href }
     } catch (caught) {
         if (caught instanceof GameRefusal) {
             if (caught.code === 'removed') {
@@ -34,7 +37,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 }
 
 /**
- * Runs a lobby command as the signed-in player, turning a refusal into a failed form that
+ * Runs a game command as the signed-in player, turning a refusal into a failed form that
  * carries `echo` back, so the page can show it in the form that was sent.
  */
 async function asPlayer<Echo extends object = object>(
@@ -99,6 +102,29 @@ export const actions: Actions = {
         const seatId = field(await request.formData(), 'seat')
         return asPlayer(locals, (userId) =>
             removePlayer(supabaseService(), { userId, code: params.code, seatId }),
+        )
+    },
+
+    // Start game: everyone's phone moves to seating.
+    start: async ({ locals, params }) =>
+        asPlayer(locals, (userId) => startGame(supabaseService(), { userId, code: params.code })),
+
+    // Set seating: the host's whole seating as a JSON list of seats, and the version it was
+    // moved from.
+    seating: async ({ request, locals, params }) => {
+        const form = await request.formData()
+        let seating: unknown
+        try {
+            seating = JSON.parse(field(form, 'seating'))
+        } catch {
+            seating = null
+        }
+        const version = Number(field(form, 'version'))
+        return asPlayer(
+            locals,
+            (userId) =>
+                setSeating(supabaseService(), { userId, code: params.code, version, seating }),
+            { seating: true as const },
         )
     },
 }
