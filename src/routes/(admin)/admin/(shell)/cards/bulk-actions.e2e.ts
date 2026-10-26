@@ -136,6 +136,10 @@ test('an editor moves picked cards to another category', async ({ page }) => {
     await expect(page.getByRole('row').filter({ hasText: kite })).toContainText(target.name)
     for (const id of ids) expect((await getCard(db, id))?.categoryId).toBe(target.id)
     expect(await auditedActions(ids)).toEqual(ids.map((id) => [id, 'update', userId]))
+
+    // The summary goes when dismissed.
+    await page.getByRole('status').getByRole('button', { name: 'Dismiss' }).click()
+    await expect(page.getByRole('status')).toHaveCount(0)
 })
 
 test('an admin deletes picked drafts after confirming; a published one is skipped', async ({

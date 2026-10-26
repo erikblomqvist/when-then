@@ -14,7 +14,8 @@
     it posts the selected ids, or the filter for "all matching", to the export endpoint (#47)
     with `data-sveltekit-reload`, and keeps the selection.
 
-    After an action the selection clears and `report` (the action's `bulk` result) is shown.
+    After an action the selection clears and `report` (the action's `bulk` result) is shown,
+    until dismissed.
 -->
 <script lang="ts">
     import type { Snippet } from 'svelte'
@@ -32,6 +33,7 @@
     } from '#lib/cards/card-export.js'
     import type { BulkReport } from '#lib/server/card-bulk-actions.js'
     import type { CardListSelection } from './card-list-selection.svelte.js'
+    import XIcon from '@lucide/svelte/icons/x'
 
     type Props = {
         selected: CardListSelection
@@ -60,6 +62,8 @@
     }: Props = $props()
 
     let busy = $state(false)
+    // The report shown: the latest, until dismissed (the next action brings its own).
+    let shownReport = $derived(report)
 
     /** A form action at the list's own URL, which the page shows again once it is done. */
     function action(name: string) {
@@ -103,15 +107,23 @@
     }
 </script>
 
-{#if report}
+{#if shownReport}
     <div
         role="status"
-        class="mt-6 rounded-md border bg-muted/40 p-4 text-sm">
-        <p class="font-medium">{report.message}</p>
-        {#if report.skipped.length > 0}
-            <p class="mt-2">Skipped {plural(report.skipped.length)}:</p>
+        class="relative mt-6 rounded-md border bg-muted/40 p-4 pr-12 text-sm">
+        <Button
+            variant="ghost"
+            size="icon-sm"
+            class="absolute top-2 right-2"
+            aria-label="Dismiss"
+            onclick={() => (shownReport = undefined)}>
+            <XIcon />
+        </Button>
+        <p class="font-medium">{shownReport.message}</p>
+        {#if shownReport.skipped.length > 0}
+            <p class="mt-2">Skipped {plural(shownReport.skipped.length)}:</p>
             <ul class="mt-1 list-disc pl-5">
-                {#each report.skipped as card (card.id)}
+                {#each shownReport.skipped as card (card.id)}
                     <li>
                         <a
                             class="underline"
