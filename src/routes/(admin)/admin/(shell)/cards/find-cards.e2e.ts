@@ -36,6 +36,16 @@ test('search finds a card by its text in another language and survives reload', 
     await reloadHydrated(page)
     await expect(search).toHaveValue('fyrtorn')
     await expect.poll(() => listed(page)).toEqual([sampleby])
+
+    // Clearing the box drops the search from the URL too.
+    await page.getByRole('button', { name: 'Clear search' }).click()
+    await expect(page).toHaveURL(/\/admin\/cards$/)
+    await expect(search).toHaveValue('')
+    await expect(search).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Clear search' })).toHaveCount(0)
+    // It shows again once something is typed.
+    await search.fill('Sample')
+    await expect(page.getByRole('button', { name: 'Clear search' })).toBeVisible()
 })
 
 test('a filter and a sort narrow and order the list, and the URL keeps them', async ({ page }) => {

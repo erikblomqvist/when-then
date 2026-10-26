@@ -76,6 +76,18 @@
 
     const submit = () => form?.requestSubmit()
 
+    // What the search box holds as typed, for showing its clear button.
+    let typed = $derived(filter.search ?? '')
+
+    function clearSearch() {
+        const box = form?.elements.namedItem('q')
+        if (!(box instanceof HTMLInputElement)) return
+        box.value = ''
+        typed = ''
+        box.focus()
+        submit()
+    }
+
     // The filters a list can be narrowed by, keyed by their URL parameter. Only the ones in use
     // show in the toolbar; "Add filter" brings in another, which holds no value until chosen.
     type FilterOption = {
@@ -381,13 +393,28 @@
         <Label
             for="q"
             class="sr-only">Search</Label>
-        <Input
-            id="q"
-            name="q"
-            type="search"
-            placeholder="Search text in any language"
-            class="w-80 max-w-full"
-            value={filter.search ?? ''} />
+        <!-- Our own clear button instead of the browser's: it also drops the search from the URL. -->
+        <div class="relative w-80 max-w-full">
+            <Input
+                id="q"
+                name="q"
+                type="search"
+                placeholder="Search text in any language"
+                class="pr-9 [&::-webkit-search-cancel-button]:appearance-none"
+                value={filter.search ?? ''}
+                oninput={(event) => (typed = event.currentTarget.value)} />
+            {#if typed}
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="absolute top-1/2 right-0.5 -translate-y-1/2 cursor-pointer text-muted-foreground"
+                    aria-label="Clear search"
+                    onclick={clearSearch}>
+                    <XIcon />
+                </Button>
+            {/if}
+        </div>
         <Button
             type="submit"
             variant="outline">Search</Button>
