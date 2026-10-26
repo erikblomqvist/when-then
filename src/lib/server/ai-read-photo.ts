@@ -27,6 +27,7 @@ import {
     type PhotoCandidate,
 } from '../cards/photo-import'
 import { isCountryCode } from '../cards/country'
+import { quotationMarksRule, withQuotationMarks } from '../cards/quotation-marks'
 import { categoryColours, categoryIcons } from '../categories/look'
 import { englishNameKey } from '../categories/category-form'
 import { AiAnswerRejectedError, replyText, runModel, type AiDeps, type AiRequest } from './ai'
@@ -72,7 +73,7 @@ The photo may be anything: a card from another timeline game (statement on one s
 
 For each card:
 - source_language: the language the photo is written in (en, sv, nb, or other).
-- texts: write the statement fresh in the game's style (not a copied sentence) in the photo's language, then translate it into the others, so en, sv and nb are all filled. Use the names established in each language. Never put the date or year in the text.
+- texts: write the statement fresh in the game's style (not a copied sentence) in the photo's language, then translate it into the others, so en, sv and nb are all filled. Use the names established in each language. Never put the date or year in the text. ${quotationMarksRule}
 - source_quote: the passage in the photo the card is based on, as written, at most 300 characters.
 - date: the event's date as precisely as it is reliably known: year (BCE negative, no year 0); month and day too whenever the event happened on a known day (a launch, a sinking, a birth, a treaty signed), from the photo or from what you reliably know, so fill them in rather than stopping at the year; leave them null for something that took longer than a day or whose day isn't recorded. decade (its earliest year, e.g. 1490) only when the year isn't known. date_from_photo says whether the photo itself states the date; if not, give the date from your own knowledge only when you are confident, and otherwise leave every part null.
 - difficulty: 1 (most people know it) to 4 (obscure).
@@ -199,7 +200,7 @@ export function candidatesFrom(
         const texts = Object.fromEntries(
             cardLocales.map((locale) => [
                 locale,
-                str(card.texts?.[locale]).slice(0, cardTextMaxLength),
+                withQuotationMarks(str(card.texts?.[locale]), locale).slice(0, cardTextMaxLength),
             ]),
         ) as Record<CardLocale, string>
         if (!texts.en) return []

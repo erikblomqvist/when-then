@@ -152,6 +152,21 @@ describe('readCardsFromPhoto', () => {
         expect(records[0].details).toMatchObject({ calls: 2, candidates: 2, duplicates: 1 })
     })
 
+    it('asks for each language’s quotation marks, and fixes straight ones it gets', async () => {
+        const quoted = {
+            ...vasa,
+            texts: { en: '"Pippi" is published', sv: '"Pippi" ges ut', nb: '"Pippi" gis ut' },
+        }
+        const { deps, sent } = fakeDeps([{ message: '', cards: [quoted] }, { duplicates: [] }])
+        const { candidates } = await readCardsFromPhoto(deps, input)
+        expect(candidates[0].texts).toEqual({
+            en: '“Pippi” is published',
+            sv: '”Pippi” ges ut',
+            nb: '«Pippi» gis ut',
+        })
+        expect(sent[0].system).toContain('”…” in Swedish')
+    })
+
     it('says why when the photo holds no card', async () => {
         const { deps, records } = fakeDeps([{ message: 'The photo is of a cat.', cards: [] }])
         await expect(readCardsFromPhoto(deps, input)).rejects.toThrow(

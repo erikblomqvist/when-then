@@ -3,6 +3,7 @@
 // category name and the target languages are sent. The date is never part of it.
 
 import { cardTextMaxLength } from '../cards/card-form'
+import { quotationMarksRule, withQuotationMarks } from '../cards/quotation-marks'
 import type { TranslationLocale } from '../cards/translation'
 import { AiCallError, callModel, replyText, type AiDeps } from './ai'
 
@@ -18,7 +19,7 @@ The user message is JSON: the English card text, its category, and the target la
 
 - Keep the same event, the same milestone and the same specificity. Don't add, drop or explain facts, and never add a date or a year.
 - Keep the present tense and the short, natural phrasing a native speaker would read aloud.
-- Use the names, spellings and conventions that are established in that language (for people, places, works and institutions).
+- Use the names, spellings and conventions that are established in that language (for people, places, works and institutions). ${quotationMarksRule}
 - Answer with the JSON object only: one string per locale code, the translated card text.`
 
 export type TranslateCardText = {
@@ -89,7 +90,7 @@ export async function translateCardText(
         if (typeof text !== 'string' || !text.trim()) {
             throw new AiCallError(`The AI answer had no ${languages[locale]} text.`)
         }
-        texts[locale] = text.trim().slice(0, cardTextMaxLength)
+        texts[locale] = withQuotationMarks(text.trim(), locale).slice(0, cardTextMaxLength)
     }
     return texts
 }

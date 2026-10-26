@@ -56,6 +56,13 @@ describe('translateCardText', () => {
         })
     })
 
+    it('asks for each language’s quotation marks, and fixes straight ones it gets', async () => {
+        const { deps, sent } = fakeDeps('{"sv":"\\"Pippi\\" ges ut","nb":"\\"Pippi\\" gis ut"}')
+        const texts = await translateCardText(deps, { ...card, locales: ['sv', 'nb'] })
+        expect(texts).toEqual({ sv: '”Pippi” ges ut', nb: '«Pippi» gis ut' })
+        expect(sent[0].system).toContain('«…» in Norwegian')
+    })
+
     it('sends only the card text, its category and the target locales, asking for JSON per locale', async () => {
         const { deps, sent } = fakeDeps('{"nb":"Den første bro åpner"}')
         await translateCardText(deps, { ...card, locales: ['nb'] })
