@@ -964,6 +964,20 @@ describe('rounds and winning', () => {
         })
     })
 
+    it('never lets a removed player win, however far past the target they were', () => {
+        const state = threePlayerGame()
+        const order = roundOrder(state)
+        // The first guest in the round passes the target, and the host removes them mid-round.
+        const guest = order.findIndex((id) => id !== 'astrid')
+        let next = turns(state, ...order.slice(0, guest + 1).map((_, i) => (i === guest ? 4 : 0)))
+        next = ok(apply(next, { type: 'remove', by: 'astrid', playerId: order[guest] }))
+        // The rest of the round, each scoring 3, less than the removed guest's 4, and it ends.
+        while (next.phase.name === 'playing') next = turn(next, 3)
+        const top = next.seating.filter((id) => score(next, id) === 3)
+        expect(top.length).toBeGreaterThan(0)
+        expect(next.phase).toEqual({ name: 'finished', winners: top })
+    })
+
     it('lets a player push past the target', () => {
         const state = turns(threePlayerGame(), 5, 0, 0)
         const [first] = roundOrder(state)

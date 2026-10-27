@@ -633,6 +633,10 @@ export type Database = {
                 }
                 Returns: number
             }
+            remove_from_game: {
+                Args: { game: string; game_version: number; seat: string; state: Json }
+                Returns: number
+            }
             remove_player: {
                 Args: { code: string; host: string; seat: string }
                 Returns: {

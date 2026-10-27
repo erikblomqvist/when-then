@@ -22,6 +22,7 @@ import {
     getLobby,
     joinGame,
     leaveGame,
+    removeFromGame,
     removePlayer,
     setSeating,
     skipPlayer,
@@ -925,6 +926,100 @@ test('nobody is skipped before play starts', async () => {
     await expect(skipPlayer(db, { userId: host, code, seatId: seats.bo })).rejects.toMatchObject({
         code: 'nothing_to_skip',
     })
+})
+
+// Remove player -----------------------------------------------------------------------------
+
+/** A game of three in play, with its guests' users by seat: Bo's and Caro's. */
+async function playingOfThreeWithGuests() {
+    const game = await playingOfThree()
+    const { bo, caro, seats } = game
+    return {
+        ...game,
+        guests: new Map([
+            [seats.bo, bo],
+            [seats.caro, caro],
+        ]),
+    }
+}
+
+test('the host removes a player for good: out of the seating with their timeline, and their seat is gone', async () => {
+    const { host, code, version, activeId, seats, guests } = await playingOfThreeWithGuests()
+    // A guest who isn't the active player.
+    const seatId = [seats.bo, seats.caro].find((seat) => seat !== activeId)!
+    const removed = guests.get(seatId)!
+    const stays = [...guests].find(([seat]) => seat !== seatId)![1]
+
+    await removeFromGame(db, { userId: host, code, version, seatId })
+
+    const { version: next, view } = await viewOf(stays, code)
+    expect(next).toBe(version + 1)
+    expect(view.seating).not.toContain(seatId)
+    expect(view.seating).toHaveLength(2)
+    expect(view.timelines[seatId]).toBeUndefined()
+    expect(view.scores[seatId]).toBeUndefined()
+    expect(view.players.find((player) => player.id === seatId)?.removed).toBe(true)
+    expect(view.log).toContainEqual({ kind: 'remove', playerId: seatId })
+
+    // Their phone is told they were removed, and finds no seat to go back to.
+    expect(await findMySeat(db, removed)).toBeNull()
+    await expect(getGame(db, removed, code)).rejects.toMatchObject({ code: 'removed' })
+    await expect(getJoinStep(db, removed, code)).rejects.toMatchObject({ code: 'removed' })
+    await expect(confirmSeating(db, { userId: removed, code })).rejects.toMatchObject({
+        code: 'removed',
+    })
+    // The others keep theirs.
+    expect((await findMySeat(db, stays))?.code).toBe(code)
+    expect((await findMySeat(db, host))?.code).toBe(code)
+})
+
+test('removing the player holding up play moves it on as a skip would', async () => {
+    const { host, code, version, activeId, readerId, seats } = await playingOfThreeWithGuests()
+    // The active player, or the reader when the host is the active one.
+    const seatId = activeId === seats.astrid ? readerId : activeId
+
+    await removeFromGame(db, { userId: host, code, version, seatId })
+
+    const { view } = await viewOf(host, code)
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    expect(view.phase.activeId).not.toBe(seatId)
+    expect(view.phase.play.readerId).not.toBe(seatId)
+    expect(view.seating).toEqual(expect.arrayContaining([view.phase.activeId]))
+})
+
+test('removing one of two players ends the game with no winner', async () => {
+    const { host, bo, code } = await lobbyWithBo()
+    await startGame(db, { userId: host, code })
+    const { view } = await viewOf(host, code)
+    const seatId = view.players.find((player) => !player.host)!.id
+
+    await removeFromGame(db, { userId: host, code, seatId })
+
+    expect((await viewOf(host, code)).view.phase).toEqual({ name: 'ended' })
+    expect(await findMySeat(db, bo)).toBeNull()
+})
+
+test('only the host removes, never themselves, only a player still in, and only from the version shown', async () => {
+    const { host, bo, code, version, seats } = await playingOfThreeWithGuests()
+    const refusal = (userId: string, seatId: string, at = version) =>
+        expect(removeFromGame(db, { userId, code, version: at, seatId })).rejects
+
+    await refusal(bo, seats.caro).toMatchObject({ code: 'not_host' })
+    await refusal(host, seats.astrid).toMatchObject({ code: 'host_cannot_leave' })
+    await refusal(host, 'nobody').toMatchObject({ code: 'no_player' })
+    await refusal(host, seats.caro, version - 1).toMatchObject({ code: 'stale_version' })
+    expect((await viewOf(host, code)).version).toBe(version)
+    expect((await findMySeat(db, bo))?.code).toBe(code)
+
+    await removeFromGame(db, { userId: host, code, version, seatId: seats.caro })
+    await refusal(host, seats.caro, version + 1).toMatchObject({ code: 'no_player' })
+})
+
+test('nobody is removed from the game before Start: that is the lobby’s Remove', async () => {
+    const { host, code, seats } = await lobbyOfThree()
+    await expect(
+        removeFromGame(db, { userId: host, code, seatId: seats.bo }),
+    ).rejects.toMatchObject({ code: 'not_started' })
 })
 
 test('of two host commands from the same version, one lands and the other is refused for a refetch', async () => {

@@ -24,7 +24,7 @@ import {
 } from '../game/player'
 import type { GameRefusalCode } from '../game/refusals'
 import { isTargetScore, maxTargetScore, minTargetScore } from '../game/settings'
-import type { DeckCard } from '../game/state'
+import type { DeckCard, GameState } from '../game/state'
 import { redact, type SeatView } from '../game/view'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
@@ -218,9 +218,9 @@ export async function getGame(
  * The name-and-icon step for joining the running game with `code` (any case): the names and
  * icons already taken, so the phone can flag a clash before submitting. `seated` says `userId`
  * already has a seat, and the phone goes straight to the lobby; `null` is a phone that hasn't
- * signed in yet. `removed` says the host removed `userId` from the lobby, and they haven't
- * joined again. Refused, for a player without a seat, with `not_found`, `game_started` or
- * `game_full`.
+ * signed in yet. `removed` says the host removed `userId` from the game, and they haven't
+ * joined again. Refused, for a player without a seat, with `not_found`, `game_started` (or
+ * `removed`, for a player the host removed from the started game) or `game_full`.
  */
 export async function getJoinStep(
     db: Db,
@@ -249,7 +249,8 @@ export async function getJoinStep(
     if (!game) return refuse('not_found')
 
     const seated = game.game_players.some((player) => player.user_id === userId)
-    if (!seated && game.started_at) refuse('game_started')
+    const removed = !seated && userId !== null && (await wasRemoved(db, game.id, userId))
+    if (!seated && game.started_at) refuse(removed ? 'removed' : 'game_started')
     if (!seated && game.game_players.length >= maxPlayers) refuse('game_full')
 
     return {
@@ -257,7 +258,7 @@ export async function getJoinStep(
         gameId: game.id,
         version: game.version,
         seated,
-        removed: !seated && userId !== null && (await wasRemoved(db, game.id, userId)),
+        removed,
         takenNames: game.game_players.map((player) => player.name),
         // Only icons from the set get in; the database checks the shape only.
         takenIcons: game.game_players.map((player) => player.icon as PlayerIcon),
@@ -511,17 +512,49 @@ export async function skipPlayer(
 }
 
 /**
+ * Remove player: the host `userId` takes the player in `seatId` out of the running game with
+ * `code` (any case) for good, once it has started: out of the seating with their timeline, so
+ * they can't win, and whatever they were holding up moves on as a skip would. Their user gives
+ * up the seat, so Find my seat has nothing for them and their phone is refused as `removed`.
+ * `version` is the version the host's phone showed: see `play`. Refused with `not_host` for
+ * anyone else, `host_cannot_leave` for the host, `no_player` for a player not in the game, and
+ * `not_started` in the lobby, where `removePlayer` removes.
+ */
+export async function removeFromGame(
+    db: Db,
+    input: { userId: string; code: string; version?: number; seatId: string },
+): Promise<void> {
+    await play(
+        db,
+        input,
+        (by) => ({ type: 'remove', by, playerId: input.seatId }),
+        async (db, game, state) => {
+            const { data, error } = await db.rpc('remove_from_game', {
+                game: game.id,
+                game_version: game.version,
+                seat: input.seatId,
+                state: state as unknown as Json,
+            })
+            if (error) throw new Error(error.message, { cause: error })
+            return data
+        },
+    )
+}
+
+/**
  * Plays the game machine command `command` makes for the asking player's seat on the running
  * game with `code` (any case), saves the next state where the version is still the one it
  * loaded, and nudges everyone. When another save got in first it reads the game again and
  * plays the command on that. `version`, when given, is the version the phone showed: a command
  * based on an older one is refused with `stale_version`, and the phone refetches. Refused with
- * `not_started` before Start, and with the machine's refusals.
+ * `not_started` before Start, and with the machine's refusals. `save` is how the next state is
+ * saved, for a command that changes more than the state with it (`removeFromGame`).
  */
 async function play(
     db: Db,
     input: { userId: string; code: string; version?: number },
     command: (by: string) => Command,
+    save = saveState,
 ): Promise<void> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const { game, you } = await readGame(db, input.userId, input.code)
@@ -532,19 +565,34 @@ async function play(
         const result = apply(load(game.state), command(you.seat_id))
         if (!result.ok) return refuse(result.refusal)
 
-        const { data, error } = await db
-            .from('games')
-            .update({ state: result.state as unknown as Json, version: game.version + 1 })
-            .eq('id', game.id)
-            .eq('version', game.version)
-            .select('version')
-        if (error) throw new Error(error.message, { cause: error })
-        if (data.length === 0) continue
+        const saved = await save(db, game, result.state)
+        if (saved === null) continue
 
-        await nudge(db, { gameId: game.id, version: data[0].version })
+        await nudge(db, { gameId: game.id, version: saved })
         return
     }
     throw new Error(`The game kept changing during ${maxAttempts} tries to play a command`)
+}
+
+/**
+ * Saves `state` on `game` where its version is still the one it was read at: the new version,
+ * or null when another save got in first.
+ */
+type Save = (
+    db: Db,
+    game: { id: string; version: number },
+    state: GameState,
+) => Promise<number | null>
+
+const saveState: Save = async (db, game, state) => {
+    const { data, error } = await db
+        .from('games')
+        .update({ state: state as unknown as Json, version: game.version + 1 })
+        .eq('id', game.id)
+        .eq('version', game.version)
+        .select('version')
+    if (error) throw new Error(error.message, { cause: error })
+    return data[0]?.version ?? null
 }
 
 // The Data API returns at most `max_rows` (supabase/config.toml) rows per request.
@@ -627,7 +675,7 @@ export async function sweep(db: Db, now: Date): Promise<{ expired: number; delet
     return data
 }
 
-/** Whether the host removed `userId` from the game's lobby, and they haven't joined again. */
+/** Whether the host removed `userId` from the game, and they haven't joined again. */
 async function wasRemoved(db: Db, gameId: string, userId: string): Promise<boolean> {
     const { count, error } = await db
         .from('game_removals')

@@ -7,11 +7,13 @@
     /**
      * What the host can do about `name`'s player: a round button that opens their actions on
      * paper. A button group in a popover, like the corner menu: Escape or a tap outside closes
-     * it, and so does sending a form in it.
+     * it, and so does sending a form in it. Each opening starts its actions afresh, so a
+     * confirmation left open isn't waiting the next time.
      */
     let { name, children }: { name: string; children: Snippet } = $props()
     const id = $props.id()
     let menu = $state<HTMLElement>()
+    let openings = $state(0)
 </script>
 
 <IconButton
@@ -24,9 +26,14 @@
     popover="auto"
     class="ui-paper host-menu"
     bind:this={menu}
-    onsubmit={() => menu?.hidePopover()}>
+    onsubmit={() => menu?.hidePopover()}
+    ontoggle={(event) => {
+        if (event.newState === 'open') openings++
+    }}>
     <Text role="heading-2">{name}</Text>
-    {@render children()}
+    {#key openings}
+        {@render children()}
+    {/key}
 </div>
 
 <style>

@@ -10,12 +10,15 @@
     import SeatingEditor from '#lib/ui/SeatingEditor.svelte'
     import SeatingTable from '#lib/ui/SeatingTable.svelte'
     import AbsentPlayers from './AbsentPlayers.svelte'
+    import HostMenu from './HostMenu.svelte'
+    import RemoveFromGame from './RemoveFromGame.svelte'
     import type { ActionData, PageData } from './$types'
 
     /**
      * The game in seating, as this seat sees it. The host arranges everyone and confirms the
-     * seating, seeing who is absent (`absentPlayers`, empty on other phones); every other phone
-     * shows the table from its own seat, following the host live.
+     * seating, seeing who is absent (`absentPlayers`, empty on other phones) with a menu to
+     * remove them from the game; every other phone shows the table from its own seat,
+     * following the host live.
      */
     let {
         game,
@@ -81,7 +84,16 @@
         <Text role="heading-1">{m.seating_title()}</Text>
         {#if isHost}
             <p class="hint">{m.seating_host_hint()}</p>
-            <AbsentPlayers players={absentPlayers} />
+            <AbsentPlayers players={absentPlayers}>
+                {#snippet action(player)}
+                    <HostMenu name={player.name}>
+                        <RemoveFromGame
+                            seat={player.id}
+                            name={player.name}
+                            version={game.version} />
+                    </HostMenu>
+                {/snippet}
+            </AbsentPlayers>
             <SeatingEditor
                 players={seated}
                 bind:seating={() => seating, moveTo}

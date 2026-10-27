@@ -7,6 +7,7 @@ import {
     GameRefusal,
     getGame,
     leaveGame,
+    removeFromGame,
     removePlayer,
     setSeating,
     skipPlayer,
@@ -145,6 +146,17 @@ export const actions: Actions = {
         const version = Number(field(form, 'version'))
         return asPlayer(locals, (userId) =>
             skipPlayer(supabaseService(), { userId, code: params.code, version, seatId }),
+        )
+    },
+
+    // Remove player: the player in the form's seat leaves the game for good, from the version
+    // the host saw.
+    removeFromGame: async ({ request, locals, params }) => {
+        const form = await request.formData()
+        const seatId = field(form, 'seat')
+        const version = Number(field(form, 'version'))
+        return asPlayer(locals, (userId) =>
+            removeFromGame(supabaseService(), { userId, code: params.code, version, seatId }),
         )
     },
 }

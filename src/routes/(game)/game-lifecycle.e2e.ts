@@ -8,7 +8,7 @@
 // arranges the table and the others follow it live from their own seats. The host confirms the
 // seating, every phone moves to play, and a player who reloads is back in their seat. The screen
 // stays awake through seating and play. A player whose phone drops out shows as absent to the host,
-// who skips what they are holding up.
+// who skips what they are holding up, then removes them from the game.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -556,6 +556,7 @@ test('the host starts the game, every phone follows seating live, and confirming
         (await db.from('games').select('version, state').eq('code', code).single()).data
     const version = (await savedGame())?.version
     const hostAbsent = host.getByRole('list', { name: 'Absent players' })
+    const goneSession = await gone.context.storageState()
     await gone.context.close()
     await host.waitForTimeout(10_000)
     await expect(hostAbsent).toHaveCount(0)
@@ -580,5 +581,40 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(host.getByRole('button', { name: skip })).toBeHidden()
     await expect(host.getByRole('alert')).toHaveCount(0)
 
-    await Promise.all([hostContext, stays.context, lateContext].map((context) => context.close()))
+    // They don't come back, so the host removes them from the same menu. It asks first, and
+    // Cancel changes nothing.
+    const hostMenu = hostAbsent.getByRole('button', { name: `Host menu for ${gone.name}` })
+    await hostMenu.click()
+    await host.getByRole('button', { name: 'Remove from game' }).click()
+    await expect(
+        host.getByText(`${gone.name} leaves the game for good, with their timeline`),
+    ).toBeVisible()
+    await host.getByRole('button', { name: 'Cancel' }).click()
+    await host.getByRole('button', { name: 'Remove from game' }).click()
+    await host.getByRole('button', { name: `Remove ${gone.name}` }).click()
+    await expect.poll(async () => (await savedGame())?.version).toBe(version! + 2)
+    const removed = (await savedGame())!.state as {
+        seating: string[]
+        timelines: Record<string, object[]>
+        players: { id: string; removed: boolean }[]
+    }
+    expect(removed.seating).toEqual(expect.not.arrayContaining([seatOf(gone.name)]))
+    expect(removed.timelines[seatOf(gone.name)]).toBeUndefined()
+    expect(removed.players.find((player) => player.id === seatOf(gone.name))?.removed).toBe(true)
+    await expect(hostAbsent).toHaveCount(0)
+    await expect(host.getByRole('alert')).toHaveCount(0)
+
+    // Their phone, back on the game link, is told they were removed, and the home page offers
+    // no way back.
+    const backContext = await browser.newContext({ storageState: goneSession })
+    const back = await backContext.newPage()
+    await back.goto(`/game/${code}`)
+    await expect(back).toHaveURL(`/join/${code}`)
+    await expect(back.getByText('The host removed you from this game.')).toBeVisible()
+    await gotoHydrated(back, '/')
+    await expect(back.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
+
+    await Promise.all(
+        [hostContext, stays.context, lateContext, backContext].map((context) => context.close()),
+    )
 })

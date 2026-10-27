@@ -6,12 +6,13 @@
     import { m } from '#lib/paraglide/messages.js'
     import AbsentPlayers from './AbsentPlayers.svelte'
     import HostMenu from './HostMenu.svelte'
+    import RemoveFromGame from './RemoveFromGame.svelte'
     import type { ActionData, PageData } from './$types'
 
     /**
      * The game from Confirm seating on. Until the phone views per role (#16) take its place, it
      * shows only whose turn it is, and to the host, who is absent, with a menu to skip whatever
-     * an absent player is holding up.
+     * an absent player is holding up or remove them from the game.
      */
     let {
         game,
@@ -72,8 +73,8 @@
         <AbsentPlayers players={absentPlayers}>
             {#snippet action(player)}
                 {@const what = skippable.get(player.id)}
-                {#if what}
-                    <HostMenu name={player.name}>
+                <HostMenu name={player.name}>
+                    {#if what}
                         <form
                             method="post"
                             action="?/skip"
@@ -91,8 +92,12 @@
                                 variant="ink"
                                 block>{skipLabels[what]()}</Button>
                         </form>
-                    </HostMenu>
-                {/if}
+                    {/if}
+                    <RemoveFromGame
+                        seat={player.id}
+                        name={player.name}
+                        version={game.version} />
+                </HostMenu>
             {/snippet}
         </AbsentPlayers>
         {#if error}
