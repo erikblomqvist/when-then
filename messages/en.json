@@ -127,5 +127,9 @@
     "seating_swap": "Swap {a} and {b}",
     "seating_move_between": "Move {who} between {a} and {b}",
     "seating_across_from_you": "{name} sits across from you.",
-    "seating_your_neighbours": "{left} is on your left, {right} on your right."
+    "seating_your_neighbours": "{left} is on your left, {right} on your right.",
+    "host_menu_for": "Host menu for {name}",
+    "skip_turn": "Skip turn",
+    "skip_steal": "Skip steal attempt",
+    "skip_reading": "Skip reading"
 }

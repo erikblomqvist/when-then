@@ -62,17 +62,28 @@ export type Play =
           stealerId: string
       }
 
+/** Who has a part in a play, as a `Play` or a phone's view of one has it. */
+type PlayRoles =
+    | { step: 'picking' | 'placing' | 'deciding'; readerId: string }
+    | { step: 'stealing'; readerId: string; stealerId: string }
+
 /**
  * Who is holding up `play` and what the host would skip of theirs, the active player first: the
  * current stealer's steal, or else the active player's turn and, while a choice or a card
  * waits, the reader's reading.
  */
-export function holdingUp(play: Play, activeId: string): { playerId: string; what: Skipped }[] {
+export function holdingUp(
+    play: PlayRoles,
+    activeId: string,
+): { playerId: string; what: Skipped }[] {
     if (play.step === 'stealing') return [{ playerId: play.stealerId, what: 'steal' }]
     const turn = { playerId: activeId, what: 'turn' as const }
     if (play.step === 'deciding') return [turn]
     return [turn, { playerId: play.readerId, what: 'reading' }]
 }
+
+/** Whether a skipped reading can move on: the active player never reads, so it takes a third. */
+export const hasOtherReader = (seating: readonly string[]) => seating.length > 2
 
 /** Who picks the category on a choice: the reader on Reader's choice, else the active player. */
 export const pickerOf = (draw: ChoiceDraw, activeId: string, readerId: string) =>

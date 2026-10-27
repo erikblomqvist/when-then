@@ -11,6 +11,7 @@ import {
     categoriesLeft,
     currentSchema,
     fits,
+    hasOtherReader,
     holdingUp,
     leaders,
     pickerOf,
@@ -410,7 +411,7 @@ function skip(state: GameState, playerId: string): ApplyResult {
         if (play.step !== 'placing') return succeed(endTurn(next, activeId))
         return succeed(endTurn(discarded(next, play.cardId), activeId))
     }
-    if (state.seating.length < 3) return refuse('no_other_reader')
+    if (!hasOtherReader(state.seating)) return refuse('no_other_reader')
     const readerId = nextReader(state.seating, activeId, playerId)
     return succeed({
         ...state,

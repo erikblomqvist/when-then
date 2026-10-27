@@ -127,5 +127,9 @@
     "seating_swap": "Byt plats på {a} och {b}",
     "seating_move_between": "Flytta {who} mellan {a} och {b}",
     "seating_across_from_you": "{name} sitter mitt emot dig.",
-    "seating_your_neighbours": "{left} sitter till vänster om dig, {right} till höger."
+    "seating_your_neighbours": "{left} sitter till vänster om dig, {right} till höger.",
+    "host_menu_for": "Värdmeny för {name}",
+    "skip_turn": "Hoppa över turen",
+    "skip_steal": "Hoppa över stöldförsöket",
+    "skip_reading": "Hoppa över uppläsningen"
 }

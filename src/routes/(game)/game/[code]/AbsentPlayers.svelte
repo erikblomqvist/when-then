@@ -1,10 +1,14 @@
 <script lang="ts">
+    import type { Snippet } from 'svelte'
     import { PlayerIcon } from '#lib'
     import type { GamePlayer } from '#lib/game/state.js'
     import { m } from '#lib/paraglide/messages.js'
 
-    /** The host's list of absent players (`#lib/game/absence.js`); nothing when it's empty. */
-    let { players }: { players: GamePlayer[] } = $props()
+    /**
+     * The host's list of absent players (`#lib/game/absence.js`); nothing when it's empty.
+     * `action` adds what the host can do about a player at the end of their row.
+     */
+    let { players, action }: { players: GamePlayer[]; action?: Snippet<[GamePlayer]> } = $props()
 </script>
 
 {#if players.length}
@@ -16,6 +20,7 @@
                 <PlayerIcon icon={player.icon} />
                 <span>{player.name}</span>
                 <span class="absent__tag">{m.absent()}</span>
+                {@render action?.(player)}
             </li>
         {/each}
     </ul>

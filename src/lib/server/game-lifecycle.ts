@@ -496,6 +496,21 @@ export async function confirmSeating(
 }
 
 /**
+ * Skip: the host `userId` moves play past whatever the player in `seatId` is holding up in the
+ * running game with `code` (any case): their turn ends with their unlocked cards lost, their
+ * steal passes the card on, or their reading moves to the next player before the active one.
+ * They keep their seat and locked score. `version` is the version the host's phone showed: see
+ * `play`. Refused with `not_host` for anyone else, `nothing_to_skip` for a player holding
+ * nothing up, and `no_other_reader` when nobody else can read.
+ */
+export async function skipPlayer(
+    db: Db,
+    input: { userId: string; code: string; version?: number; seatId: string },
+): Promise<void> {
+    await play(db, input, (by) => ({ type: 'skip', by, playerId: input.seatId }))
+}
+
+/**
  * Plays the game machine command `command` makes for the asking player's seat on the running
  * game with `code` (any case), saves the next state where the version is still the one it
  * loaded, and nudges everyone. When another save got in first it reads the game again and

@@ -9,6 +9,7 @@ import {
     leaveGame,
     removePlayer,
     setSeating,
+    skipPlayer,
     startGame,
     updateSettings,
 } from '#lib/server/game-lifecycle.js'
@@ -134,6 +135,16 @@ export const actions: Actions = {
         const version = Number(field(await request.formData(), 'version'))
         return asPlayer(locals, (userId) =>
             confirmSeating(supabaseService(), { userId, code: params.code, version }),
+        )
+    },
+
+    // Skip: whatever the player in the form's seat is holding up, from the version the host saw.
+    skip: async ({ request, locals, params }) => {
+        const form = await request.formData()
+        const seatId = field(form, 'seat')
+        const version = Number(field(form, 'version'))
+        return asPlayer(locals, (userId) =>
+            skipPlayer(supabaseService(), { userId, code: params.code, version, seatId }),
         )
     },
 }

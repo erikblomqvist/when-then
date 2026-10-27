@@ -84,5 +84,6 @@
 {:else}
     <Playing
         game={data.game}
-        {absentPlayers} />
+        {absentPlayers}
+        {form} />
 {/if}

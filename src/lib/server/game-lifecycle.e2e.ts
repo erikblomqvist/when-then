@@ -24,6 +24,7 @@ import {
     leaveGame,
     removePlayer,
     setSeating,
+    skipPlayer,
     startGame,
     sweep,
     updateSettings,
@@ -845,6 +846,84 @@ test('only the host confirms the seating, and only while the game is in seating'
     await confirmSeating(db, { userId: host, code })
     await expect(confirmSeating(db, { userId: host, code })).rejects.toMatchObject({
         code: 'not_seating',
+    })
+})
+
+// Skip -----------------------------------------------------------------------------------
+
+/** A game of three in play, and who is active and reading in its first turn. */
+async function playingOfThree() {
+    const three = await lobbyOfThree()
+    const { host, code } = three
+    await startGame(db, { userId: host, code })
+    await confirmSeating(db, { userId: host, code })
+    const { version, view } = await viewOf(host, code)
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    const { activeId, play } = view.phase
+    return { ...three, version, activeId, readerId: play.readerId }
+}
+
+test('the host skips the active player’s turn, and the next player is up; the skipped player keeps their seat', async () => {
+    const { host, bo, code, version, activeId } = await playingOfThree()
+
+    await skipPlayer(db, { userId: host, code, version, seatId: activeId })
+
+    const { version: next, view } = await viewOf(bo, code)
+    expect(next).toBe(version + 1)
+    expect(view.phase).toMatchObject({ name: 'playing', activeId: expect.any(String) })
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    expect(view.phase.activeId).not.toBe(activeId)
+    expect(view.lastTurn).toContainEqual({ kind: 'skip', playerId: activeId, what: 'turn' })
+    expect(view.seating).toContain(activeId)
+    expect(view.timelines[activeId]).toEqual([{ kind: 'anchor', date: expect.any(Number) }])
+})
+
+test('the host skips the reader, and the next player before the active one reads', async () => {
+    const { host, code, version, activeId, readerId } = await playingOfThree()
+
+    await skipPlayer(db, { userId: host, code, version, seatId: readerId })
+
+    const { view } = await viewOf(host, code)
+    expect(view.log).toContainEqual({ kind: 'skip', playerId: readerId, what: 'reading' })
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    expect(view.phase.activeId).toBe(activeId)
+    expect([activeId, readerId]).not.toContain(view.phase.play.readerId)
+})
+
+test('only the host skips, only a player holding up play, and only from the version shown', async () => {
+    const { host, bo, caro, code, version, activeId, readerId, seats } = await playingOfThree()
+    const idle = Object.values(seats).find((seat) => seat !== activeId && seat !== readerId)!
+    const refusal = (userId: string, seatId: string, at = version) =>
+        expect(skipPlayer(db, { userId, code, version: at, seatId })).rejects
+
+    await refusal(bo, activeId).toMatchObject({ code: 'not_host' })
+    await refusal(caro, readerId).toMatchObject({ code: 'not_host' })
+    await refusal(host, idle).toMatchObject({ code: 'nothing_to_skip' })
+    await refusal(host, 'nobody').toMatchObject({ code: 'nothing_to_skip' })
+    await refusal(host, activeId, version - 1).toMatchObject({ code: 'stale_version' })
+    expect((await viewOf(host, code)).version).toBe(version)
+})
+
+test('with two players the reading has nobody else to move to', async () => {
+    const { host, code } = await lobbyWithBo()
+    await startGame(db, { userId: host, code })
+    const { view } = await viewOf(host, code)
+    if (view.phase.name !== 'playing') throw new Error('Not playing')
+    const seatId = view.phase.play.readerId
+
+    await expect(skipPlayer(db, { userId: host, code, seatId })).rejects.toMatchObject({
+        code: 'no_other_reader',
+    })
+})
+
+test('nobody is skipped before play starts', async () => {
+    const { host, code, seats } = await lobbyOfThree()
+    await expect(skipPlayer(db, { userId: host, code, seatId: seats.bo })).rejects.toMatchObject({
+        code: 'not_started',
+    })
+    await startGame(db, { userId: host, code })
+    await expect(skipPlayer(db, { userId: host, code, seatId: seats.bo })).rejects.toMatchObject({
+        code: 'nothing_to_skip',
     })
 })
 
