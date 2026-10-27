@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { apply, create, type ApplyResult, type Command } from './machine'
 import { fits, type DeckCard, type GameState } from './state'
 import { scenario } from './scenario'
-import { redact } from './view'
+import { redact, standings } from './view'
 
 const deck: DeckCard[] = Array.from({ length: 12 }, (_, i) => ({
     id: `card-${i}`,
@@ -346,5 +346,34 @@ describe('what a seat sees of the reseat flag', () => {
         const result = apply(state, { type: 'setReseat', by: 'astrid', reseat: true })
         if (!result.ok) throw new Error(`Refused: ${result.refusal}`)
         for (const seat of ['astrid', 'bjorn']) expect(redact(result.state, seat).reseat).toBe(true)
+    })
+})
+
+describe('the standings at the end', () => {
+    it('ranks the seated players by locked score, a tie in seating order, with no winner when ended early', () => {
+        const { view } = scenario().players(4).scores([2, 5, 2, 0]).endEarly().build()
+        const [first, second, third, fourth] = view.seating
+        expect(
+            standings(view).map(({ player, score, winner }) => [player.id, score, winner]),
+        ).toEqual([
+            [second, 5, false],
+            [first, 2, false],
+            [third, 2, false],
+            [fourth, 0, false],
+        ])
+    })
+
+    it('marks the winners of a won game', () => {
+        const { view } = scenario().players(3).scores([4, 4, 1]).endEarly().build()
+        const [first, second] = view.seating
+        const won = { ...view, phase: { name: 'finished' as const, winners: [first, second] } }
+        expect(standings(won).map(({ winner }) => winner)).toEqual([true, true, false])
+    })
+
+    it('leaves out the players the host removed', () => {
+        const { view } = scenario().players(3).removed([3]).endEarly().build()
+        const removed = view.players.find((player) => player.removed)!
+        expect(standings(view).map(({ player }) => player.id)).toEqual(view.seating)
+        expect(standings(view).map(({ player }) => player.id)).not.toContain(removed.id)
     })
 })

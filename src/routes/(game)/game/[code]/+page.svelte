@@ -1,8 +1,10 @@
 <script lang="ts">
     import { invalidateAll } from '$app/navigation'
     import { absentSeats, missingSince, nextAbsence } from '#lib/game/absence.js'
+    import { isOver } from '#lib/game/state.js'
     import { watchGame } from '#lib/supabase-browser.js'
     import { holdWakeLock } from '#lib/wake-lock.js'
+    import EndScreen from './EndScreen.svelte'
     import Lobby from './Lobby.svelte'
     import Playing from './Playing.svelte'
     import Seating from './Seating.svelte'
@@ -76,6 +78,8 @@
         lobby={data.game.lobby}
         joinUrl={data.joinUrl}
         {form} />
+{:else if isOver(data.game.view.phase)}
+    <EndScreen game={data.game} />
 {:else if phase === 'seating'}
     <Seating
         game={data.game}

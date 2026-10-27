@@ -10,6 +10,7 @@
 
 import { isCardLocale, type CardLocale } from '../cards/card'
 import { isCountryCode } from '../cards/country'
+import type { CategoryLook } from '../categories/look'
 import type { Json } from '../database.types'
 import { deckFromRows, type DeckRow } from '../game/deck'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
@@ -26,6 +27,7 @@ import type { GameRefusalCode } from '../game/refusals'
 import { isTargetScore, maxTargetScore, minTargetScore } from '../game/settings'
 import type { DeckCard, GameState } from '../game/state'
 import { redact, type SeatView } from '../game/view'
+import { categoryLooks } from './categories'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
 
@@ -137,25 +139,33 @@ export async function createGame(
     throw new Error(`No free game code after ${maxCodeDraws} draws`)
 }
 
-/** The running game with `code` (any case) and its players, and the asking player's own row. */
+/**
+ * The game with `code` (any case) that the asking player has a seat in, its players, and their
+ * own row: the running game with the code, or else the last game with it that they finished,
+ * so its end screen still opens after the code is free (`20261027100000_end_finished_games.sql`).
+ */
 async function readGame(db: Db, userId: string, code: string) {
     const normalised = normaliseGameCode(code)
     if (!isGameCode(normalised)) refuse('not_found')
 
-    const { data: game, error } = await db
+    // The running game first, then the games that ended after Start, last ended first.
+    const { data: games, error } = await db
         .from('games')
         .select(
-            'id, version, code, target_score, exact_year, card_language, left_out_countries, started_at, state, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
+            'id, version, code, target_score, exact_year, card_language, left_out_countries, started_at, ended_at, state, game_players (user_id, seat_id, name, icon, is_host, joined_at)',
         )
         .eq('code', normalised)
-        .is('ended_at', null)
+        .or('ended_at.is.null,state.not.is.null')
+        .order('ended_at', { ascending: false, nullsFirst: true })
         .order('joined_at', { referencedTable: 'game_players' })
-        .maybeSingle()
     if (error) throw new Error(error.message, { cause: error })
-    if (!game) return refuse('not_found')
-    const you = game.game_players.find((player) => player.user_id === userId)
-    if (!you) return refuse((await wasRemoved(db, game.id, userId)) ? 'removed' : 'no_seat')
-    return { game, you }
+    for (const game of games) {
+        const you = game.game_players.find((player) => player.user_id === userId)
+        if (you) return { game, you }
+    }
+    const running = games.find((game) => game.ended_at === null)
+    if (!running) return refuse('not_found')
+    return refuse((await wasRemoved(db, running.id, userId)) ? 'removed' : 'no_seat')
 }
 
 /**
@@ -188,9 +198,10 @@ function lobbyOf(game: Awaited<ReturnType<typeof readGame>>['game'], userId: str
 }
 
 /**
- * The running game with `code` (any case) as a player seated in it sees it: its lobby until
- * Start, then the game state redacted for their seat (ADR 0002). `gameId` and `version` match
- * its nudges either way. Refused like `getLobby`.
+ * The game with `code` (any case) as a player seated in it sees it: its lobby until Start, then
+ * the game state redacted for their seat (ADR 0002), with how to show the category of each card
+ * in it, and once it has finished, its end. `gameId` and `version` match its nudges either way.
+ * Refused like `getLobby`.
  */
 export async function getGame(
     db: Db,
@@ -198,20 +209,27 @@ export async function getGame(
     code: string,
 ): Promise<
     | { started: false; gameId: string; version: number; code: string; lobby: Lobby }
-    | { started: true; gameId: string; version: number; code: string; view: SeatView }
+    | {
+          started: true
+          gameId: string
+          version: number
+          code: string
+          view: SeatView
+          categories: Record<string, CategoryLook>
+      }
 > {
     const { game, you } = await readGame(db, userId, code)
     const { id: gameId, version } = game
     if (game.state === null) {
         return { started: false, gameId, version, code: game.code, lobby: lobbyOf(game, userId) }
     }
-    return {
-        started: true,
-        gameId,
-        version,
-        code: game.code,
-        view: redact(load(game.state), you.seat_id),
-    }
+    const view = redact(load(game.state), you.seat_id)
+    const categories = await categoryLooks(
+        db,
+        Object.values(view.cards).map((card) => card.category),
+        view.settings.cardLanguage,
+    )
+    return { started: true, gameId, version, code: game.code, view, categories }
 }
 
 /**
@@ -539,6 +557,19 @@ export async function removeFromGame(
             return data
         },
     )
+}
+
+/**
+ * End early: the host `userId` ends the running game with `code` (any case), in seating or in
+ * play, with no winner. The locked scores stay for the end screen, and its code is free again.
+ * `version` is the version the host's phone showed: see `play`. Refused with `not_host` for
+ * anyone else, `not_started` in the lobby, and `game_over` once it has finished.
+ */
+export async function endEarly(
+    db: Db,
+    input: { userId: string; code: string; version?: number },
+): Promise<void> {
+    await play(db, input, (by) => ({ type: 'endEarly', by }))
 }
 
 /**

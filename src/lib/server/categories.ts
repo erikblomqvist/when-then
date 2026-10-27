@@ -1,7 +1,7 @@
 // Categories as the admin reads and manages them (#44), over the SQL functions in
 // `supabase/migrations/20261023004400_manage_categories.sql`. Those check the actor is an
 // admin and name it for the audit log; this module passes the actor along and turns their
-// refusals into errors the categories page can show.
+// refusals into errors the categories page can show. `categoryLooks` is how a game shows them.
 
 import type { CardLocale } from '../cards/card'
 import { englishNameKey, type CategoryInput } from '../categories/category-form'
@@ -10,6 +10,7 @@ import {
     isCategoryIcon,
     type CategoryColour,
     type CategoryIconName,
+    type CategoryLook,
 } from '../categories/look'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
 import type { Db } from './supabase'
@@ -87,6 +88,35 @@ export async function listCategories(
 }
 
 export { englishNameKey }
+
+/**
+ * How the game shows each category in `ids`, archived ones too, named in `locale` (English
+ * when it has no name there), keyed by id.
+ */
+export async function categoryLooks(
+    db: Db,
+    ids: readonly string[],
+    locale: CardLocale,
+): Promise<Record<string, CategoryLook>> {
+    const wanted = [...new Set(ids)]
+    if (wanted.length === 0) return {}
+    const { data, error } = await db
+        .from('categories')
+        .select('id, icon, colour, category_translations(locale, name)')
+        .in('id', wanted)
+    if (error) throw new Error(error.message, { cause: error })
+    return Object.fromEntries(
+        data.map((row) => {
+            const names = namesByLocale(row.category_translations)
+            const look = {
+                name: names[locale] ?? names.en ?? '',
+                icon: iconOf(row.icon),
+                colour: colourOf(row.colour),
+            }
+            return [row.id, look]
+        }),
+    )
+}
 
 /**
  * Categories keyed by `englishNameKey` of their English name, for matching imported rows

@@ -8,7 +8,9 @@
 // arranges the table and the others follow it live from their own seats. The host confirms the
 // seating, every phone moves to play, and a player who reloads is back in their seat. The screen
 // stays awake through seating and play. A player whose phone drops out shows as absent to the host,
-// who skips what they are holding up, then removes them from the game.
+// who skips what they are holding up, then removes them from the game. The host ends the game
+// early, and every phone shows the end screen, where anyone can browse each player's timeline.
+// Its code is then free: the home page and the join link no longer lead to it.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -613,6 +615,37 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(back.getByText('The host removed you from this game.')).toBeVisible()
     await gotoHydrated(back, '/')
     await expect(back.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
+
+    // Only the host ends the game early. It asks first, and Cancel changes nothing; then every
+    // phone moves to the end screen: ended early, the locked scores, and no winner.
+    await expect(stays.page.getByRole('button', { name: 'End game early' })).toHaveCount(0)
+    await host.getByRole('button', { name: 'End game early' }).click()
+    await expect(host.getByText('The game ends now for everyone')).toBeVisible()
+    await host.getByRole('button', { name: 'Cancel' }).click()
+    await host.getByRole('button', { name: 'End game early' }).click()
+    await host.getByRole('button', { name: 'End the game' }).click()
+    for (const page of [host, stays.page]) {
+        await expect(page.getByRole('heading', { name: 'Ended early' })).toBeVisible()
+        await expect(page.getByText('Winner')).toHaveCount(0)
+    }
+    expect((await savedGame())?.state).toMatchObject({ phase: { name: 'ended' } })
+
+    // Each phone opens on its own timeline, and browses everyone else's.
+    const timelineOf = (page: Page, name: string) =>
+        page.getByRole('heading', { name: `${name}'s timeline` })
+    await expect(timelineOf(stays.page, stays.name)).toBeVisible()
+    await stays.page.getByRole('button', { name: "Show Astrid's timeline" }).click()
+    await expect(timelineOf(stays.page, 'Astrid')).toBeVisible()
+    await expect(stays.page.getByText('Anchor year')).toBeVisible()
+
+    // A reload is still the end screen, but the code is free: the home page offers no way back,
+    // and the join link finds no game.
+    await reloadHydrated(host)
+    await expect(host.getByRole('heading', { name: 'Ended early' })).toBeVisible()
+    await gotoHydrated(stays.page, '/')
+    await expect(stays.page.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
+    await gotoHydrated(stays.page, `/join/${code}`)
+    await expect(stays.page.getByText('No running game has that code.')).toBeVisible()
 
     await Promise.all(
         [hostContext, stays.context, lateContext, backContext].map((context) => context.close()),

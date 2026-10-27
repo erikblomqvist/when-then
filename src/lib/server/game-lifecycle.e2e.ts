@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import type { Json } from '../database.types'
 import { isGameCode, randomGameCode } from '../game/game-code'
 import { nudgeEvent, nudgeTopic, type Nudge } from '../game/nudge'
 import { playerIcons } from '../game/player'
@@ -16,6 +17,7 @@ import {
     changePlayer,
     confirmSeating,
     createGame,
+    endEarly,
     findMySeat,
     getGame,
     getJoinStep,
@@ -997,6 +999,9 @@ test('removing one of two players ends the game with no winner', async () => {
 
     expect((await viewOf(host, code)).view.phase).toEqual({ name: 'ended' })
     expect(await findMySeat(db, bo)).toBeNull()
+    // The game has finished, so its code is free.
+    expect(await findMySeat(db, host)).toBeNull()
+    await expect(getJoinStep(db, null, code)).rejects.toMatchObject({ code: 'not_found' })
 })
 
 test('only the host removes, never themselves, only a player still in, and only from the version shown', async () => {
@@ -1020,6 +1025,115 @@ test('nobody is removed from the game before Start: that is the lobby’s Remove
     await expect(
         removeFromGame(db, { userId: host, code, seatId: seats.bo }),
     ).rejects.toMatchObject({ code: 'not_started' })
+})
+
+// End early and the end screen ------------------------------------------------------------
+
+test('the host ends the game early: everyone sees it ended with no winner, and its code is free', async () => {
+    const { host, bo, caro, code, version } = await playingOfThree()
+
+    await endEarly(db, { userId: host, code, version })
+
+    for (const player of [host, bo, caro]) {
+        const { version: next, view } = await viewOf(player, code)
+        expect(next).toBe(version + 1)
+        expect(view.phase).toEqual({ name: 'ended' })
+        // The locked scores stay, for the end screen.
+        expect(Object.keys(view.scores)).toHaveLength(3)
+        expect(await findMySeat(db, player)).toBeNull()
+    }
+    // The join link leads nowhere, for the players in it too.
+    await expect(getJoinStep(db, null, code)).rejects.toMatchObject({ code: 'not_found' })
+    await expect(getJoinStep(db, bo, code)).rejects.toMatchObject({ code: 'not_found' })
+
+    // A new game can take the code, and its join link leads there, while the old game's
+    // players still see how theirs ended.
+    const newHost = await newPlayer()
+    await createGame(
+        db,
+        { userId: newHost, name: 'Dag', icon: 'sun', cardLanguage: 'en' },
+        { newCode: () => code },
+    )
+    expect((await getJoinStep(db, bo, code)).takenNames).toEqual(['Dag'])
+    expect((await viewOf(bo, code)).view.phase).toEqual({ name: 'ended' })
+    expect((await getLobby(db, newHost, code)).players.map((player) => player.name)).toEqual([
+        'Dag',
+    ])
+    // Joining the new game takes the player there instead.
+    await joinGame(db, { userId: bo, code, name: 'Bo', icon: 'dog' })
+    expect((await getGame(db, bo, code)).started).toBe(false)
+})
+
+test('the host ends the game early from seating too', async () => {
+    const { host, code } = await lobbyOfThree()
+    await startGame(db, { userId: host, code })
+
+    await endEarly(db, { userId: host, code })
+
+    expect((await viewOf(host, code)).view.phase).toEqual({ name: 'ended' })
+})
+
+test('only the host ends early, only after Start, only from the version shown, and only once', async () => {
+    const { host, bo, code } = await lobbyOfThree()
+    await expect(endEarly(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'not_started',
+    })
+    await startGame(db, { userId: host, code })
+    const { version } = await viewOf(host, code)
+
+    await expect(endEarly(db, { userId: bo, code, version })).rejects.toMatchObject({
+        code: 'not_host',
+    })
+    await expect(endEarly(db, { userId: host, code, version: version - 1 })).rejects.toMatchObject({
+        code: 'stale_version',
+    })
+    expect((await viewOf(host, code)).view.phase).toEqual({ name: 'seating' })
+
+    await endEarly(db, { userId: host, code, version })
+    await expect(endEarly(db, { userId: host, code })).rejects.toMatchObject({
+        code: 'game_over',
+    })
+})
+
+test('a game’s view names the category of every card in it, in the card language', async () => {
+    const actor = (await newPerson()).id
+    const events = (await listCategories(db)).find((category) => category.name === 'Events')!
+    const cardId = await saveCard(db, actor, {
+        categoryId: events.id,
+        date: { decade: 1960, year: 1969, month: null, day: null },
+        sourceUrl: null,
+        sourceQuote: null,
+        translations: { en: { text: `Moon landing ${randomUUID()}` } },
+    })
+    await publishCard(db, actor, cardId)
+    const { host, code } = await lobbyWithBo()
+    await updateSettings(db, { userId: host, code, ...settings, cardLanguage: 'sv' })
+    await startGame(db, { userId: host, code })
+    await endEarly(db, { userId: host, code })
+
+    // Nothing plays a card yet (#16), so put it on the host's timeline as if they had.
+    const { data: game } = await db
+        .from('games')
+        .select('id, state')
+        .eq('code', code)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+    const state = game!.state as { timelines: Record<string, object[]>; players: { id: string }[] }
+    const hostSeat = state.players[0].id
+    state.timelines[hostSeat] = [{ kind: 'card', cardId, date: 1969, locked: true }]
+    await db
+        .from('games')
+        .update({ state: state as unknown as Json })
+        .eq('id', game!.id)
+
+    const { view, categories } = await viewOf(host, code)
+    expect(view.cards[cardId].category).toBe(events.id)
+    expect(categories[events.id]).toEqual({
+        name: events.names.sv ?? events.name,
+        icon: events.icon,
+        colour: events.colour,
+    })
 })
 
 test('of two host commands from the same version, one lands and the other is refused for a refetch', async () => {

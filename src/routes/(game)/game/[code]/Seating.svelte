@@ -10,15 +10,16 @@
     import SeatingEditor from '#lib/ui/SeatingEditor.svelte'
     import SeatingTable from '#lib/ui/SeatingTable.svelte'
     import AbsentPlayers from './AbsentPlayers.svelte'
+    import EndEarly from './EndEarly.svelte'
     import HostMenu from './HostMenu.svelte'
     import RemoveFromGame from './RemoveFromGame.svelte'
     import type { ActionData, PageData } from './$types'
 
     /**
-     * The game in seating, as this seat sees it. The host arranges everyone and confirms the
-     * seating, seeing who is absent (`absentPlayers`, empty on other phones) with a menu to
-     * remove them from the game; every other phone shows the table from its own seat,
-     * following the host live.
+     * The game in seating, as this seat sees it. The host arranges everyone, sees who is absent
+     * (`absentPlayers`, empty on other phones) with a menu to remove them from the game, and
+     * confirms the seating or ends the game early; every other phone shows the table from its
+     * own seat, following the host live.
      */
     let {
         game,
@@ -140,6 +141,9 @@
                 role="alert">
                 {error}
             </p>
+        {/if}
+        {#if isHost}
+            <EndEarly version={game.version} />
         {/if}
     </div>
 </Surface>

@@ -4,6 +4,7 @@ import { refusalMessage } from '#lib/game/refusals.js'
 import {
     changePlayer,
     confirmSeating,
+    endEarly,
     GameRefusal,
     getGame,
     leaveGame,
@@ -18,9 +19,9 @@ import { field } from '#lib/server/people-form.js'
 import { supabaseService } from '#lib/server/supabase.js'
 import type { Actions, PageServerLoad } from './$types'
 
-// A game, for players seated in it: its lobby, then from Start what their seat may see of it.
-// Reloading lands here again. A player the host removed goes to the join step, which tells them
-// and lets them join again.
+// A game, for players seated in it: its lobby, then from Start what their seat may see of it,
+// and once it has finished, its end screen. Reloading lands here again. A player the host
+// removed goes to the join step, which tells them and lets them join again.
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const { user } = await locals.safeGetSession()
     if (!user) error(403, refusalMessage('no_seat'))
@@ -157,6 +158,14 @@ export const actions: Actions = {
         const version = Number(field(form, 'version'))
         return asPlayer(locals, (userId) =>
             removeFromGame(supabaseService(), { userId, code: params.code, version, seatId }),
+        )
+    },
+
+    // End early: every phone moves to the end screen, from the version the host saw.
+    endEarly: async ({ request, locals, params }) => {
+        const version = Number(field(await request.formData(), 'version'))
+        return asPlayer(locals, (userId) =>
+            endEarly(supabaseService(), { userId, code: params.code, version }),
         )
     },
 }

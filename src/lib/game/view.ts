@@ -128,3 +128,21 @@ function phaseView(state: GameState, seat: string, shown: Set<string>): PhaseVie
         },
     }
 }
+
+/** A seated player's place at the end of a game: their locked score, and whether they won. */
+export type Standing = { player: GamePlayer; score: number; winner: boolean }
+
+/**
+ * The seated players of `view`, highest score first and a tie in seating order, with the
+ * winners marked: nobody unless the game was won. A player the host removed isn't in them.
+ */
+export function standings(view: SeatView): Standing[] {
+    const winners = view.phase.name === 'finished' ? view.phase.winners : []
+    return view.seating
+        .map((id) => ({
+            player: view.players.find((player) => player.id === id)!,
+            score: view.scores[id] ?? 0,
+            winner: winners.includes(id),
+        }))
+        .toSorted((a, b) => b.score - a.score)
+}

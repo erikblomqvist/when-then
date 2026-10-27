@@ -17,8 +17,12 @@ export const currentSchema = 2
  */
 export type GameDate = number
 
+/** The first year the standard game mode places by year; earlier dates are decades. */
+export const firstPlacedYear = 1500
+
 /** The standard game mode's date for a year: the year from 1500, its decade before. */
-export const standardDate = (year: number): GameDate => (year >= 1500 ? year : decadeOf(year))
+export const standardDate = (year: number): GameDate =>
+    year >= firstPlacedYear ? year : decadeOf(year)
 
 /** A card as dealt: `text` in the card language, falling back to English. */
 export type DeckCard = { id: string; category: string; text: string; date: GameDate }
@@ -110,6 +114,10 @@ export type Phase =
     | { name: 'finished'; winners: string[] }
     | { name: 'ended' }
     | { name: 'abandoned' }
+
+/** Whether the game in `phase` is over: won, ended early or abandoned. */
+export const isOver = (phase: { name: Phase['name'] }) =>
+    phase.name === 'finished' || phase.name === 'ended' || phase.name === 'abandoned'
 
 /** Everything about a running game, hidden parts included. */
 export type GameState = {

@@ -5,6 +5,7 @@
     import { hasOtherReader, holdingUp, type GamePlayer, type Skipped } from '#lib/game/state.js'
     import { m } from '#lib/paraglide/messages.js'
     import AbsentPlayers from './AbsentPlayers.svelte'
+    import EndEarly from './EndEarly.svelte'
     import HostMenu from './HostMenu.svelte'
     import RemoveFromGame from './RemoveFromGame.svelte'
     import type { ActionData, PageData } from './$types'
@@ -12,7 +13,7 @@
     /**
      * The game from Confirm seating on. Until the phone views per role (#16) take its place, it
      * shows only whose turn it is, and to the host, who is absent, with a menu to skip whatever
-     * an absent player is holding up or remove them from the game.
+     * an absent player is holding up or remove them from the game, and End game early.
      */
     let {
         game,
@@ -25,6 +26,7 @@
     } = $props()
 
     const view = $derived(game.view)
+    const isHost = $derived(view.players.some((player) => player.id === view.seat && player.host))
     const activeId = $derived(view.phase.name === 'playing' ? view.phase.activeId : undefined)
     const active = $derived(view.players.find((player) => player.id === activeId))
     const error = $derived(form?.refusal && refusalMessage(form.refusal))
@@ -106,6 +108,9 @@
                 role="alert">
                 {error}
             </p>
+        {/if}
+        {#if isHost}
+            <EndEarly version={game.version} />
         {/if}
     </div>
 </Surface>
