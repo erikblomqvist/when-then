@@ -16,7 +16,8 @@
     import type { ActionData, PageData } from './$types'
 
     /**
-     * The game in seating, as this seat sees it. The host arranges everyone, sees who is absent
+     * The game in seating, as this seat sees it. The host arranges everyone (two players can only
+     * sit one way, so then there is nothing to arrange and just Confirm), sees who is absent
      * (`absentPlayers`, empty on other phones) with a menu to remove them from the game, and
      * confirms the seating or ends the game early; every other phone shows the table from its
      * own seat, following the host live.
@@ -34,6 +35,13 @@
     const view = $derived(game.view)
     const isHost = $derived(view.players.some((player) => player.id === view.seat && player.host))
     const seated = $derived(view.players.filter((player) => !player.removed))
+    const hostHint = $derived(
+        seated.length === 2
+            ? m.seating_host_hint_two()
+            : seated.length === 3
+              ? m.seating_host_hint_three()
+              : m.seating_host_hint(),
+    )
     const words = $derived(seatingWords())
     const error = $derived(form?.refusal && refusalMessage(form.refusal))
 
@@ -84,7 +92,7 @@
     <div class="seating">
         <Text role="heading-1">{m.seating_title()}</Text>
         {#if isHost}
-            <p class="hint">{m.seating_host_hint()}</p>
+            <p class="hint">{hostHint}</p>
             <AbsentPlayers players={absentPlayers}>
                 {#snippet action(player)}
                     <HostMenu name={player.name}>
@@ -95,11 +103,13 @@
                     </HostMenu>
                 {/snippet}
             </AbsentPlayers>
-            <SeatingEditor
-                players={seated}
-                bind:seating={() => seating, moveTo}
-                anchor={view.seat}
-                {words} />
+            {#if seated.length > 2}
+                <SeatingEditor
+                    players={seated}
+                    bind:seating={() => seating, moveTo}
+                    anchor={view.seat}
+                    {words} />
+            {/if}
             <form
                 method="post"
                 action="?/seating"

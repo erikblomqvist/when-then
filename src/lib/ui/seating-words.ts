@@ -11,6 +11,8 @@ export type SeatingWords = {
     undo: string
     reverse: string
     letGoToCancel: string
+    /** After tapping a player, until the second tap. */
+    pickSwap: (name: string) => string
     swap: (a: string, b: string) => string
     moveBetween: (who: string, a: string, b: string) => string
     acrossFromYou: (name: string) => string
@@ -24,6 +26,7 @@ export const englishSeatingWords: SeatingWords = {
     undo: 'Undo',
     reverse: 'Reverse',
     letGoToCancel: 'Let go off the table to cancel',
+    pickSwap: (name) => `Pick someone to swap with ${name}.`,
     swap: (a, b) => `Swap ${a} and ${b}`,
     moveBetween: (who, a, b) => `Move ${who} between ${a} and ${b}`,
     acrossFromYou: (name) => `${name} sits across from you.`,

@@ -5,7 +5,8 @@
 // the home page, the join link and a switch of app language, with no install prompt meanwhile.
 // In the lobby a player changes their name and icon, another leaves, and the host removes a
 // player, who joins again. The host starts the game, and every phone moves to seating: the host
-// arranges the table and the others follow it live from their own seats. The host confirms the
+// arranges the table and the others follow it live from their own seats: three players can only
+// turn it round, and four or more are swapped by tapping or with the keyboard. The host confirms the
 // seating, every phone moves to play, and a player who reloads is back in their seat. The screen
 // stays awake through seating and play. A player whose phone drops out shows as absent to the host,
 // who skips what they are holding up, then removes them from the game. The host ends the game
@@ -13,7 +14,7 @@
 // Its code is then free: the home page and the join link no longer lead to it. The host plays
 // again, every phone moves into the rematch's lobby, and a newcomer joins it by its new code.
 
-import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
 import { gotoHydrated, reloadHydrated, waitForHydration } from '../../lib/testing/e2e-hydration'
 import { qrPath } from '../../lib/ui/qr-path'
@@ -403,6 +404,83 @@ test('the host creates a game and lands in its lobby', async ({ browser, baseURL
     )
 })
 
+/** The seating saved for the running game with `code`, by name. */
+async function savedSeating(code: string) {
+    const { data } = await db
+        .from('games')
+        .select('state')
+        .eq('code', code)
+        .is('ended_at', null)
+        .single()
+    const state = data?.state as {
+        players: { id: string; name: string }[]
+        seating: string[]
+    } | null
+    const name = (id: string) => state?.players.find((player) => player.id === id)?.name
+    return state?.seating.map(name)
+}
+
+/** The host creates a game, the others join it, and the host starts it. */
+async function startedGame(browser: Browser, host: string, others: string[]) {
+    const icons = ['Cat', 'Dog', 'Fish', 'Bird']
+    const phone = async () => {
+        const context = await browser.newContext()
+        await fakeWakeLock(context)
+        return { context, page: await context.newPage() }
+    }
+    const first = await phone()
+    await gotoHydrated(first.page, '/new')
+    await first.page.getByLabel('Your name').fill(host)
+    await first.page.getByRole('radio', { name: icons[0] }).check()
+    await first.page.getByRole('button', { name: 'Create game' }).click()
+    await first.page.waitForURL(/\/game\/[A-HJ-NP-Z]{4}$/)
+    await waitForHydration(first.page)
+    const code = new URL(first.page.url()).pathname.split('/').pop()!
+    const phones = [first]
+    for (const [i, name] of others.entries()) {
+        const next = await phone()
+        await gotoHydrated(next.page, `/join/${code}`)
+        await next.page.getByLabel('Your name').fill(name)
+        await next.page.getByRole('radio', { name: icons[i + 1] }).check()
+        await next.page.getByRole('button', { name: 'Join game' }).click()
+        await next.page.waitForURL(new RegExp(`/game/${code}$`))
+        await waitForHydration(next.page)
+        phones.push(next)
+    }
+    // The host's lobby has to see everyone before Start takes them all.
+    await expect(first.page.getByRole('button', { name: `Remove ${others.at(-1)}` })).toBeVisible()
+    await first.page.getByRole('button', { name: 'Start game' }).click()
+    for (const { page } of phones) {
+        await expect(page.getByRole('heading', { name: 'Seating' })).toBeVisible()
+    }
+    return { code, phones, pages: phones.map(({ page }) => page) }
+}
+
+test('the host seats four players by tapping and with the keyboard, and the others follow', async ({
+    browser,
+}) => {
+    const { code, phones, pages } = await startedGame(browser, 'Astrid', ['Bo', 'Caro', 'Dan'])
+    const [host, bo] = pages
+    const boTable = bo.locator('.seating-table__seat')
+    await expect(boTable).toHaveText(['You', 'Caro', 'Dan', 'Astrid'])
+
+    // Tap Bo, then Dan, and they swap, here and on Bo's phone.
+    await host.getByRole('button', { name: 'Bo' }).click()
+    await expect(host.getByText('Pick someone to swap with Bo.')).toBeVisible()
+    await host.getByRole('button', { name: 'Dan' }).click()
+    await expect(host.getByText('Dan is on your left, Bo on your right.')).toBeVisible()
+    await expect(boTable).toHaveText(['You', 'Astrid', 'Dan', 'Caro'])
+
+    // The same with the keyboard: Caro and Dan swap.
+    await host.getByRole('button', { name: 'Caro' }).press('Enter')
+    await host.getByRole('button', { name: 'Dan' }).press('Enter')
+    await expect(boTable).toHaveText(['You', 'Astrid', 'Caro', 'Dan'])
+    await expect.poll(() => savedSeating(code)).toEqual(['Astrid', 'Caro', 'Dan', 'Bo'])
+    await expect(host.getByRole('alert')).toHaveCount(0)
+
+    await Promise.all(phones.map(({ context }) => context.close()))
+})
+
 test('the host starts the game, every phone follows seating live, and confirming it starts play', async ({
     browser,
 }) => {
@@ -447,22 +525,7 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(bo.page.getByText('Waiting for the host to start the game.')).toBeVisible()
     await expect(start).toBeEnabled()
     await start.click()
-    // The saved game's seating, by name.
-    const savedSeating = async () => {
-        const { data } = await db
-            .from('games')
-            .select('state')
-            .eq('code', code)
-            .is('ended_at', null)
-            .single()
-        const state = data?.state as {
-            players: { id: string; name: string }[]
-            seating: string[]
-        } | null
-        const name = (id: string) => state?.players.find((player) => player.id === id)?.name
-        return state?.seating.map(name)
-    }
-    await expect.poll(savedSeating).toEqual(['Astrid', 'Bo', 'Caro'])
+    await expect.poll(() => savedSeating(code)).toEqual(['Astrid', 'Bo', 'Caro'])
 
     // Every phone moves to seating without a reload: the host gets the editor in join order,
     // the others the table from their own seat, "You" first and then clockwise.
@@ -474,6 +537,9 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(boTable).toHaveText(['You', 'Caro', 'Astrid'])
     await expect(caro.page.locator('.seating-table__seat')).toHaveText(['You', 'Astrid', 'Bo'])
     await expect(bo.page.getByRole('button', { name: 'Undo' })).toHaveCount(0)
+    // Three players can only sit two ways round, so the host just has Reverse.
+    await expect(host.getByRole('button', { name: 'Undo' })).toHaveCount(0)
+    await expect(host.getByRole('button', { name: 'Bo' })).toHaveCount(0)
 
     // The host turns the table round, and Bo's phone follows.
     await host.getByRole('button', { name: 'Reverse' }).click()
@@ -481,11 +547,9 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(boTable).toHaveText(['You', 'Astrid', 'Caro'])
 
     // Quick moves while a save is on its way: the last one is what lands, and none is refused.
-    await host.getByRole('button', { name: 'Reverse' }).click()
-    await host.getByRole('button', { name: 'Undo' }).click()
-    await host.getByRole('button', { name: 'Undo' }).click()
+    for (let i = 0; i < 3; i++) await host.getByRole('button', { name: 'Reverse' }).click()
     await expect(host.getByText('Bo is on your left, Caro on your right.')).toBeVisible()
-    await expect.poll(savedSeating).toEqual(['Astrid', 'Bo', 'Caro'])
+    await expect.poll(() => savedSeating(code)).toEqual(['Astrid', 'Bo', 'Caro'])
     await expect(boTable).toHaveText(['You', 'Caro', 'Astrid'])
     await expect(host.getByRole('alert')).toHaveCount(0)
 

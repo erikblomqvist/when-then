@@ -10,6 +10,7 @@ export const seatingWords = (): SeatingWords => ({
     undo: m.seating_undo(),
     reverse: m.seating_reverse(),
     letGoToCancel: m.seating_let_go_to_cancel(),
+    pickSwap: (name) => m.seating_pick_swap({ name }),
     swap: (a, b) => m.seating_swap({ a, b }),
     moveBetween: (who, a, b) => m.seating_move_between({ who, a, b }),
     acrossFromYou: (name) => m.seating_across_from_you({ name }),
