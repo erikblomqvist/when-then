@@ -66,7 +66,7 @@ vpr db:stop
 - **Clients:** `event.locals.supabase` (set in `src/hooks.server.ts`) acts as the visitor through the auth cookies; `supabaseService()` in `src/lib/server/supabase.ts` uses the secret key for server-side writes.
 - **Environment variables:** declared, with descriptions, in [`src/env.ts`](src/env.ts); that is the only list of names. Locally they live in `.env.local`. Production and preview values are set by hand in Vercel's project settings (the Supabase integration could not be connected). Google sign-in on the *local* stack needs `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in `supabase/.env`, which the Supabase CLI reads for `supabase/config.toml`; anonymous sign-in works without them. Repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` and the variable `SUPABASE_PROJECT_REF` drive the workflows. The database password is in the owner's password manager.
 - **Keep-alive:** the *Keep Supabase awake* workflow runs a query every three days so the Free project is not paused. GitHub disables schedules after 60 days without commits; re-enable it under Actions if that happens.
-- **Sweep:** pg_cron runs `public.sweep_games(now())` in the database every 15 minutes (job `sweep-games`, `select * from cron.job_run_details` shows its runs). It expires lobbies idle for 2 hours and deletes games 30 days after they ended. The local stack runs it too.
+- **Sweep:** pg_cron runs `public.sweep_games(now())` in the database every 15 minutes (job `sweep-games`, `select * from cron.job_run_details` shows its runs). It expires lobbies idle for 2 hours, abandons started games with no command for 24 hours, and deletes games 30 days after they ended. The local stack runs it too.
 
 ## Admin sign-in
 

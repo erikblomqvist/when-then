@@ -739,6 +739,7 @@ export type Database = {
             sweep_games: {
                 Args: { now: string }
                 Returns: {
+                    abandoned: number
                     deleted: number
                     expired: number
                 }[]

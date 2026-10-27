@@ -8,6 +8,7 @@ We use Supabase (Postgres, Auth, Realtime) as the only backend service, next to 
 - **The browser never touches tables.** It uses `supabase-js` only for its session and the game's channel (nudges and presence). All reads and writes go through SvelteKit server routes, and RLS denies direct table access as defence in depth.
 - **Schema and audit live in SQL.** Supabase CLI migrations are the single source of truth, with generated types, accessed through `supabase-js`; there is no ORM. The admin audit log is written by database triggers on cards and categories, because Supabase audits auth events only. If several statements must succeed or fail together, that is a Postgres function called with `.rpc()`.
 - **Ops:** a "When Then" organisation with one hosted Free project (production), with collaborators added as Developers; local development uses the Supabase CLI. Free projects pause after a week without activity. We accept that, with a scheduled job that runs a real query every few days; Pro ($25/month) is the escape hatch.
+- **The sweep is the one exception to the rules living in TypeScript.** pg_cron runs it inside the database, where the machine can't run. It abandons an idle game by setting the state's phase to `abandoned`, which is all the machine's `abandon` does, and it moves the version on and sends the nudge with `realtime.send`. If abandoning ever does more than set the phase, the sweep moves to a scheduled server route that runs the machine.
 
 ## Considered options
 

@@ -348,20 +348,21 @@ test('joining again with a seat already in the game changes nothing', async () =
     ])
 })
 
-test('a join nudges the game’s channel with only the game and its version', async () => {
-    const { host, code } = await newLobby()
-    const { gameId } = await getLobby(db, host, code)
-
-    // A phone's view of the channel: the public client, signed in anonymously like every
-    // phone with a seat (Realtime then sees a user token, not just the publishable key).
+/**
+ * A phone listening on the channel of the game `gameId`, subscribed before this returns, or a
+ * nudge could go out before it listens. `nudge` is the first nudge it gets, failing after 15
+ * seconds without one.
+ */
+async function phoneOn(gameId: string) {
+    // The public client, signed in anonymously like every phone with a seat (Realtime then
+    // sees a user token, not just the publishable key).
     const phone = localPublicClient()
     const signedIn = await phone.auth.signInAnonymously()
     expect(signedIn.error).toBeNull()
     const statuses: string[] = []
     let received!: Promise<Nudge>
-    // Wait until subscribed, or the nudge can go out before the phone listens. On a cold
-    // Realtime (CI, where this test runs first) the first joins can time out; the client
-    // retries them.
+    // On a cold Realtime (CI, where the join test runs first) the first joins can time out;
+    // the client retries them.
     test.setTimeout(120_000)
     await new Promise<void>((subscribed, failed) => {
         setTimeout(() => failed(new Error(`Not subscribed: ${statuses.join(', ')}`)), 90_000)
@@ -375,17 +376,30 @@ test('a join nudges the game’s channel with only the game and its version', as
                 })
         })
     })
+    return {
+        nudge: () =>
+            Promise.race([
+                received,
+                new Promise<never>((_, failed) =>
+                    setTimeout(() => failed(new Error(`No nudge: ${statuses.join(', ')}`)), 15_000),
+                ),
+            ]),
+        close: () => phone.removeAllChannels(),
+    }
+}
+
+test('a join nudges the game’s channel with only the game and its version', async () => {
+    const { host, code } = await newLobby()
+    const { gameId } = await getLobby(db, host, code)
+    const phone = await phoneOn(gameId)
 
     await joinGame(db, { userId: await newPlayer(), code, name: 'Bo', icon: 'dog' })
 
-    const nudge = await Promise.race([
-        received,
-        new Promise<never>((_, failed) =>
-            setTimeout(() => failed(new Error(`No nudge: ${statuses.join(', ')}`)), 15_000),
-        ),
-    ])
-    expect(nudge).toEqual({ gameId, version: (await getLobby(db, host, code)).version })
-    await phone.removeAllChannels()
+    expect(await phone.nudge()).toEqual({
+        gameId,
+        version: (await getLobby(db, host, code)).version,
+    })
+    await phone.close()
 })
 
 // Changing a name or icon, leaving, removing ---------------------------------------------
@@ -1537,4 +1551,103 @@ test('an expired lobby and its players are deleted 30 days after it expired', as
     await moveBack(gameId, 'ended_at', now, 30 * day)
     await sweep(db, now)
     expect(await rowsOf(gameId)).toEqual({ games: 0, players: 0 })
+})
+
+const phasesAfterStart: [string, () => Promise<{ host: string; bo: string; code: string }>][] = [
+    [
+        'seating',
+        async () => {
+            const three = await lobbyOfThree()
+            await startGame(db, { userId: three.host, code: three.code })
+            return three
+        },
+    ],
+    ['play', playingOfThree],
+]
+
+for (const [phase, game] of phasesAfterStart) {
+    test(`a game in ${phase} with no commands for 24 hours is abandoned with no winner, and its code is free`, async () => {
+        const { host, bo, code } = await game()
+        const { gameId, version } = await viewOf(host, code)
+        const now = await lastActive(gameId)
+
+        await moveBack(gameId, 'last_active_at', now, day - minute)
+        await sweep(db, now)
+        expect(await findMySeat(db, bo)).toMatchObject({ gameId })
+
+        await moveBack(gameId, 'last_active_at', now, day)
+        await sweep(db, now)
+
+        for (const player of [host, bo]) {
+            const abandoned = await viewOf(player, code)
+            expect(abandoned.version).toBe(version + 1)
+            expect(abandoned.view.phase).toEqual({ name: 'abandoned' })
+            expect(await findMySeat(db, player)).toBeNull()
+        }
+        await expect(getJoinStep(db, null, code)).rejects.toMatchObject({ code: 'not_found' })
+        await expect(endEarly(db, { userId: host, code })).rejects.toMatchObject({
+            code: 'game_over',
+        })
+        const again = await createGame(
+            db,
+            { userId: await newPlayer(), name: 'Dag', icon: 'moon', cardLanguage: 'en' },
+            { newCode: () => code },
+        )
+        expect(again.code).toBe(code)
+    })
+}
+
+test('a command in the game starts its 24 hours over', async () => {
+    const { host, code, version, activeId } = await playingOfThree()
+    const { gameId } = await viewOf(host, code)
+    const now = await lastActive(gameId)
+    await moveBack(gameId, 'last_active_at', now, 2 * day)
+
+    await skipPlayer(db, { userId: host, code, version, seatId: activeId })
+
+    const restarted = await lastActive(gameId)
+    expect(restarted.getTime()).toBeGreaterThanOrEqual(now.getTime())
+    await sweep(db, restarted)
+    expect((await viewOf(host, code)).view.phase.name).toBe('playing')
+})
+
+test('a game that ended and its players are deleted 30 days after it ended, played to the end or abandoned', async () => {
+    const ended = await endedOfThree()
+    const { gameId: endedId } = await viewOf(ended.host, ended.code)
+    const { host, code } = await playingOfThree()
+    const { gameId: abandonedId } = await viewOf(host, code)
+    const now = await lastActive(abandonedId)
+    await moveBack(abandonedId, 'last_active_at', now, day)
+    await sweep(db, now)
+    expect((await viewOf(host, code)).view.phase).toEqual({ name: 'abandoned' })
+
+    for (const gameId of [endedId, abandonedId]) {
+        await moveBack(gameId, 'ended_at', now, 30 * day - minute)
+    }
+    await sweep(db, now)
+    expect(await rowsOf(endedId)).toEqual({ games: 1, players: 3 })
+    expect(await rowsOf(abandonedId)).toEqual({ games: 1, players: 3 })
+
+    for (const gameId of [endedId, abandonedId]) await moveBack(gameId, 'ended_at', now, 30 * day)
+    await sweep(db, now)
+    expect(await rowsOf(endedId)).toEqual({ games: 0, players: 0 })
+    expect(await rowsOf(abandonedId)).toEqual({ games: 0, players: 0 })
+})
+
+test('abandoning a game nudges its phones with only the game and its new version', async () => {
+    const { host, code } = await playingOfThree()
+    const { gameId } = await viewOf(host, code)
+    const now = await lastActive(gameId)
+    await moveBack(gameId, 'last_active_at', now, day)
+    const phone = await phoneOn(gameId)
+
+    await sweep(db, now)
+
+    // Sent from the database (`realtime.send`), which adds its message id; nothing secret.
+    expect(await phone.nudge()).toEqual({
+        id: expect.any(String),
+        gameId,
+        version: (await viewOf(host, code)).version,
+    })
+    await phone.close()
 })
