@@ -79,7 +79,9 @@
         joinUrl={data.joinUrl}
         {form} />
 {:else if isOver(data.game.view.phase)}
-    <EndScreen game={data.game} />
+    <EndScreen
+        game={data.game}
+        {form} />
 {:else if phase === 'seating'}
     <Seating
         game={data.game}

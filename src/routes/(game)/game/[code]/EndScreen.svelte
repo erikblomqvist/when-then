@@ -1,5 +1,6 @@
 <script lang="ts">
     import ListIcon from '@lucide/svelte/icons/list'
+    import { enhance } from '$app/forms'
     import {
         Button,
         Card,
@@ -14,20 +15,24 @@
         type CategoryLook,
     } from '#lib'
     import { decadeLabel } from '#lib/cards/date-parts.js'
+    import { refusalMessage } from '#lib/game/refusals.js'
     import { firstPlacedYear, type GameDate } from '#lib/game/state.js'
     import { standings } from '#lib/game/view.js'
     import { m } from '#lib/paraglide/messages.js'
     import { getLocale } from '#lib/paraglide/runtime.js'
-    import type { PageData } from './$types'
+    import type { ActionData, PageData } from './$types'
 
     /**
      * The end screen, once the game is won, ended early or abandoned: the final standings with
      * the winners marked, or the locked scores with no winner, and every seated player's
-     * timeline to look back at, this phone's own first.
+     * timeline to look back at, this phone's own first. The host plays again from here.
      */
-    let { game }: { game: Extract<PageData['game'], { started: true }> } = $props()
+    let { game, form }: { game: Extract<PageData['game'], { started: true }>; form: ActionData } =
+        $props()
 
     const view = $derived(game.view)
+    const isHost = $derived(view.players.some((player) => player.id === view.seat && player.host))
+    const error = $derived(form?.refusal && refusalMessage(form.refusal))
     const rows = $derived(standings(view))
     const winners = $derived(rows.filter((row) => row.winner).map((row) => row.player.name))
     // A tie shares its place.
@@ -153,6 +158,25 @@
             </section>
         {/if}
 
+        {#if error}
+            <p
+                class="error"
+                role="alert">
+                {error}
+            </p>
+        {/if}
+        {#if isHost}
+            <form
+                class="play-again"
+                method="post"
+                action="?/playAgain"
+                use:enhance>
+                <Button
+                    type="submit"
+                    variant="ink"
+                    block>{m.play_again()}</Button>
+            </form>
+        {/if}
         <Button
             variant="ghost"
             href="/">{m.back_home()}</Button>
@@ -185,6 +209,16 @@
         font-family: var(--font-family-sans);
         font-size: var(--font-size-15);
         color: var(--text-on-table-secondary);
+    }
+    .error {
+        margin: 0;
+        font-family: var(--font-family-sans);
+        font-size: var(--font-size-14);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-error-on-table);
+    }
+    .play-again {
+        justify-self: stretch;
     }
     .standing--winner :global(.ui-role-tag) {
         color: var(--text-on-paper);

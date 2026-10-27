@@ -10,7 +10,8 @@
 // stays awake through seating and play. A player whose phone drops out shows as absent to the host,
 // who skips what they are holding up, then removes them from the game. The host ends the game
 // early, and every phone shows the end screen, where anyone can browse each player's timeline.
-// Its code is then free: the home page and the join link no longer lead to it.
+// Its code is then free: the home page and the join link no longer lead to it. The host plays
+// again, every phone moves into the rematch's lobby, and a newcomer joins it by its new code.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { localServiceClient } from '../../lib/testing/e2e-auth'
@@ -646,6 +647,41 @@ test('the host starts the game, every phone follows seating live, and confirming
     await expect(stays.page.getByRole('link', { name: /^Back to game/ })).toHaveCount(0)
     await gotoHydrated(stays.page, `/join/${code}`)
     await expect(stays.page.getByText('No running game has that code.')).toBeVisible()
+
+    // Only the host plays again. Every phone on the end screen moves into the rematch's lobby,
+    // under a new code, keeping its name, icon and host status; the removed player isn't there.
+    await gotoHydrated(stays.page, `/game/${code}`)
+    await expect(stays.page.getByRole('heading', { name: 'Ended early' })).toBeVisible()
+    await expect(stays.page.getByRole('button', { name: 'Play again' })).toHaveCount(0)
+    await host.getByRole('button', { name: 'Play again' }).click()
+    await host.waitForURL(
+        (url) => /^\/game\/[A-HJ-NP-Z]{4}$/.test(url.pathname) && !url.pathname.endsWith(code),
+    )
+    const rematch = new URL(host.url()).pathname.split('/').pop()!
+    await expect(stays.page).toHaveURL(`/game/${rematch}`)
+    for (const page of [host, stays.page]) {
+        await expect(page.getByRole('heading', { name: 'Lobby' })).toBeVisible()
+        await expect(page.getByText(`Game code: ${rematch}`)).toBeAttached()
+        const rows = page.locator('.ui-player-row')
+        await expect(rows).toHaveCount(2)
+        await expect(rows.filter({ hasText: 'Astrid' })).toContainText('Host')
+        await expect(rows.filter({ hasText: 'Astrid' }).locator('.lucide-cat')).toHaveCount(1)
+        const icon = stays.name === 'Bo' ? '.lucide-dog' : '.lucide-fish'
+        await expect(rows.filter({ hasText: stays.name }).locator(icon)).toHaveCount(1)
+    }
+    await expect(
+        stays.page.locator('.ui-player-row').filter({ hasText: stays.name }),
+    ).toContainText('You')
+    await expect(host.getByRole('button', { name: 'Start game' })).toBeEnabled()
+
+    // A newcomer joins with the rematch's code, and the lobby updates live.
+    await gotoHydrated(late, `/join/${rematch}`)
+    await late.getByLabel('Your name').fill('Dag')
+    await late.getByRole('radio', { name: 'Sun' }).check()
+    await late.getByRole('button', { name: 'Join game' }).click()
+    await late.waitForURL(new RegExp(`/game/${rematch}$`))
+    await expect(host.locator('.ui-player-row')).toHaveCount(3)
+    await expect(stays.page.locator('.ui-player-row')).toHaveCount(3)
 
     await Promise.all(
         [hostContext, stays.context, lateContext, backContext].map((context) => context.close()),

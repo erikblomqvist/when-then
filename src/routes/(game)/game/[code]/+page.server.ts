@@ -8,6 +8,7 @@ import {
     GameRefusal,
     getGame,
     leaveGame,
+    playAgain,
     removeFromGame,
     removePlayer,
     setSeating,
@@ -21,13 +22,15 @@ import type { Actions, PageServerLoad } from './$types'
 
 // A game, for players seated in it: its lobby, then from Start what their seat may see of it,
 // and once it has finished, its end screen. Reloading lands here again. A player the host
-// removed goes to the join step, which tells them and lets them join again.
+// removed goes to the join step, which tells them and lets them join again. Once the host plays
+// again, every phone with a seat in the rematch goes on to its lobby.
 export const load: PageServerLoad = async ({ params, locals, url }) => {
     const { user } = await locals.safeGetSession()
     if (!user) error(403, refusalMessage('no_seat'))
 
     try {
         const game = await getGame(supabaseService(), user.id, params.code)
+        if (game.started && game.rematch) redirect(303, `/game/${game.rematch}`)
         return { game, joinUrl: new URL(`/join/${game.code}`, url.origin).href }
     } catch (caught) {
         if (caught instanceof GameRefusal) {
@@ -168,4 +171,11 @@ export const actions: Actions = {
             endEarly(supabaseService(), { userId, code: params.code, version }),
         )
     },
+
+    // Play again: the host goes to the rematch's lobby, and every other phone follows.
+    playAgain: async ({ locals, params }) =>
+        asPlayer(locals, async (userId) => {
+            const rematch = await playAgain(supabaseService(), { userId, code: params.code })
+            redirect(303, `/game/${rematch.code}`)
+        }),
 }

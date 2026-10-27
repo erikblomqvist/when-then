@@ -1,7 +1,7 @@
 // The game lifecycle service against the local database (run through with-db.sh / CI's
 // stack): creating and joining a game and opening its lobby, changing a name or icon, leaving
-// and removing, the host's settings, starting the game and seating it, finding your seat
-// again, the code rules and the refusals.
+// and removing, the host's settings, starting the game and seating it, ending it and playing
+// again, finding your seat again, the code rules and the refusals.
 
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
@@ -24,6 +24,7 @@ import {
     getLobby,
     joinGame,
     leaveGame,
+    playAgain,
     removeFromGame,
     removePlayer,
     setSeating,
@@ -1093,6 +1094,165 @@ test('only the host ends early, only after Start, only from the version shown, a
     await expect(endEarly(db, { userId: host, code })).rejects.toMatchObject({
         code: 'game_over',
     })
+})
+
+// Play again ---------------------------------------------------------------------------------
+
+/**
+ * A game of Astrid (the host), Bo and Caro with settings of its own, seated Astrid, Caro, Bo
+ * (not their join order), that the host ended early.
+ */
+async function endedOfThree() {
+    const three = await lobbyOfThree()
+    const { host, code, seats } = three
+    await updateSettings(db, {
+        userId: host,
+        code,
+        targetScore: 15,
+        exactYear: true,
+        cardLanguage: 'sv',
+        leftOutCountries: ['SE'],
+    })
+    await startGame(db, { userId: host, code })
+    await setSeating(db, { userId: host, code, seating: [seats.astrid, seats.caro, seats.bo] })
+    await confirmSeating(db, { userId: host, code })
+    await endEarly(db, { userId: host, code })
+    return three
+}
+
+/** The names in the seating of `view`, in order. */
+const seatedNames = (view: Awaited<ReturnType<typeof viewOf>>['view']) =>
+    view.seating.map((id) => view.players.find((player) => player.id === id)?.name)
+
+test('the host plays again: a lobby with a new code, the same players, host and settings, linked to the finished game', async () => {
+    const { host, bo, caro, code } = await endedOfThree()
+    const finished = await viewOf(bo, code)
+
+    const { code: rematch } = await playAgain(db, { userId: host, code })
+
+    expect(isGameCode(rematch)).toBe(true)
+    expect(rematch).not.toBe(code)
+    const lobby = await getLobby(db, bo, rematch)
+    expect(lobby).toMatchObject({
+        version: 1,
+        code: rematch,
+        targetScore: 15,
+        exactYear: true,
+        cardLanguage: 'sv',
+        leftOutCountries: ['SE'],
+    })
+    // In the finished game's seating, each in a new seat.
+    expect(lobby.players).toEqual([
+        { seatId: expect.any(String), name: 'Astrid', icon: 'cat', isHost: true, isYou: false },
+        { seatId: expect.any(String), name: 'Caro', icon: 'fish', isHost: false, isYou: false },
+        { seatId: expect.any(String), name: 'Bo', icon: 'dog', isHost: false, isYou: true },
+    ])
+    expect(lobby.players.map((player) => player.seatId)).not.toContain(finished.view.seat)
+    const { data } = await db
+        .from('games')
+        .select('previous_game_id')
+        .eq('id', lobby.gameId)
+        .single()
+    expect(data?.previous_game_id).toBe(finished.gameId)
+
+    // Every phone on the finished game learns where the rematch is, in a new version, and the
+    // rematch is where each player's seat is now.
+    for (const player of [host, bo, caro]) {
+        expect(await getGame(db, player, code)).toMatchObject({
+            started: true,
+            version: finished.version + 1,
+            rematch,
+        })
+        expect(await findMySeat(db, player)).toMatchObject({ code: rematch })
+    }
+})
+
+test('the rematch is a lobby like any other, and Start seats it as the finished game was, newcomers after', async () => {
+    const { host, code } = await endedOfThree()
+    const { code: rematch } = await playAgain(db, { userId: host, code })
+
+    const dag = await newPlayer()
+    await joinGame(db, { userId: dag, code: rematch, name: 'Dag', icon: 'sun' })
+    await updateSettings(db, { userId: host, code: rematch, ...settings, targetScore: 5 })
+    await startGame(db, { userId: host, code: rematch })
+
+    const { view } = await viewOf(dag, rematch)
+    expect(view.settings).toMatchObject({ targetScore: 5, cardLanguage: 'en' })
+    expect(seatedNames(view)).toEqual(['Astrid', 'Caro', 'Bo', 'Dag'])
+})
+
+test('a player who leaves the rematch stays on the finished game, and is left out of its seating', async () => {
+    const { host, caro, code } = await endedOfThree()
+    const { code: rematch } = await playAgain(db, { userId: host, code })
+
+    await leaveGame(db, { userId: caro, code: rematch })
+
+    expect(await getGame(db, caro, code)).toMatchObject({ started: true, rematch: null })
+    expect(await findMySeat(db, caro)).toBeNull()
+    await startGame(db, { userId: host, code: rematch })
+    expect(seatedNames((await viewOf(host, rematch)).view)).toEqual(['Astrid', 'Bo'])
+})
+
+test('a player removed from the finished game is not in its rematch', async () => {
+    const { host, bo, code, seats } = await playingOfThree()
+    await removeFromGame(db, { userId: host, code, seatId: seats.bo })
+    await endEarly(db, { userId: host, code })
+
+    const { code: rematch } = await playAgain(db, { userId: host, code })
+
+    expect((await getLobby(db, host, rematch)).players.map((player) => player.name)).toEqual([
+        'Astrid',
+        'Caro',
+    ])
+    await expect(getGame(db, bo, rematch)).rejects.toMatchObject({ code: 'no_seat' })
+})
+
+test('the rematch never draws the finished game’s code, now free, and draws again on a clash', async () => {
+    const { host, code } = await endedOfThree()
+    const taken = (await newLobby()).code
+    const fresh = [code, taken, randomGameCode()]
+    let draw = 0
+    const newCode = () => fresh[Math.min(draw++, fresh.length - 1)]
+
+    const { code: rematch } = await playAgain(db, { userId: host, code }, { newCode })
+
+    expect(rematch).not.toBe(code)
+    expect(rematch).not.toBe(taken)
+    expect(draw).toBeGreaterThanOrEqual(3)
+})
+
+test('once the rematch has ended, playing again starts another', async () => {
+    const { host, code } = await endedOfThree()
+    const first = await playAgain(db, { userId: host, code })
+    // As the sweep ends an idle lobby.
+    await db.from('games').update({ ended_at: new Date().toISOString() }).eq('code', first.code)
+
+    expect(await getGame(db, host, code)).toMatchObject({ rematch: null })
+    const second = await playAgain(db, { userId: host, code })
+
+    expect(second.code).not.toBe(first.code)
+    expect((await getLobby(db, host, second.code)).players).toHaveLength(3)
+    expect(await getGame(db, host, code)).toMatchObject({ rematch: second.code })
+})
+
+test('only the host plays again, only once the game is over, and again is the same rematch', async () => {
+    const { host, bo, code } = await lobbyOfThree()
+    const again = (userId: string) => playAgain(db, { userId, code })
+    await expect(again(host)).rejects.toMatchObject({ code: 'not_over' })
+    await startGame(db, { userId: host, code })
+    await expect(again(host)).rejects.toMatchObject({ code: 'not_over' })
+    await endEarly(db, { userId: host, code })
+
+    await expect(again(bo)).rejects.toMatchObject({ code: 'not_host' })
+    await expect(again(await newPlayer())).rejects.toMatchObject({ code: 'not_found' })
+    const both = await Promise.all([again(host), again(host)])
+    expect(both[1]).toEqual(both[0])
+    expect(await again(host)).toEqual(both[0])
+    const { count } = await db
+        .from('games')
+        .select('id', { count: 'exact', head: true })
+        .eq('previous_game_id', (await viewOf(host, code)).gameId)
+    expect(count).toBe(1)
 })
 
 test('a game’s view names the category of every card in it, in the card language', async () => {

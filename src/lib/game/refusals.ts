@@ -40,6 +40,7 @@ export type GameRefusalCode =
     | 'too_few_players'
     | 'stale_version'
     | 'not_started'
+    | 'not_over'
 
 const words: Record<GameRefusalCode, () => string> = {
     invalid_name: m.refusal_invalid_name,
@@ -76,6 +77,7 @@ const words: Record<GameRefusalCode, () => string> = {
     too_few_players: m.refusal_too_few_players,
     stale_version: m.refusal_stale_version,
     not_started: m.refusal_not_started,
+    not_over: m.refusal_not_over,
 }
 
 /** The message for a refusal, in the current locale. */

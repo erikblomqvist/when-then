@@ -11,6 +11,7 @@
 import { isCardLocale, type CardLocale } from '../cards/card'
 import { isCountryCode } from '../cards/country'
 import type { CategoryLook } from '../categories/look'
+import type { PostgrestSingleResponse } from '@supabase/supabase-js'
 import type { Json } from '../database.types'
 import { deckFromRows, type DeckRow } from '../game/deck'
 import { isGameCode, normaliseGameCode, randomGameCode } from '../game/game-code'
@@ -25,7 +26,7 @@ import {
 } from '../game/player'
 import type { GameRefusalCode } from '../game/refusals'
 import { isTargetScore, maxTargetScore, minTargetScore } from '../game/settings'
-import type { DeckCard, GameState } from '../game/state'
+import { isOver, type DeckCard, type GameState } from '../game/state'
 import { redact, type SeatView } from '../game/view'
 import { categoryLooks } from './categories'
 import { checkRpc, RpcRefusal, type Refusals } from './rpc-refusal'
@@ -67,6 +68,7 @@ const refusals = {
     too_few_players: 'A game needs at least two players.',
     stale_version: 'The game has moved on since the phone last fetched it.',
     not_started: 'The game has not started yet.',
+    not_over: 'The game is not over yet.',
 } satisfies Record<GameRefusalCode, string> & Refusals
 
 /** A refused command; `code` says why. */
@@ -123,18 +125,34 @@ export async function createGame(
     const name = normalisePlayerName(input.name) ?? refuse('invalid_name')
     if (!isPlayerIcon(input.icon)) refuse('invalid_icon')
 
-    for (let draw = 0; draw < maxCodeDraws; draw++) {
-        const code = newCode()
-        const { error } = await db.rpc('create_game', {
+    const { code } = await withFreeCode(newCode, (code) =>
+        db.rpc('create_game', {
             host: input.userId,
             code,
             host_name: name,
             host_icon: input.icon,
             card_language: input.cardLanguage,
-        })
+        }),
+    )
+    return { code }
+}
+
+/**
+ * Runs `claim`, which creates a game under the code it's given, with codes from `newCode` until
+ * one isn't held by another unended game, never `except`. Returns the code and what `claim` got.
+ */
+async function withFreeCode<T>(
+    newCode: () => string,
+    claim: (code: string) => PromiseLike<PostgrestSingleResponse<T>>,
+    except?: string,
+): Promise<{ code: string; data: T | null }> {
+    for (let draw = 0; draw < maxCodeDraws; draw++) {
+        const code = newCode()
+        if (code === except) continue
+        const { data, error } = await claim(code)
         if (error?.code === '23505' && error.message.includes(codeClash)) continue
         checkRpc(error, refusals, GameRefusal)
-        return { code }
+        return { code, data }
     }
     throw new Error(`No free game code after ${maxCodeDraws} draws`)
 }
@@ -201,7 +219,8 @@ function lobbyOf(game: Awaited<ReturnType<typeof readGame>>['game'], userId: str
  * The game with `code` (any case) as a player seated in it sees it: its lobby until Start, then
  * the game state redacted for their seat (ADR 0002), with how to show the category of each card
  * in it, and once it has finished, its end. `gameId` and `version` match its nudges either way.
- * Refused like `getLobby`.
+ * `rematch` is the code of the finished game's rematch (`playAgain`) while it hasn't ended, for a
+ * player with a seat in it, so their phone follows it there. Refused like `getLobby`.
  */
 export async function getGame(
     db: Db,
@@ -216,6 +235,7 @@ export async function getGame(
           code: string
           view: SeatView
           categories: Record<string, CategoryLook>
+          rematch: string | null
       }
 > {
     const { game, you } = await readGame(db, userId, code)
@@ -229,7 +249,21 @@ export async function getGame(
         Object.values(view.cards).map((card) => card.category),
         view.settings.cardLanguage,
     )
-    return { started: true, gameId, version, code: game.code, view, categories }
+    const rematch = isOver(view.phase) ? await rematchOf(db, gameId, userId) : null
+    return { started: true, gameId, version, code: game.code, view, categories, rematch }
+}
+
+/** The code of the rematch of the game `gameId` while it hasn't ended, if `userId` is in it. */
+async function rematchOf(db: Db, gameId: string, userId: string): Promise<string | null> {
+    const { data, error } = await db
+        .from('games')
+        .select('code, game_players!inner (user_id)')
+        .eq('previous_game_id', gameId)
+        .is('ended_at', null)
+        .eq('game_players.user_id', userId)
+        .maybeSingle()
+    if (error) throw new Error(error.message, { cause: error })
+    return data?.code ?? null
 }
 
 /**
@@ -456,7 +490,7 @@ export async function startGame(
                 exactYear: game.exact_year,
                 cardLanguage: game.card_language,
             },
-            // Join order; a rematch will start from its previous game's seating (#76).
+            // Join order, which in a rematch starts with the finished game's seating (`playAgain`).
             seating: game.game_players.map((player) => player.seat_id),
             cards: await readDeck(db, game.card_language, game.left_out_countries),
             seed: seed(),
@@ -570,6 +604,34 @@ export async function endEarly(
     input: { userId: string; code: string; version?: number },
 ): Promise<void> {
     await play(db, input, (by) => ({ type: 'endEarly', by }))
+}
+
+/**
+ * Play again: the host `userId` starts a rematch of the finished game with `code` (any case): a
+ * new game in the lobby with its own code, linked to the finished one, with the same players
+ * (names, icons and host) and settings. The players join in the finished game's seating, so Start
+ * seats them that way again, newcomers after. Then it nudges the finished game, whose phones
+ * follow the link (`getGame`'s `rematch`). Playing again while the rematch hasn't ended gives the
+ * same rematch; once it has, a new one.
+ * Returns its code. Refused with `not_host` for anyone else and `not_over` until the game has
+ * finished. `newCode` draws a code, never the finished game's (tests force clashes with it).
+ */
+export async function playAgain(
+    db: Db,
+    input: { userId: string; code: string },
+    { newCode = randomGameCode }: { newCode?: () => string } = {},
+): Promise<{ code: string }> {
+    const { game } = await readGame(db, input.userId, input.code)
+    const { data } = await withFreeCode(
+        newCode,
+        (code) =>
+            db.rpc('create_rematch', { host: input.userId, previous: game.id, code }).single(),
+        game.code,
+    )
+    if (!data) throw new Error('create_rematch returned no game')
+
+    await nudge(db, { gameId: game.id, version: data.previous_version })
+    return { code: data.rematch_code }
 }
 
 /**

@@ -320,6 +320,7 @@ export type Database = {
                     id: string
                     last_active_at: string
                     left_out_countries: string[]
+                    previous_game_id: string | null
                     started_at: string | null
                     state: Json | null
                     target_score: number
@@ -334,6 +335,7 @@ export type Database = {
                     id?: string
                     last_active_at?: string
                     left_out_countries?: string[]
+                    previous_game_id?: string | null
                     started_at?: string | null
                     state?: Json | null
                     target_score?: number
@@ -348,12 +350,21 @@ export type Database = {
                     id?: string
                     last_active_at?: string
                     left_out_countries?: string[]
+                    previous_game_id?: string | null
                     started_at?: string | null
                     state?: Json | null
                     target_score?: number
                     version?: number
                 }
-                Relationships: []
+                Relationships: [
+                    {
+                        foreignKeyName: 'games_previous_game_id_fkey'
+                        columns: ['previous_game_id']
+                        isOneToOne: false
+                        referencedRelation: 'games'
+                        referencedColumns: ['id']
+                    },
+                ]
             }
             role_invites: {
                 Row: {
@@ -517,6 +528,14 @@ export type Database = {
                 }
                 Returns: string
             }
+            create_rematch: {
+                Args: { code: string; host: string; previous: string }
+                Returns: {
+                    previous_version: number
+                    rematch_code: string
+                    rematch_game: string
+                }[]
+            }
             current_actor: { Args: never; Returns: string }
             custom_access_token_hook: { Args: { event: Json }; Returns: Json }
             decade_of: { Args: { year: number }; Returns: number }
@@ -600,6 +619,7 @@ export type Database = {
                     id: string
                     last_active_at: string
                     left_out_countries: string[]
+                    previous_game_id: string | null
                     started_at: string | null
                     state: Json | null
                     target_score: number
