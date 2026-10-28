@@ -7,6 +7,13 @@ test('the card filters prototype shows each mockup', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Card filters' })).toBeVisible()
     await expect(page.getByText('Easy to Medium · from 1900')).toBeVisible()
 
+    // Nobody has filters: one field in the host's settings, and no list of players.
+    await gotoHydrated(page, '/prototype/card-filters?view=host&none')
+    await expect(page.getByText('Card filters', { exact: true })).toBeVisible()
+    await expect(page.getByText('None', { exact: true })).toBeVisible()
+    await expect(page.getByText('No filters')).toHaveCount(0)
+    await expect(page.getByTitle('Has card filters')).toHaveCount(0)
+
     // Ella's filters: the difficulty range and insider cards as tiles, kept or filtered out.
     await gotoHydrated(page, '/prototype/card-filters?view=edit')
     await expect(page.getByRole('heading', { name: 'Filters for Ella' })).toBeVisible()

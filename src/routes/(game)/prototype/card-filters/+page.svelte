@@ -1,9 +1,12 @@
 <script lang="ts">
     // PROTOTYPE (#100), throwaway: static mockups of the host setting card filters per player
     // (difficulty, oldest cards, categories, insider cards) over one shared deck, switched with
-    // `?view=`, and `?who=astrid` for a veteran's filters. Made-up data, nothing saved, so its
+    // `?view=`, `?who=astrid` for a veteran's filters, and `?view=host&none` for a lobby where
+    // nobody has filters. Made-up data, nothing saved, so its
     // words aren't translated.
     import CheckIcon from '@lucide/svelte/icons/check'
+    import MinusIcon from '@lucide/svelte/icons/minus'
+    import PlusIcon from '@lucide/svelte/icons/plus'
     import SlidersIcon from '@lucide/svelte/icons/sliders-horizontal'
     import TrendingUpIcon from '@lucide/svelte/icons/trending-up'
     import { page } from '$app/state'
@@ -11,6 +14,8 @@
         Button,
         Card,
         CategoryDot,
+        IconButton,
+        Input,
         Notepad,
         PlayerIcon,
         PlayerRow,
@@ -21,6 +26,7 @@
     } from '#lib'
 
     const view = $derived(page.url.searchParams.get('view') ?? 'host')
+    const none = $derived(page.url.searchParams.has('none'))
     const countries = [
         { code: 'SE', name: 'Sweden' },
         { code: 'NO', name: 'Norway' },
@@ -95,7 +101,7 @@
                 icon={player.icon}
                 role={player.name === you ? (player.role ?? 'You') : player.role}>
                 {#snippet action()}
-                    {#if player.filters}
+                    {#if player.filters && !none}
                         <span
                             class="has-filters"
                             title="Has card filters"><SlidersIcon /></span>
@@ -110,7 +116,59 @@
     kind="table"
     grain
     class="proto-page">
-    {#if view === 'host'}
+    {#if view === 'host' && none}
+        <!-- Nobody has filters: one quiet field at the end of the host's settings. -->
+        <div class="column">
+            <Text role="heading-1">Lobby</Text>
+            {@render notepad('Astrid')}
+
+            <Surface
+                kind="sheet"
+                class="host-settings">
+                <Text role="heading-2">Settings</Text>
+                <div class="field">
+                    <span class="ui-caption">Target score</span>
+                    <div class="stepper">
+                        <IconButton label="Lower"><MinusIcon /></IconButton>
+                        <Input
+                            class="score"
+                            value="10"
+                            aria-label="Target score" />
+                        <IconButton label="Higher"><PlusIcon /></IconButton>
+                    </div>
+                </div>
+                <div class="field">
+                    <span class="ui-caption">Exact-year house rule</span>
+                    <Tabs
+                        label="Exact-year house rule"
+                        tabs={[
+                            { id: 'off', label: 'Off' },
+                            { id: 'on', label: 'On' },
+                        ]}
+                        selected="off" />
+                </div>
+                <div class="field">
+                    <span class="ui-caption">Card language</span>
+                    <Tabs
+                        label="Card language"
+                        tabs={[
+                            { id: 'en', label: 'English' },
+                            { id: 'sv', label: 'Svenska' },
+                            { id: 'nb', label: 'Norsk' },
+                        ]}
+                        selected="en" />
+                </div>
+                <div class="field">
+                    <span class="ui-caption">Card filters</span>
+                    <div class="filters-line">
+                        <span class="what what--none">None</span>
+                        <Button variant="ghost">Add</Button>
+                    </div>
+                    <span class="hint">Cards a player won’t be dealt, agreed on together.</span>
+                </div>
+            </Surface>
+        </div>
+    {:else if view === 'host'}
         <div class="column">
             <Text role="heading-1">Lobby</Text>
             {@render notepad('Astrid')}
@@ -454,6 +512,34 @@
     }
     .what--none {
         color: var(--text-on-paper-subtle);
+    }
+    .column :global(.host-settings) {
+        gap: var(--space-8);
+    }
+    .field {
+        display: grid;
+        gap: var(--space-3);
+    }
+    .field :global(.ui-tabs) {
+        justify-self: start;
+    }
+    .stepper {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+    }
+    .stepper :global(.score) {
+        width: 96px;
+        text-align: center;
+    }
+    .filters-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-family: var(--font-family-sans);
+    }
+    .filters-line .what {
+        font-size: var(--font-size-16);
     }
     .head {
         display: flex;
