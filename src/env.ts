@@ -37,6 +37,11 @@ export const variables = defineEnvVars({
         description:
             'Set to "on" to open the dev-only /scenario page in a build; `vp dev` always has it. Leave unset in production; e2e sets it.',
     },
+    VERCEL_ENV: {
+        schema: optional,
+        description:
+            'Set by Vercel: production, preview or development. PROTOTYPE (#16): opens /prototype/in-game on preview deployments.',
+    },
     PUBLIC_SUPABASE_URL: {
         public: true,
         schema: optional,
