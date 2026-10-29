@@ -124,7 +124,7 @@ The rules for how precisely cards must be placed, chosen when the game is create
 _Avoid_: Difficulty level
 
 **Exact-year house rule**:
-A house rule, off unless the host turns it on in the lobby, that rewards knowing a card's exact year rather than only where it goes on the timeline. How it plays is still open (#20).
+A house rule, off unless the host turns it on in the lobby, that rewards knowing a card's exact year rather than only where it goes on the timeline. After picking a slot, the active player may claim a year before the reveal; a correct slot with the right year (or, for a card placed by decade, a year in the right decade) locks that card only, and the turn goes on. A wrong year costs nothing, and the rule does not apply to steals.
 
 **Card language**:
 The language a game's cards are read aloud in, independent of each player's own app language. It starts as the host's app language, the host can change it in the lobby, and it is fixed once the game starts. A card without text in that language is read in English.
