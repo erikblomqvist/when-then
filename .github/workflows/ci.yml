@@ -26,7 +26,7 @@ jobs:
         steps:
             - uses: actions/checkout@v7
             # Pin an exact release: Vite+ asks us not to use the moving v1 tag.
-            - uses: voidzero-dev/setup-vp@v1.21.2
+            - uses: voidzero-dev/setup-vp@v1.22.0
               with:
                   node-version: '24'
                   cache: true
@@ -77,7 +77,7 @@ jobs:
                   # Google is enabled in config.toml; e2e never reaches Google, so placeholders do.
                   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-placeholder
                   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-placeholder
-            - uses: voidzero-dev/setup-vp@v1.21.2
+            - uses: voidzero-dev/setup-vp@v1.22.0
               with:
                   node-version: '24'
                   cache: true
